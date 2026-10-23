@@ -37,7 +37,13 @@ export type Envelope = {
   order: number;
   /** Set when this is the auto-created payment envelope for a debt account. */
   debtAccountId?: string;
-  /** Optional monthly amount the user aims to put in. */
+  /**
+   * Monthly target by month: an entry applies from that month on, until a later entry.
+   * `null` clears the target from that month. Older envelopes may only have
+   * `monthlyTarget`, which applies to months before any entry.
+   */
+  targets?: Record<string, Cents | null>;
+  /** Legacy single target, used before any `targets` entry. */
   monthlyTarget?: Cents;
   hidden?: boolean;
 };
@@ -63,10 +69,22 @@ export type Transaction = {
   /** For transfers: the other account. Each transfer is stored as two linked rows. */
   transferAccountId?: string;
   transferPairId?: string;
+  /** Notes. */
   memo?: string;
   cleared: boolean;
+  /** Flagged for follow-up. A flagged transaction can never be reconciled. */
+  flagged?: boolean;
+  /** Matched against the bank statement and locked. Editing it asks first. */
+  reconciled?: boolean;
   recurringId?: string;
   createdAt: number;
+};
+
+/** A merchant you've paid, with the envelope its transactions default to. */
+export type Payee = {
+  id: string;
+  name: string;
+  envelopeId?: string;
 };
 
 /** Money assigned to (positive) or pulled from (negative) an envelope. */

@@ -13,6 +13,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { addDays, formatDay, today } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
+import { payeeMemory } from '@/domain/payees';
 import { parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type ISODate } from '@/domain/types';
 import { useAccounts } from '@/hooks/use-ledger';
@@ -44,7 +45,13 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const [override, setOverride] = useState<Override>({});
 
   const envelopes = useStore((s) => s.envelopes);
-  const merchantMemory = useStore((s) => s.merchantMemory);
+  const payees = useStore((s) => s.payees);
+  const legacyMemory = useStore((s) => s.merchantMemory);
+  // Payees are the memory now; the old map only matters until it's migrated.
+  const merchantMemory = useMemo(
+    () => (payees.length ? payeeMemory(payees) : legacyMemory),
+    [payees, legacyMemory],
+  );
   const addTransaction = useStore((s) => s.addTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
   const showToast = useToast((s) => s.show);
@@ -106,8 +113,8 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   );
 
   const hints = useMemo(
-    () => [...accounts.map((a) => a.name), ...envelopes.map((e) => e.name), ...Object.keys(merchantMemory)],
-    [accounts, envelopes, merchantMemory],
+    () => [...accounts.map((a) => a.name), ...envelopes.map((e) => e.name), ...payees.map((p) => p.name)],
+    [accounts, envelopes, payees],
   );
   const voiceEntry = useVoiceEntry({
     hints,

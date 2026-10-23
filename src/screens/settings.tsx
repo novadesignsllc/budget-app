@@ -10,6 +10,7 @@ import { Text } from '@/components/text';
 import { useSession } from '@/sync/session';
 import { useStore } from '@/store';
 import { loadSampleData } from '@/store/sample-data';
+import { PayeesSection } from '@/screens/settings-payees';
 import { spacing } from '@/theme';
 import { useThemePreference, type ThemePreference } from '@/theme/preference';
 import { closeSheet } from '@/utils/close-sheet';
@@ -66,6 +67,8 @@ export function Settings() {
           />
         </>
       )}
+      <PayeesSection />
+
       {__DEV__ && empty && !inDemo && (
         <Button
           title="Load sample data"

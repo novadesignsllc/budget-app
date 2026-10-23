@@ -68,6 +68,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const status = envelopeStatus(
     envelope,
     row,
+    month,
     debtAccount ? { owed: -(ledger.balance.get(debtAccount.id) ?? 0), minPayment: debtAccount.minPayment } : undefined,
   );
   const rta = budget.readyToAssign;
@@ -97,7 +98,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
           headerLargeTitleEnabled: false,
           headerRight: envelope.debtAccountId
             ? undefined
-            : () => <HeaderButton sf="slider.horizontal.3" md="tune" label="Edit envelope" onPress={() => router.push(`/envelope/${id}`)} />,
+            : () => <HeaderButton sf="slider.horizontal.3" md="tune" label="Edit envelope" onPress={() => router.push({ pathname: '/envelope/[id]', params: { id, month } })} />,
         }}
       />
 

@@ -1,3 +1,4 @@
+import { targetFor } from './targets';
 import { isCashAccount, type Account, type Allocation, type Cents, type Envelope, type ISODate, type Transaction } from './types';
 
 /** `YYYY-MM` */
@@ -147,11 +148,18 @@ export function computeMonth(
   return { month, envelopes: rows, cash, readyToAssign: cash - total - assignedLater };
 }
 
-/** How much each envelope still needs this month to reach its monthly target. */
+/** How much each envelope still needs this month to reach that month's target. */
 export function targetGaps(envelopes: Envelope[], budget: BudgetMonth): { envelopeId: string; need: Cents }[] {
   return envelopes
-    .filter((e) => !e.hidden && !e.debtAccountId && e.monthlyTarget && e.monthlyTarget > 0)
+    .filter((e) => !e.hidden && !e.debtAccountId)
     .sort((a, b) => a.order - b.order)
-    .map((e) => ({ envelopeId: e.id, need: e.monthlyTarget! - (budget.envelopes.get(e.id)?.assigned ?? 0) }))
+    .map((e) => ({ e, target: targetFor(e, budget.month) }))
+    .filter(({ target }) => target !== null && target > 0)
+    .map(({ e, target }) => ({ envelopeId: e.id, need: target! - (budget.envelopes.get(e.id)?.assigned ?? 0) }))
     .filter((g) => g.need > 0);
+}
+
+/** You can always look back, but not ahead of the current calendar month. */
+export function canGoToMonth(month: MonthKey, today: ISODate): boolean {
+  return month <= monthOf(today);
 }

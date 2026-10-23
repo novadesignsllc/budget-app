@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 
-import { addMonthKey, formatMonth, type MonthKey } from '@/domain/months';
+import { today } from '@/domain/dates';
+import { addMonthKey, canGoToMonth, formatMonth, type MonthKey } from '@/domain/months';
 import { haptic } from '@/utils/haptics';
 import { radius, spacing, useColors } from '@/theme';
 
@@ -22,13 +23,18 @@ export function MonthSwitcher({
     haptic('selection');
     onChange(addMonthKey(month, n));
   };
+  // You can always look back, but never past the current month.
+  const canStep = (dir: -1 | 1) => dir < 0 || canGoToMonth(addMonthKey(month, 1), today());
   const arrow = (dir: -1 | 1) => (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={dir < 0 ? 'Previous month' : 'Next month'}
+      accessibilityState={{ disabled: !canStep(dir) }}
+      disabled={!canStep(dir)}
       hitSlop={6}
       onPress={() => step(dir)}
       style={({ pressed }) => ({
+        opacity: canStep(dir) ? 1 : 0.3,
         width: 30,
         height: 30,
         borderRadius: radius.full,

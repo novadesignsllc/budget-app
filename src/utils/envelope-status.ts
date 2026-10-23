@@ -1,5 +1,6 @@
 import { formatMoney } from '@/domain/money';
-import type { EnvelopeMonth } from '@/domain/months';
+import type { EnvelopeMonth, MonthKey } from '@/domain/months';
+import { targetFor } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
 import { DEBT_GROUP } from '@/store';
 
@@ -23,6 +24,7 @@ const m = (c: Cents) => formatMoney(c, { whole: c % 100 === 0 });
 export function envelopeStatus(
   e: Envelope,
   row: EnvelopeMonth,
+  month: MonthKey,
   debt?: { owed: Cents; minPayment?: Cents },
 ): EnvelopeStatus {
   const { available, assigned, spent } = row;
@@ -55,7 +57,7 @@ export function envelopeStatus(
     };
   }
 
-  const target = e.monthlyTarget ?? 0;
+  const target = targetFor(e, month) ?? 0;
   const need = Math.max(0, target - assigned);
 
   if (e.group === 'Savings') {

@@ -163,7 +163,7 @@ export function Budget() {
             <Section key={g.name} title={g.name} detail={groupSummary(g.name, total)} inset={ICON_INSET}>
               {g.items.map((e) => {
                 const row = budget.envelopes.get(e.id) ?? empty;
-                const status = envelopeStatus(e, row, debtFor(e));
+                const status = envelopeStatus(e, row, month, debtFor(e));
                 const icon = envelopeIcon(e.name, !!e.debtAccountId);
                 const canFill = status.need > 0 && rta > 0;
                 return (
@@ -189,7 +189,7 @@ export function Budget() {
                       sf: 'slider.horizontal.3',
                       md: 'tune',
                       color: colors.blue,
-                      onTrigger: () => router.push(`/envelope/${e.id}`),
+                      onTrigger: () => router.push({ pathname: '/envelope/[id]', params: { id: e.id, month } }),
                     }}
                   >
                     <Row

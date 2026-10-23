@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { computeLedger } from './ledger';
-import { addMonthKey, assignDateFor, computeMonth, formatMonth, monthEnd, targetGaps } from './months';
+import { addMonthKey, assignDateFor, canGoToMonth, computeMonth, formatMonth, monthEnd, targetGaps } from './months';
 import type { Account, Allocation, Envelope, Transaction } from './types';
 
 const checking: Account = { id: 'chk', name: 'Checking', kind: 'checking', openingBalance: 100000, openedOn: '2026-09-01', order: 0 };
@@ -81,7 +81,27 @@ describe('looking back', () => {
   });
 });
 
+describe('targets by month', () => {
+  it('uses the target in effect for the month being looked at', () => {
+    const changed = envelopes.map((e) => (e.id === 'groc' ? { ...e, targets: { '2026-11': 45000 } } : e));
+    // October still reads the old target and is already filled.
+    expect(targetGaps(changed, computeMonth({ ...input, envelopes: changed }, '2026-10'))).toEqual([
+      { envelopeId: 'save', need: 10000 },
+    ]);
+    expect(targetGaps(changed, computeMonth({ ...input, envelopes: changed }, '2026-11'))[0]).toEqual({
+      envelopeId: 'groc',
+      need: 45000,
+    });
+  });
+});
+
 describe('month helpers', () => {
+  it('never goes past the current month', () => {
+    expect(canGoToMonth('2026-10', '2026-10-23')).toBe(true);
+    expect(canGoToMonth('2020-01', '2026-10-23')).toBe(true);
+    expect(canGoToMonth('2026-11', '2026-10-23')).toBe(false);
+  });
+
   it('steps across years', () => {
     expect(addMonthKey('2026-12', 1)).toBe('2027-01');
     expect(addMonthKey('2026-01', -1)).toBe('2025-12');

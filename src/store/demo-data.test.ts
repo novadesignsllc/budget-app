@@ -3,6 +3,7 @@ import { describe, expect, it } from '@jest/globals';
 import { computeLedger } from '@/domain/ledger';
 import { addMonthKey, computeMonth, monthEnd, monthOf } from '@/domain/months';
 import { dueForApproval } from '@/domain/recurring';
+import { targetFor } from '@/domain/targets';
 import { isCashAccount } from '@/domain/types';
 
 import { demoDocs, generateDemo } from './demo-data';
@@ -62,6 +63,20 @@ describe('generateDemo', () => {
     const now = computeMonth(demo, '2026-10');
     expect([...now.envelopes.values()].some((r) => r.available < 0)).toBe(true);
     expect(Object.keys(demo.merchantMemory).length).toBeGreaterThan(10);
+  });
+
+  it('uses flags, reconciling, notes, payees and per-month targets', () => {
+    const flagged = demo.transactions.filter((t) => t.flagged);
+    expect(flagged.length).toBe(2);
+    expect(flagged.every((t) => !t.reconciled)).toBe(true);
+    expect(demo.transactions.filter((t) => t.reconciled).length).toBeGreaterThan(50);
+    expect(demo.transactions.filter((t) => t.memo).length).toBeGreaterThanOrEqual(3);
+    expect(demo.payees.length).toBeGreaterThan(10);
+    expect(demo.payees.find((p) => p.name === 'Kroger')?.envelopeId).toBe(demo.envelopes.find((e) => e.name === 'Groceries')!.id);
+    const groceries = demo.envelopes.find((e) => e.name === 'Groceries')!;
+    expect(targetFor(groceries, '2026-09')).toBe(52000);
+    expect(targetFor(groceries, '2026-10')).toBe(56000);
+    expect(computeMonth(demo, '2026-10').envelopes.get(groceries.id)?.assigned).toBeGreaterThanOrEqual(56000);
   });
 
   it('serializes to docs without undefined values', () => {

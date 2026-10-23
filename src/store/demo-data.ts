@@ -1,6 +1,7 @@
 import { addDays, addMonths, fromISODate, today as todayISO } from '@/domain/dates';
 import { computeMonth, addMonthKey, monthEnd, monthOf, monthStart, type MonthKey } from '@/domain/months';
 import { normalizePayee } from '@/domain/quick-add';
+import { targetFor } from '@/domain/targets';
 import type {
   Account,
   AccountKind,
@@ -9,6 +10,7 @@ import type {
   Envelope,
   Frequency,
   ISODate,
+  Payee,
   Recurring,
   RecurringKind,
   Transaction,
@@ -91,6 +93,15 @@ type RecurringDef = {
   pending?: boolean;
 };
 
+/** A few transactions carry notes, so the notes column has something in it. */
+const NOTES: Record<string, string> = {
+  Costco: 'Paper towels and the big coffee',
+  'Best Buy': 'New headphones, went over',
+  'Jiffy Lube': 'Oil change and wiper blades',
+  Etsy: 'Mom’s birthday print',
+  'Barnes & Noble': 'Two paperbacks',
+};
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function dateIn(month: MonthKey, day: number): ISODate {
@@ -146,6 +157,8 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     group: e.group,
     order: i,
     monthlyTarget: e.target,
+    // Groceries went up this month; earlier months keep the old target.
+    ...(e.name === 'Groceries' ? { targets: { [thisMonth]: 56000 } } : {}),
   }));
   debts.forEach((d, i) =>
     envelopes.push({ id: id('e'), name: d.name, group: DEBT_GROUP, order: i, debtAccountId: d.id }),
@@ -156,7 +169,12 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
   const transactions: Transaction[] = [];
   const allocations: Allocation[] = [];
   const merchantMemory: Record<string, string> = {};
+  const payeeNames = new Map<string, string>();
   const clearedBefore = addDays(asOf, -7);
+  // Older transactions have been checked against the bank and locked.
+  const reconciledBefore = addDays(asOf, -21);
+
+  const notedPayees = new Set<string>();
 
   function post(t: {
     date: ISODate;
@@ -181,11 +199,14 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
       transferAccountId: t.transferAccountId,
       transferPairId: t.transferPairId,
       recurringId: t.recurringId,
+      memo: NOTES[t.payee] && !notedPayees.has(t.payee) ? (notedPayees.add(t.payee), NOTES[t.payee]) : undefined,
       cleared: t.date < clearedBefore,
+      reconciled: t.date < reconciledBefore,
       createdAt: fromISODate(t.date).getTime() + counter,
     });
     if ((t.kind === 'spend' || t.kind === 'slip') && t.envelopeId) {
       merchantMemory[normalizePayee(t.payee)] = t.envelopeId;
+      payeeNames.set(normalizePayee(t.payee), t.payee);
     }
   }
 
@@ -253,7 +274,10 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     }
 
     // Fill every target. The first month also gives the opening savings a job.
-    for (const e of envelopes) if (e.monthlyTarget) assign(e.id, e.monthlyTarget, first);
+    for (const e of envelopes) {
+      const target = targetFor(e, month);
+      if (target) assign(e.id, target, first);
+    }
     if (m === 0) {
       assign(env('Emergency Fund').id, 210000, first);
       assign(env('Car Repairs').id, 25000, first);
@@ -339,10 +363,24 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     });
   }
 
+  // Two things to follow up on: flagged, so they stay out of reconciling.
+  const flagLatest = (envelopeName: string) => {
+    const envelopeId = env(envelopeName).id;
+    const t = [...transactions].reverse().find((x) => x.envelopeId === envelopeId && x.kind === 'spend' && !x.flagged);
+    if (t) Object.assign(t, { flagged: true, reconciled: false, memo: t.memo ?? 'Check this charge' });
+  };
+  flagLatest('Household');
+  flagLatest('Eating Out');
+
   // Leave a few dollars without a job this month; the rest tops up the emergency fund.
   const now = computeMonth({ accounts, envelopes, transactions, allocations }, thisMonth);
   const leave = 4237;
   if (now.readyToAssign > leave) assign(env('Emergency Fund').id, now.readyToAssign - leave, monthStart(thisMonth));
+
+  const payees: Payee[] = [...payeeNames.entries()]
+    .sort((a, b) => a[1].localeCompare(b[1]))
+    .map(([key, name]) => ({ id: id('y'), name, envelopeId: merchantMemory[key] }));
+  payees.push({ id: id('y'), name: 'Paycheck' });
 
   return {
     accounts,
@@ -350,6 +388,7 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     transactions,
     allocations,
     recurring,
+    payees,
     merchantMemory,
     settings: { debtStrategy: 'snowball', monthlyDebtPayment: MONTHLY_DEBT_PAYMENT },
   };
@@ -365,6 +404,7 @@ export function demoDocs(asOf?: ISODate) {
     transactions: clean(s.transactions),
     allocations: clean(s.allocations),
     recurring: clean(s.recurring),
+    payees: clean(s.payees),
     meta: [{ id: 'state', settings: s.settings, merchantMemory: s.merchantMemory }],
   };
 }

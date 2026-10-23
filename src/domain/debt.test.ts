@@ -35,6 +35,21 @@ describe('project', () => {
     expect(byId.mid).toBeLessThan(byId.big);
   });
 
+  it('tracks each debt month by month, hitting zero on its payoff month', () => {
+    const p = project(debts, 100000, 'snowball');
+    for (const d of p.perDebt) {
+      const series = p.perDebtBalances[d.id];
+      expect(series[0]).toBe(debts.find((x) => x.id === d.id)!.balance);
+      expect(series[d.payoffMonth!]).toBe(0);
+      expect(series[d.payoffMonth! - 1]).toBeGreaterThan(0);
+      expect(series).toHaveLength(p.balances.length);
+    }
+    // The totals line is the sum of the per-debt lines.
+    p.balances.forEach((total, m) =>
+      expect(Object.values(p.perDebtBalances).reduce((a, s) => a + s[m], 0)).toBe(total),
+    );
+  });
+
   it('reports a plan that never finishes when payments do not cover interest', () => {
     const p = project([{ id: 'a', name: 'A', balance: 1000000, apr: 3000, minPayment: 1000 }], 1000, 'snowball');
     expect(p.months).toBeNull();

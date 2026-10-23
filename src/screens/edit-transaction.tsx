@@ -8,7 +8,7 @@ import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { parseMoney } from '@/domain/money';
-import { useStore } from '@/store';
+import { isLocked, useStore } from '@/store';
 import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
@@ -19,6 +19,7 @@ export function EditTransaction({ id }: { id: string }) {
   const envelopes = useStore((s) => s.envelopes);
   const update = useStore((s) => s.updateTransaction);
   const remove = useStore((s) => s.deleteTransaction);
+  const setFlag = useStore((s) => s.setFlag);
 
   const [payee, setPayee] = useState(t?.payee ?? '');
   const [amountText, setAmountText] = useState(t ? (Math.abs(t.amount) / 100).toFixed(2) : '');
@@ -26,6 +27,7 @@ export function EditTransaction({ id }: { id: string }) {
   const [envelopeId, setEnvelopeId] = useState(t?.envelopeId);
   const [memo, setMemo] = useState(t?.memo ?? '');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmSave, setConfirmSave] = useState(false);
 
   if (!t) {
     return (
@@ -37,6 +39,7 @@ export function EditTransaction({ id }: { id: string }) {
   }
 
   const amount = parseMoney(amountText);
+  const locked = isLocked(t);
   const canPickEnvelope = t.kind === 'spend' || t.kind === 'slip';
   const spendable = envelopes.filter((e) => !e.hidden && !e.debtAccountId);
   const title =
@@ -60,9 +63,15 @@ export function EditTransaction({ id }: { id: string }) {
         </Text>
         <Text variant="callout" tone="textSecondary">
           {account?.name}
-          {t.cleared ? ' · Cleared at the bank' : ''}
+          {t.reconciled ? ' · Reconciled' : t.cleared ? ' · Cleared at the bank' : ''}
+          {t.flagged ? ' · Flagged' : ''}
         </Text>
       </View>
+      {locked && (
+        <Text variant="callout" tone="warning">
+          This transaction is reconciled with the bank. Changing it will make the account stop matching your statement.
+        </Text>
+      )}
       <Field label="Payee" value={payee} onChangeText={setPayee} />
       <Field label="Amount" value={amountText} onChangeText={setAmountText} keyboardType="decimal-pad" inputMode="decimal" />
       <DateField label="Date" value={date} onChange={setDate} />
@@ -80,17 +89,29 @@ export function EditTransaction({ id }: { id: string }) {
       )}
       <Field label="Note" value={memo} onChangeText={setMemo} placeholder="Optional" />
       <Button
-        title="Save"
+        title={t.flagged ? 'Remove flag' : 'Flag for follow-up'}
+        variant="secondary"
+        onPress={() => setFlag(id, !t.flagged)}
+      />
+      <Button
+        title={locked && confirmSave ? 'Save anyway' : 'Save'}
         size="lg"
         disabled={!amount || !payee.trim()}
         onPress={() => {
+          if (locked && !confirmSave) return setConfirmSave(true);
           update(id, { payee: payee.trim(), amount: amount ?? undefined, date, envelopeId, memo: memo.trim() || undefined });
           haptic('success');
           closeSheet();
         }}
       />
       <Button
-        title={confirmDelete ? 'Tap again to delete' : 'Delete transaction'}
+        title={
+          confirmDelete
+            ? locked
+              ? 'It’s reconciled. Tap again to delete anyway'
+              : 'Tap again to delete'
+            : 'Delete transaction'
+        }
         variant="destructive"
         onPress={() => {
           if (!confirmDelete) return setConfirmDelete(true);

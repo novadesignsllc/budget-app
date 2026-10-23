@@ -29,7 +29,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 
 ## Sync rules
 
-- Data lives at `users/{uid}/{accounts|envelopes|transactions|allocations|recurring}/{id}`, plus `users/{uid}/meta/state` (settings, merchant memory). `firestore.rules` allows only the owner.
+- Data lives at `users/{uid}/{accounts|envelopes|transactions|allocations|recurring|payees}/{id}`, plus `users/{uid}/meta/state` (settings, plus the legacy merchant memory that migrates into payees). `firestore.rules` allows only the owner.
 - Offline writes land in Firestore's local cache right away and upload on reconnect. On iPhone the queue is on disk, so it survives the app closing.
 - Never write to Firestore directly from a screen. Change the store; the engine syncs it.
 - Firestore bills a full re-read when a listener has been gone for more than 30 minutes. When the transaction count gets into the thousands, listen to recent months only and load older ones on demand.

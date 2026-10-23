@@ -27,6 +27,8 @@ export type Projection = {
   perDebt: DebtResult[];
   /** Total balance at the end of each month, starting with today. For charts. */
   balances: Cents[];
+  /** Each debt's balance at the end of each month, starting with today. For charts. */
+  perDebtBalances: Record<string, Cents[]>;
 };
 
 const MAX_MONTHS = 600;
@@ -68,6 +70,7 @@ export function project(
   const interest = ordered.map(() => 0);
   const payoff: (number | null)[] = ordered.map(() => null);
   const balances: Cents[] = [bal.reduce((a, b) => a + b, 0)];
+  const perDebtBalances: Record<string, Cents[]> = Object.fromEntries(ordered.map((d, i) => [d.id, [bal[i]]]));
   let totalPaid = 0;
   let month = 0;
 
@@ -103,6 +106,7 @@ export function project(
       if (bal[i] <= 0 && payoff[i] === null) payoff[i] = month;
     }
     balances.push(bal.reduce((a, b) => a + Math.max(b, 0), 0));
+    ordered.forEach((d, i) => perDebtBalances[d.id].push(Math.max(bal[i], 0)));
 
     // Payments no longer cover interest: this plan never finishes.
     if (balances[balances.length - 1] >= balances[balances.length - 2] && month > 1) {
@@ -112,6 +116,7 @@ export function project(
         totalPaid,
         perDebt: ordered.map((d, i) => ({ id: d.id, payoffMonth: payoff[i], interest: interest[i] })),
         balances,
+        perDebtBalances,
       };
     }
   }
@@ -123,6 +128,7 @@ export function project(
     totalPaid,
     perDebt: ordered.map((d, i) => ({ id: d.id, payoffMonth: payoff[i], interest: interest[i] })),
     balances,
+    perDebtBalances,
   };
 }
 

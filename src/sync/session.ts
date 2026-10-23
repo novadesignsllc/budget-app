@@ -36,7 +36,11 @@ export function useSessionBootstrap() {
         uid: user.uid,
         store: useStore,
         status: useSyncStatus.getState(),
-        onReady: () => useSession.setState({ dataReady: true }),
+        onReady: () => {
+          // Older data kept payee memory as a map; move it into the payees list once.
+          useStore.getState().migrateMerchantMemory();
+          useSession.setState({ dataReady: true });
+        },
       });
     });
     return () => {

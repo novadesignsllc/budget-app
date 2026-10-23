@@ -4,7 +4,7 @@ import type { Backend, DocData, WriteOp } from '@/backend/types';
 import { defaultSettings, type State } from '@/store';
 
 /** Firestore layout: users/{uid}/{collection}/{id}, plus users/{uid}/meta/state for settings. */
-export const COLLECTIONS = ['accounts', 'envelopes', 'transactions', 'allocations', 'recurring'] as const;
+export const COLLECTIONS = ['accounts', 'envelopes', 'transactions', 'allocations', 'recurring', 'payees'] as const;
 const META = 'meta';
 const META_ID = 'state';
 const ALL = [...COLLECTIONS, META];

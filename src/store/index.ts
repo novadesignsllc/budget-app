@@ -2,6 +2,10 @@ import { create } from 'zustand';
 
 import { today } from '@/domain/dates';
 import type { Strategy } from '@/domain/debt';
+import type { MonthKey } from '@/domain/months';
+import { findPayee } from '@/domain/payees';
+import { canReconcile, isLocked } from '@/domain/reconcile';
+import { withTarget } from '@/domain/targets';
 import { normalizePayee } from '@/domain/quick-add';
 import { advance } from '@/domain/recurring';
 import type {
@@ -11,6 +15,7 @@ import type {
   Cents,
   Envelope,
   ISODate,
+  Payee,
   Recurring,
   Transaction,
   TransactionKind,
@@ -44,9 +49,14 @@ export type State = {
   transactions: Transaction[];
   allocations: Allocation[];
   recurring: Recurring[];
+  /** Merchants with their default envelopes. Replaces `merchantMemory`. */
+  payees: Payee[];
+  /** Legacy payee memory, read only for migrating into `payees`. */
   merchantMemory: Record<string, string>;
   settings: Settings;
 };
+
+export { isLocked };
 
 type Actions = {
   addAccount: (input: {
@@ -63,7 +73,10 @@ type Actions = {
   ) => void;
   moveAccount: (id: string, direction: -1 | 1) => void;
 
-  addEnvelope: (input: { name: string; group: string; monthlyTarget?: Cents }) => string;
+  /** `month` is when the target starts; it defaults to the current month. */
+  addEnvelope: (input: { name: string; group: string; monthlyTarget?: Cents; month?: MonthKey }) => string;
+  /** Sets the target from `month` on. Earlier months keep the target they had. */
+  setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
   updateEnvelope: (
     id: string,
     patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden'>>,
@@ -83,6 +96,14 @@ type Actions = {
     },
   ) => void;
   deleteTransaction: (id: string) => void;
+  setFlag: (id: string, flagged: boolean) => void;
+  /**
+   * Marks these transactions reconciled (and cleared), which locks them. Flagged ones are
+   * skipped and returned, since a flagged transaction can't be reconciled.
+   */
+  reconcileTransactions: (accountId: string, ids: string[]) => string[];
+  /** Posts a leftover difference found while reconciling, already reconciled. */
+  addAdjustment: (accountId: string, amount: Cents) => void;
   transfer: (input: {
     fromAccountId: string;
     toAccountId: string;
@@ -102,6 +123,13 @@ type Actions = {
   approveRecurring: (id: string, amount?: Cents) => void;
   skipRecurring: (id: string) => void;
 
+  addPayee: (name: string, envelopeId?: string) => string;
+  renamePayee: (id: string, name: string) => void;
+  deletePayee: (id: string) => void;
+  setPayeeEnvelope: (id: string, envelopeId: string | undefined) => void;
+  /** One-time move of the old merchant memory into `payees`. Does nothing once payees exist. */
+  migrateMerchantMemory: () => void;
+
   updateSettings: (patch: Partial<Settings>) => void;
   replaceAll: (state: State) => void;
 };
@@ -116,12 +144,23 @@ export const initialState: State = {
   transactions: [],
   allocations: [],
   recurring: [],
+  payees: [],
   merchantMemory: {},
   settings: defaultSettings,
 };
 
 export function newId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+/** Adds the payee if it's new and remembers its envelope. */
+function learnPayee(payees: Payee[], name: string, envelopeId?: string): Payee[] {
+  const clean = name.trim();
+  if (!clean || !normalizePayee(clean)) return payees;
+  const existing = findPayee(payees, clean);
+  if (!existing) return [...payees, { id: newId(), name: clean, envelopeId }];
+  if (!envelopeId || existing.envelopeId === envelopeId) return payees;
+  return payees.map((p) => (p.id === existing.id ? { ...p, envelopeId } : p));
 }
 
 function signed(kind: NewTransaction['kind'], amount: Cents): Cents {
@@ -185,8 +224,9 @@ export const useStore = create<Store>()((set, get) => ({
       return { accounts: sorted.map((a, order) => ({ ...a, order })) };
     }),
 
-  addEnvelope: ({ name, group, monthlyTarget }) => {
+  addEnvelope: ({ name, group, monthlyTarget, month }) => {
     const id = newId();
+    const from = month ?? today().slice(0, 7);
     set((s) => ({
       envelopes: [
         ...s.envelopes,
@@ -195,12 +235,17 @@ export const useStore = create<Store>()((set, get) => ({
           name: name.trim(),
           group: group.trim() || 'Everyday',
           order: s.envelopes.length,
-          monthlyTarget,
+          ...(monthlyTarget ? { targets: { [from]: monthlyTarget } } : {}),
         },
       ],
     }));
     return id;
   },
+
+  setTarget: (envelopeId, month, amount) =>
+    set((s) => ({
+      envelopes: s.envelopes.map((e) => (e.id === envelopeId ? { ...e, targets: withTarget(e, month, amount) } : e)),
+    })),
 
   updateEnvelope: (id, patch) =>
     set((s) => ({ envelopes: s.envelopes.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
@@ -255,10 +300,7 @@ export const useStore = create<Store>()((set, get) => ({
     };
     set((s) => ({
       transactions: [...s.transactions, row],
-      merchantMemory:
-        row.envelopeId && row.payee
-          ? { ...s.merchantMemory, [normalizePayee(row.payee)]: row.envelopeId }
-          : s.merchantMemory,
+      payees: row.kind === 'income' ? learnPayee(s.payees, row.payee) : learnPayee(s.payees, row.payee, row.envelopeId),
     }));
     return id;
   },
@@ -286,10 +328,7 @@ export const useStore = create<Store>()((set, get) => ({
       const updated = transactions.find((t) => t.id === id)!;
       return {
         transactions,
-        merchantMemory:
-          patch.envelopeId && updated.payee
-            ? { ...s.merchantMemory, [normalizePayee(updated.payee)]: patch.envelopeId }
-            : s.merchantMemory,
+        payees: patch.envelopeId || patch.payee ? learnPayee(s.payees, updated.payee, patch.envelopeId) : s.payees,
       };
     }),
 
@@ -303,6 +342,45 @@ export const useStore = create<Store>()((set, get) => ({
         ),
       };
     }),
+
+  setFlag: (id, flagged) =>
+    set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, flagged } : t)) })),
+
+  reconcileTransactions: (accountId, ids) => {
+    const skipped: string[] = [];
+    set((s) => ({
+      transactions: s.transactions.map((t) => {
+        if (t.accountId !== accountId || !ids.includes(t.id)) return t;
+        if (!canReconcile(t)) {
+          skipped.push(t.id);
+          return t;
+        }
+        return { ...t, cleared: true, reconciled: true };
+      }),
+      accounts: s.accounts.map((a) => (a.id === accountId ? { ...a, lastReconciledOn: today() } : a)),
+    }));
+    return skipped;
+  },
+
+  addAdjustment: (accountId, amount) => {
+    if (!amount) return;
+    set((s) => ({
+      transactions: [
+        ...s.transactions,
+        {
+          id: newId(),
+          date: today(),
+          accountId,
+          amount,
+          kind: 'adjustment',
+          payee: 'Balance adjustment',
+          cleared: true,
+          reconciled: true,
+          createdAt: Date.now(),
+        },
+      ],
+    }));
+  },
 
   transfer: ({ fromAccountId, toAccountId, amount, date, envelopeId, payee }) => {
     const pair = newId();
@@ -355,8 +433,8 @@ export const useStore = create<Store>()((set, get) => ({
       if (!account) return s;
       // Everything up to today that isn't still pending is now confirmed against the bank.
       let transactions = s.transactions.map((t) =>
-        t.accountId === accountId && t.date <= day && !pendingIds.includes(t.id)
-          ? { ...t, cleared: true }
+        t.accountId === accountId && t.date <= day && !pendingIds.includes(t.id) && canReconcile(t)
+          ? { ...t, cleared: true, reconciled: true }
           : t,
       );
       const cleared = transactions
@@ -374,6 +452,7 @@ export const useStore = create<Store>()((set, get) => ({
             kind: 'adjustment',
             payee: 'Balance adjustment',
             cleared: true,
+            reconciled: true,
             createdAt: Date.now(),
           },
         ];
@@ -440,6 +519,37 @@ export const useStore = create<Store>()((set, get) => ({
     const r = get().recurring.find((x) => x.id === id);
     if (r) get().updateRecurring(id, { nextDue: advance(r) });
   },
+
+  addPayee: (name, envelopeId) => {
+    const existing = findPayee(get().payees, name);
+    if (existing) {
+      if (envelopeId) get().setPayeeEnvelope(existing.id, envelopeId);
+      return existing.id;
+    }
+    const id = newId();
+    set((s) => ({ payees: [...s.payees, { id, name: name.trim(), envelopeId }] }));
+    return id;
+  },
+
+  renamePayee: (id, name) =>
+    set((s) => ({ payees: s.payees.map((p) => (p.id === id && name.trim() ? { ...p, name: name.trim() } : p)) })),
+
+  deletePayee: (id) => set((s) => ({ payees: s.payees.filter((p) => p.id !== id) })),
+
+  setPayeeEnvelope: (id, envelopeId) =>
+    set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId } : p)) })),
+
+  migrateMerchantMemory: () =>
+    set((s) => {
+      const entries = Object.entries(s.merchantMemory);
+      if (s.payees.length || !entries.length) return s;
+      // The memory only kept normalized keys, so recover display names from transactions.
+      const names = new Map<string, string>();
+      for (const t of s.transactions) names.set(normalizePayee(t.payee), t.payee);
+      return {
+        payees: entries.map(([key, envelopeId]) => ({ id: newId(), name: names.get(key) ?? key, envelopeId })),
+      };
+    }),
 
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
 

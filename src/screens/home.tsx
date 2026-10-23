@@ -17,6 +17,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { TransactionRow } from '@/components/transaction-row';
 import { daysBetween, formatDay, today } from '@/domain/dates';
+import { budgetHealth } from '@/domain/health';
 import { formatMoney } from '@/domain/money';
 import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
@@ -89,6 +90,7 @@ export function Home() {
   }
 
   const rta = ledger.readyToAssign;
+  const health = budgetHealth(ledger);
 
   function approveItem(r: Recurring) {
     approve(r.id);
@@ -99,6 +101,26 @@ export function Home() {
   return (
     <Screen>
       {header}
+      {health.short > 0 && (
+        <Section inset={spacing.lg - 2}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/budget')}
+            style={{ flexDirection: 'row', gap: spacing.md, padding: spacing.lg - 2, alignItems: 'flex-start' }}
+          >
+            <RowIcon sf="exclamationmark.triangle.fill" md="warning" fg={colors.negative} bg={colors.negativeSoft} />
+            <View style={{ flex: 1, gap: 2 }}>
+              <Text variant="body" weight="600" tone="negative">
+                Your envelopes hold more than your accounts
+              </Text>
+              <Text variant="callout" tone="negative">
+                Your accounts have {formatMoney(health.short)} less than your envelopes. Take money back from envelopes
+                until they match.
+              </Text>
+            </View>
+          </Pressable>
+        </Section>
+      )}
 
       <HeroCard>
         <View style={{ gap: 2 }}>

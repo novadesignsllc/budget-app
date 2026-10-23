@@ -6,21 +6,27 @@ import { Chip } from '@/components/chip';
 import { Field, FieldLabel } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
+import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
+import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
+import { targetFor } from '@/domain/targets';
 import { useLedger } from '@/hooks/use-ledger';
 import { DEBT_GROUP, useStore } from '@/store';
 import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
-export function EnvelopeSettings({ id }: { id: string }) {
+export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?: MonthKey }) {
+  const month = monthParam ?? monthOf(today());
   const envelope = useStore((s) => s.envelopes.find((e) => e.id === id));
   const envelopes = useStore((s) => s.envelopes);
   const updateEnvelope = useStore((s) => s.updateEnvelope);
+  const setTargetFor = useStore((s) => s.setTarget);
   const ledger = useLedger();
   const [name, setName] = useState(envelope?.name ?? '');
   const [group, setGroup] = useState(envelope?.group ?? 'Everyday');
-  const [target, setTarget] = useState(envelope?.monthlyTarget ? (envelope.monthlyTarget / 100).toFixed(2) : '');
+  const current = envelope ? targetFor(envelope, month) : null;
+  const [target, setTarget] = useState(current ? (current / 100).toFixed(2) : '');
 
   if (!envelope) {
     return (
@@ -52,7 +58,8 @@ export function EnvelopeSettings({ id }: { id: string }) {
       )}
       {!isDebt && (
         <Field
-          label={group === 'Savings' ? 'Put in each month' : 'Monthly target'}
+          label={`${group === 'Savings' ? 'Put in each month' : 'Monthly target'} from ${formatMonth(month)}`}
+          hint="Earlier months keep the target they had."
           optional
           value={target}
           onChangeText={setTarget}
@@ -69,8 +76,9 @@ export function EnvelopeSettings({ id }: { id: string }) {
           updateEnvelope(id, {
             name: isDebt ? envelope.name : name.trim(),
             group: isDebt ? envelope.group : group,
-            monthlyTarget: parseMoney(target) ?? undefined,
           });
+          const next = parseMoney(target);
+          if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);
           haptic('success');
           closeSheet();
         }}

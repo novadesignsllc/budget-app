@@ -6,7 +6,9 @@ import { Chip } from '@/components/chip';
 import { Field, FieldLabel } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
+import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
+import { monthOf } from '@/domain/months';
 import { DEBT_GROUP, useStore } from '@/store';
 import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
@@ -67,7 +69,7 @@ export function NewEnvelope() {
         size="lg"
         disabled={!name.trim() || duplicate}
         onPress={() => {
-          addEnvelope({ name, group: finalGroup, monthlyTarget: parseMoney(target) ?? undefined });
+          addEnvelope({ name, group: finalGroup, monthlyTarget: parseMoney(target) ?? undefined, month: monthOf(today()) });
           haptic('success');
           closeSheet();
         }}

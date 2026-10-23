@@ -60,3 +60,6 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Plus buttons are black and icon-only, bottom right; quick-add has no plus | One add pattern everywhere |
 | 2026-10-23 | Motion is a fade: quick-add examples and tab switches cross-fade, nothing slides or bounces | The lift read as a bounce |
 | 2026-10-23 | Transactions table runs a size smaller (12pt cells, 46pt rows) | Money columns felt cramped |
+| 2026-10-23 | Tab bar items don't scale on press; sheets and menus keep their pop-in | The press scale read as a bounce |
+| 2026-10-23 | Dropdown options are labels only, no description lines; no notes beside field labels | Menus felt cluttered with tooltip text |
+| 2026-10-23 | Home has one Upcoming card: items waiting for approval plus the next 7 days of bills and subscriptions | Replaces the separate To approve card |

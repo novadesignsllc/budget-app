@@ -50,7 +50,6 @@ export function DebtPlan() {
         autoFocus
         onSubmitEditing={save}
         error={below ? `That’s less than your minimums. They add up to ${formatMoney(minimums)}.` : undefined}
-        hint={`Minimums add up to ${formatMoney(minimums)}. The rest goes to the debt that’s up next.`}
       />
       {preview && (
         <View style={{ paddingHorizontal: 2, gap: 2 }}>

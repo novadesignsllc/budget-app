@@ -133,13 +133,10 @@ export function TransactionList() {
   );
 
   const flaggedCount = scoped.filter((t) => t.flagged).length;
-  const context = searching
-    ? `All months · ${scoped.length} ${scoped.length === 1 ? 'match' : 'matches'}`
-    : `${formatMonth(month)} · ${scoped.length} ${scoped.length === 1 ? 'transaction' : 'transactions'}`;
 
   const emptyText =
     transactions.length === 0
-      ? 'No transactions yet. Tap the bar at the bottom and type something like “Kroger 54.20”.'
+      ? 'No transactions yet.'
       : searching
         ? 'Nothing matches that search.'
         : filter !== 'all'
@@ -148,7 +145,7 @@ export function TransactionList() {
 
   return (
     <>
-      <ScreenTitle title="Transactions" context={context} />
+      <ScreenTitle title="Transactions" />
       <FlatList
         data={rows}
         keyExtractor={(t) => t.id}

@@ -127,7 +127,7 @@ export function PayeesCard({
 
   return (
     <Card>
-      <CardHeader title="Payees" detail={`${payees.length} · quick-add uses these`} />
+      <CardHeader title="Payees" detail={`${payees.length}`} />
       {adding && (
         <InputRow
           icon={{ sf: 'plus', md: 'add' }}

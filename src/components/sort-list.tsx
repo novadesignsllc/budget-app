@@ -16,7 +16,7 @@ export type SortItem = { id: string; name: string };
 export type SortGroup = {
   name: string;
   color: string;
-  /** Envelopes in a locked group (debt payments) can be reordered but can't leave, and nothing else can join. */
+  /** Envelopes in a locked group (Bills, Subscriptions, Debt payments) can be reordered but can't leave, and nothing else can join. */
   locked?: boolean;
   items: SortItem[];
 };

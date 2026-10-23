@@ -311,14 +311,9 @@ export function EditTransaction({ id }: { id: string }) {
         </CardRow>
       </Card>
 
-      {flagged && (
-        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: 2 }}>
-          Flagged transactions stay out of reconciling until you clear the flag.
-        </Text>
-      )}
       {onCard && spending && (
         <Text variant="footnote" tone="negative" style={{ paddingHorizontal: 2 }}>
-          On a card, this is a slip. It still comes out of the envelope, and the money moves to the card’s payment.
+          On a card, this is a slip.
         </Text>
       )}
 

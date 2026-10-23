@@ -124,7 +124,7 @@ export function DebtDetail({ id }: { id: string }) {
 
   return (
     <Screen>
-      <ScreenTitle title={account.name} context={account.apr ? `${(account.apr / 100).toFixed(2)}% APR` : 'No rate set'} />
+      <ScreenTitle title={account.name} />
 
       <Card padded>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -191,14 +191,9 @@ export function DebtDetail({ id }: { id: string }) {
               backgroundColor: pressed ? colors.control : colors.surface,
             })}
           >
-            <View style={{ flex: 1, gap: 1 }}>
-              <Text variant="body" weight="500">
-                Payment envelope
-              </Text>
-              <Text variant="footnote" tone="textSecondary">
-                Money here pays this debt. Slips move money here on their own.
-              </Text>
-            </View>
+            <Text variant="body" weight="500" style={{ flex: 1 }}>
+              Payment envelope
+            </Text>
             <Money cents={ready} weight="600" tone="auto" />
             <Icon sf="chevron.right" md="chevron_right" size={11} color={colors.textTertiary} weight="semibold" />
           </Pressable>

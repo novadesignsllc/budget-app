@@ -15,9 +15,11 @@ import { Text } from './text';
 const month = new Intl.DateTimeFormat('en-US', { month: 'short' });
 
 /** Column widths shared by the row and its TableHeader. Put an empty-label `emoji` column after Date. */
-export const TXN_COLUMNS = { date: 36, emoji: 22, money: 74, amount: 84, check: 20 } as const;
+export const TXN_COLUMNS = { date: 36, emoji: 20, money: 72, amount: 80, check: 20 } as const;
 /** Every row is the same height, note or not. */
-const ROW_HEIGHT = 50;
+const ROW_HEIGHT = 46;
+/** The table runs a size smaller than the rest of the app so the money columns breathe. */
+const cell = { fontSize: 12, lineHeight: 15 } as const;
 
 function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
   const d = fromISODate(date);
@@ -26,7 +28,7 @@ function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
       <Text variant="caption" weight="600" tone={tone ?? 'textTertiary'} style={{ fontSize: 9, lineHeight: 11 }} caps>
         {month.format(d)}
       </Text>
-      <Text variant="body" weight="600" tone={tone ?? 'text'} style={{ fontVariant: ['tabular-nums'] }}>
+      <Text variant="row" weight="600" tone={tone ?? 'text'} style={{ fontVariant: ['tabular-nums'] }}>
         {d.getDate()}
       </Text>
     </View>
@@ -130,30 +132,35 @@ export function TransactionRow({
         </View>
       )}
       <DateBlock date={t.date} tone={slip ? 'negative' : undefined} />
-      <Text style={{ width: TXN_COLUMNS.emoji, textAlign: 'center', fontSize: 17, lineHeight: 22 }} accessible={false}>
+      <Text style={{ width: TXN_COLUMNS.emoji, textAlign: 'center', fontSize: 15, lineHeight: 20 }} accessible={false}>
         {transactionEmoji(t, envelope, other)}
       </Text>
       {/* Payee centered on the row; the note sits under it only when there is one. */}
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center', gap: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text variant="row" weight="600" tone={slip ? 'negative' : 'text'} numberOfLines={1} style={{ flexShrink: 1 }}>
+          <Text variant="row" weight="600" tone={slip ? 'negative' : 'text'} numberOfLines={1} style={[cell, { flexShrink: 1 }]}>
             {t.payee || 'Untitled'}
           </Text>
           {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={colors.orange} />}
           {t.reconciled && !select && <Icon sf="lock.fill" md="lock" size={9} color={colors.textTertiary} />}
         </View>
         {note ? (
-          <Text variant="caption" tone={slip ? 'negative' : select?.disabled ? 'orange' : 'textSecondary'} numberOfLines={1}>
+          <Text
+            variant="caption"
+            tone={slip ? 'negative' : select?.disabled ? 'orange' : 'textSecondary'}
+            numberOfLines={1}
+            style={{ fontSize: 10.5, lineHeight: 13 }}
+          >
             {note}
           </Text>
         ) : null}
       </View>
       {columns === 'split' ? (
         <>
-          <Text variant="row" align="right" tone="negative" style={{ width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }}>
+          <Text variant="row" align="right" tone="negative" style={[cell, { width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }]}>
             {out ? formatMoney(-out) : ''}
           </Text>
-          <Text variant="row" align="right" tone="positive" style={{ width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }}>
+          <Text variant="row" align="right" tone="positive" style={[cell, { width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }]}>
             {inn ? formatMoney(inn, { signed: true }) : ''}
           </Text>
         </>
@@ -162,7 +169,7 @@ export function TransactionRow({
           variant="row"
           align="right"
           tone={t.amount > 0 ? 'positive' : 'negative'}
-          style={{ width: TXN_COLUMNS.amount, fontVariant: ['tabular-nums'] }}
+          style={[cell, { width: TXN_COLUMNS.amount, fontVariant: ['tabular-nums'] }]}
         >
           {formatMoney(t.amount, { signed: true })}
         </Text>

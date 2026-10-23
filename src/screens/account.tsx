@@ -13,25 +13,11 @@ import { useToast } from '@/components/toast';
 import { TransactionRow, TXN_COLUMNS } from '@/components/transaction-row';
 import { formatShortDate, today } from '@/domain/dates';
 import { canReconcile, reconciledBalance } from '@/domain/reconcile';
-import type { AccountKind } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { newestFirst, TableCardRow, TableCardTop } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { gutter, maxContentWidth, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
-
-const KIND_LABEL: Record<AccountKind, string> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  cash: 'Cash',
-  credit_card: 'Credit card',
-  auto_loan: 'Car loan',
-  student_loan: 'Student loan',
-  mortgage: 'Mortgage',
-  personal_loan: 'Personal loan',
-  medical: 'Medical debt',
-  other_debt: 'Debt',
-};
 
 const SINGLE_COLUMNS = [
   { label: 'Date', width: TXN_COLUMNS.date },
@@ -201,9 +187,7 @@ export function AccountDetail({ id }: { id: string }) {
             paddingHorizontal: 6,
           }}
         >
-          <Text variant="footnote" tone="textSecondary" style={{ flex: 1 }}>
-            Quick-add uses the first account in your list unless you name another.
-          </Text>
+          <View style={{ flex: 1 }} />
           <Pressable accessibilityRole="button" hitSlop={8} onPress={() => moveAccount(id, -1)}>
             <Text variant="footnote" weight="600" tone="accent">
               Move up
@@ -221,7 +205,7 @@ export function AccountDetail({ id }: { id: string }) {
 
   return (
     <>
-      <ScreenTitle title={account.name} context={reconciling ? 'Reconciling' : KIND_LABEL[account.kind]} />
+      <ScreenTitle title={account.name} />
       <FlatList
         data={rows}
         keyExtractor={(t) => t.id}

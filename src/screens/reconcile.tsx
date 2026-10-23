@@ -120,12 +120,6 @@ export function Reconcile({ id, ids }: { id: string; ids: string[] }) {
         </SummaryRow>
       </Card>
 
-      {diff !== null && diff !== 0 && (
-        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: 2 }}>
-          The adjustment goes to Ready to assign, already reconciled.
-          {diff < 0 ? ' Ready to assign drops by the same amount.' : ''}
-        </Text>
-      )}
 
       <Button
         title={

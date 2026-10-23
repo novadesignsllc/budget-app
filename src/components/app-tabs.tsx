@@ -195,7 +195,7 @@ function SideItem({ label, isFocused, ref, ...props }: TabProps & { label: strin
   );
 }
 
-/** A short fade and lift when you switch tabs, so the change reads as one motion. */
+/** A short fade when you switch tabs. Opacity only, nothing moves. */
 function useTabFade() {
   const tab = useSegments()[1];
   const reduceMotion = useReducedMotion();
@@ -203,11 +203,10 @@ function useTabFade() {
   useEffect(() => {
     if (reduceMotion) return;
     progress.value = 0;
-    progress.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+    progress.value = withTiming(1, { duration: 220, easing: Easing.inOut(Easing.quad) });
   }, [tab, reduceMotion, progress]);
   return useAnimatedStyle(() => ({
     opacity: 0.35 + progress.value * 0.65,
-    transform: [{ translateY: (1 - progress.value) * 6 }],
   }));
 }
 

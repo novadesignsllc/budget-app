@@ -17,12 +17,12 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
 import { floorDollars, formatDollars } from '@/domain/money';
-import { assignDateFor, formatMonth, monthEnd, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
+import { assignDateFor, formatMonth, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
-import { DEBT_GROUP, useStore } from '@/store';
+import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
@@ -31,10 +31,6 @@ import { haptic } from '@/utils/haptics';
 import { useMonthOptions } from '@/utils/month-options';
 
 const STARTERS: { name: string; group: string }[] = [
-  { name: 'Rent', group: 'Bills' },
-  { name: 'Utilities', group: 'Bills' },
-  { name: 'Phone', group: 'Bills' },
-  { name: 'Insurance', group: 'Bills' },
   { name: 'Groceries', group: 'Daily' },
   { name: 'Eating Out', group: 'Daily' },
   { name: 'Gas', group: 'Daily' },
@@ -174,7 +170,7 @@ export function Budget() {
       groups.map((g) => ({
         name: g.name,
         color: groupColor(g.name),
-        locked: g.name === DEBT_GROUP,
+        locked: isManagedGroup(g.name),
         items: g.items.map((e) => ({ id: e.id, name: e.name })),
       })),
     );
@@ -193,11 +189,7 @@ export function Budget() {
     return (
       <>
         <Screen ref={scrollRef} onScroll={onScroll} scrollEnabled={!dragging}>
-          <ScreenTitle title="Budget" context="Sorting envelopes" />
-          <Text variant="footnote" tone="textSecondary" align="center">
-            Press and hold to pick something up. Drag a group to move it with its envelopes, or drop an envelope into
-            any group.
-          </Text>
+          <ScreenTitle title="Sort envelopes" />
           <SortList groups={sorting} onChange={setSorting} scroller={{ offset, scrollBy }} onDragChange={setDragging} />
         </Screen>
         <ScreenActions>
@@ -211,10 +203,7 @@ export function Budget() {
   return (
     <>
       <Screen ref={scrollRef} onScroll={onScroll}>
-        <ScreenTitle
-          title="Budget"
-          context={past ? `${monthYear.format(asDate(month))} · past month` : monthYear.format(asDate(month))}
-        />
+        <ScreenTitle title={`Budget · ${monthYear.format(asDate(month))}`} />
 
         {past && (
           <View
@@ -229,14 +218,9 @@ export function Budget() {
             }}
           >
             <Icon sf="clock.arrow.circlepath" md="history" size={18} color={colors.onInk} />
-            <View style={{ flex: 1, gap: 1 }}>
-              <Text variant="body" weight="600" tone="onInk">
-                Past month: {monthOnly.format(asDate(month))}
-              </Text>
-              <Text variant="footnote" color="rgba(255,255,255,0.8)">
-                Anything you assign here is dated {monthEnd(month).slice(5).replace('-', '/')}.
-              </Text>
-            </View>
+            <Text variant="body" weight="600" tone="onInk" style={{ flex: 1 }}>
+              Past month: {monthOnly.format(asDate(month))}
+            </Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => setMonth(thisMonth)}
@@ -409,13 +393,6 @@ export function Budget() {
               tint={past ? colors.textSecondary : colors.accent}
               soft={past ? colors.control : colors.accentSoft}
               title="Auto-assign"
-              detail={
-                gaps.length === 0
-                  ? 'Every target is already funded'
-                  : rta < 100
-                    ? 'Nothing left to assign'
-                    : 'Fill every target, top to bottom, with what’s left to assign'
-              }
               disabled={gaps.length === 0 || rta < 100}
               onPress={() => {
                 haptic('light');
@@ -430,7 +407,6 @@ export function Budget() {
               tint={colors.textSecondary}
               soft={colors.control}
               title="Sort envelopes"
-              detail="Drag groups and envelopes into a new order"
               onPress={startSorting}
             />
             <ControlRow
@@ -438,19 +414,12 @@ export function Budget() {
               tint={colors.negative}
               soft={colors.negativeSoft}
               title={confirmUnassign ? `Tap again to unassign ${formatDollars(assignedTotal)}` : 'Unassign all'}
-              detail={`Send all of ${formatMonth(month)}’s assigned money back to Ready to assign`}
               danger
               disabled={assignedTotal === 0}
               last
               onPress={unassignAll}
             />
           </Card>
-        )}
-
-        {spendable.length > 0 && (
-          <Text variant="footnote" tone="textTertiary" align="center">
-            Tap an amount to change it. Swipe right to fill, left to edit.
-          </Text>
         )}
       </Screen>
 
@@ -596,7 +565,6 @@ function ControlRow({
   tint,
   soft,
   title,
-  detail,
   danger,
   disabled,
   last,
@@ -606,7 +574,6 @@ function ControlRow({
   tint: string;
   soft: string;
   title: string;
-  detail: string;
   danger?: boolean;
   disabled?: boolean;
   last?: boolean;
@@ -624,7 +591,7 @@ function ControlRow({
         alignItems: 'center',
         gap: spacing.md,
         paddingHorizontal: spacing.md + 2,
-        paddingVertical: 11,
+        paddingVertical: 12,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
         backgroundColor: pressed ? colors.control : colors.surface,
@@ -636,14 +603,9 @@ function ControlRow({
       >
         <Icon sf={icon.sf} md={icon.md} size={14} color={tint} weight="semibold" />
       </View>
-      <View style={{ flex: 1, gap: 1 }}>
-        <Text variant="body" weight="600" tone={danger ? 'negative' : 'text'}>
-          {title}
-        </Text>
-        <Text variant="footnote" tone="textSecondary">
-          {detail}
-        </Text>
-      </View>
+      <Text variant="body" weight="600" tone={danger ? 'negative' : 'text'} style={{ flex: 1 }}>
+        {title}
+      </Text>
     </Pressable>
   );
 }

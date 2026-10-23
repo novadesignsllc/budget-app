@@ -30,7 +30,7 @@ function useCyclingExample() {
       setTimeout(() => {
         setIndex((i) => (i + 1) % EXAMPLES.length);
         setVisible(true);
-      }, 220);
+      }, 280);
     }, 3200);
     return () => clearInterval(id);
   }, [reduceMotion]);
@@ -60,28 +60,17 @@ export function QuickAddBar() {
         }}
         style={({ pressed }) => [
           box,
-          { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 7, opacity: pressed ? 0.7 : 1 },
+          { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: spacing.md, opacity: pressed ? 0.7 : 1 },
         ]}
       >
-        <View
-          style={{
-            width: 26,
-            height: 26,
-            borderRadius: 7,
-            backgroundColor: colors.accent,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Icon sf="plus" md="add" size={12} color={colors.onInk} weight="bold" />
-        </View>
+        {/* A plain cross-fade between examples: no movement. */}
         <Animated.View
           style={{
             flex: 1,
             opacity: example.visible ? 1 : 0,
-            transform: [{ translateY: example.visible ? 0 : -3 }],
-            transitionProperty: ['opacity', 'transform'],
-            transitionDuration: 200,
+            transitionProperty: 'opacity',
+            transitionDuration: 260,
+            transitionTimingFunction: 'ease-in-out',
           }}
         >
           <Text variant="body" tone="placeholder" numberOfLines={1}>

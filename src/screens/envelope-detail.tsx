@@ -102,7 +102,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   return (
     <>
       <Screen>
-        <ScreenTitle title={envelope.name} context={past ? `${formatMonth(month)} · past month` : formatMonth(month)} />
+        <ScreenTitle title={envelope.name} />
 
         <Card>
           <View style={{ padding: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm }}>

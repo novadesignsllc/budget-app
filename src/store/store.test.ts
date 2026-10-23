@@ -119,7 +119,7 @@ describe('sorting envelopes', () => {
 });
 
 describe('fixed groups', () => {
-  it('renames Everyday to Daily and folds custom groups in, leaving debt and valid envelopes alone', () => {
+  it('renames Everyday to Daily and folds custom groups and loose Bills envelopes into Daily', () => {
     useStore.setState({
       envelopes: [
         { id: 'a', name: 'Groceries', group: 'Everyday', order: 0 },
@@ -129,12 +129,36 @@ describe('fixed groups', () => {
       ],
       settings: { debtStrategy: 'snowball', monthlyDebtPayment: 0, groupOrder: ['Bills', 'Everyday', 'Fun stuff'] },
     });
-    const rent = useStore.getState().envelopes[2];
+    const visa = useStore.getState().envelopes[3];
     useStore.getState().normalizeGroups();
     const s = useStore.getState();
-    expect(s.envelopes.map((e) => e.group)).toEqual(['Daily', 'Daily', 'Bills', 'Debt payments']);
-    expect(s.envelopes[2]).toBe(rent);
+    // Rent has no bill behind it, so it can't stay in Bills.
+    expect(s.envelopes.map((e) => e.group)).toEqual(['Daily', 'Daily', 'Daily', 'Debt payments']);
+    expect(s.envelopes[3]).toBe(visa);
     expect(s.settings.groupOrder).toEqual(['Bills', 'Daily']);
+  });
+
+  it('ties each recurring item to its own envelope in Bills or Subscriptions', () => {
+    const { account } = setup();
+    useStore.setState({
+      envelopes: [
+        { id: 'rent', name: 'Rent', group: 'Bills', order: 0 },
+        { id: 'tv', name: 'Streaming', group: 'Daily', order: 1 },
+      ],
+      recurring: [
+        { id: 'r1', name: 'Rent', kind: 'bill', amount: 120000, accountId: account, frequency: 'monthly', nextDue: '2026-11-01', envelopeId: 'rent', active: true },
+        { id: 'r2', name: 'Netflix', kind: 'subscription', amount: 1549, accountId: account, frequency: 'monthly', nextDue: '2026-11-03', envelopeId: 'tv', active: true },
+        { id: 'r3', name: 'Hulu', kind: 'subscription', amount: 999, accountId: account, frequency: 'monthly', nextDue: '2026-11-05', envelopeId: 'tv', active: true },
+      ],
+    });
+    useStore.getState().normalizeGroups();
+    const s = useStore.getState();
+    expect(s.envelopes.find((e) => e.id === 'rent')).toMatchObject({ group: 'Bills', recurringId: 'r1' });
+    expect(s.envelopes.find((e) => e.id === 'tv')).toMatchObject({ group: 'Subscriptions', recurringId: 'r2' });
+    // Hulu shared Netflix's envelope, so it gets its own.
+    const hulu = s.recurring.find((r) => r.id === 'r3')!;
+    expect(hulu.envelopeId).not.toBe('tv');
+    expect(s.envelopes.find((e) => e.id === hulu.envelopeId)).toMatchObject({ name: 'Hulu', group: 'Subscriptions', recurringId: 'r3' });
   });
 
   it('does nothing when every group is already valid', () => {
@@ -169,7 +193,7 @@ describe('recurring envelopes', () => {
     expect(Object.values(e.targets ?? {})).toEqual([10900]);
   });
 
-  it('follows renames and amount changes, and lets go of the envelope when deleted', () => {
+  it('follows renames, amount and kind changes, and hides the envelope when deleted', () => {
     const { account } = setup();
     const id = useStore.getState().addRecurring(bill(account));
     const envelopeId = useStore.getState().recurring[0].envelopeId!;
@@ -177,10 +201,12 @@ describe('recurring envelopes', () => {
     let e = useStore.getState().envelopes.find((x) => x.id === envelopeId)!;
     expect(e.name).toBe('Verizon Wireless');
     expect(Object.values(e.targets ?? {}).at(-1)).toBe(8000);
+    useStore.getState().updateRecurring(id, { kind: 'subscription' });
+    e = useStore.getState().envelopes.find((x) => x.id === envelopeId)!;
+    expect(e.group).toBe('Subscriptions');
     useStore.getState().deleteRecurring(id);
     e = useStore.getState().envelopes.find((x) => x.id === envelopeId)!;
-    expect(e).toBeDefined();
-    expect(e.recurringId).toBeUndefined();
+    expect(e.hidden).toBe(true);
   });
 
   it('approving spends from the linked envelope', () => {
@@ -191,11 +217,10 @@ describe('recurring envelopes', () => {
     expect(s.transactions[0].envelopeId).toBe(s.recurring[0].envelopeId);
   });
 
-  it('links an existing envelope with the same name instead of making a second one', () => {
+  it('puts subscriptions in their own group', () => {
     const { account } = setup();
-    const existing = useStore.getState().addEnvelope({ name: 'Verizon', group: 'Bills' });
-    useStore.getState().addRecurring(bill(account));
-    expect(useStore.getState().recurring[0].envelopeId).toBe(existing);
-    expect(useStore.getState().envelopes.filter((e) => e.name === 'Verizon')).toHaveLength(1);
+    useStore.getState().addRecurring({ ...bill(account), name: 'Spotify', kind: 'subscription', amount: 1199 });
+    const s = useStore.getState();
+    expect(s.envelopes.find((e) => e.id === s.recurring[0].envelopeId)).toMatchObject({ group: 'Subscriptions' });
   });
 });

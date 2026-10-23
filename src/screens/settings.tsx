@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 
 import { backend, inDemo } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
@@ -65,7 +65,7 @@ export function Settings() {
   return (
     <>
       <Screen>
-        <ScreenTitle title="Settings" context={inDemo ? 'Demo' : (user?.email ?? 'Signed in with Apple')} />
+        <ScreenTitle title="Settings" />
 
         <PayeesCard searching={searching} adding={adding} onDoneAdding={() => setAdding(false)} />
 
@@ -76,18 +76,16 @@ export function Settings() {
             <>
               <ActionRow title="Try the demo" detail="Six months of sample data ›" onPress={() => void setDemoMode(true)} />
               {devSample && <ActionRow title="Load sample data" detail="Dev only" onPress={loadSampleData} />}
-              <ActionRow title="Sign out" tone="negative" onPress={() => void backend.signOut()} last />
+              <ActionRow
+                title="Sign out"
+                detail={user?.email ?? 'Signed in with Apple'}
+                tone="negative"
+                onPress={() => void backend.signOut()}
+                last
+              />
             </>
           )}
         </Card>
-
-        {!inDemo && (
-          <View style={{ paddingHorizontal: 2 }}>
-            <Text variant="footnote" tone="textTertiary" align="center">
-              Your data syncs to every device signed in to this account.
-            </Text>
-          </View>
-        )}
       </Screen>
       <ScreenActions>
         <ActionButton

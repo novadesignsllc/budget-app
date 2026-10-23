@@ -24,10 +24,27 @@ import type {
 import { GROUPS, isCashAccount } from '@/domain/types';
 
 export const DEBT_GROUP = 'Debt payments';
+export const BILLS_GROUP = 'Bills';
+export const SUBSCRIPTIONS_GROUP = 'Subscriptions';
+
+/**
+ * Groups the app fills on its own: one envelope per bill, subscription and debt. Their
+ * envelopes can be reordered but never leave, and nothing else can join.
+ */
+export const MANAGED_GROUPS: readonly string[] = [BILLS_GROUP, SUBSCRIPTIONS_GROUP, DEBT_GROUP];
+
+export function isManagedGroup(group: string): boolean {
+  return MANAGED_GROUPS.includes(group);
+}
+
+/** The group a recurring item's envelope lives in. */
+export function recurringGroup(kind: Recurring['kind']): string {
+  return kind === 'subscription' ? SUBSCRIPTIONS_GROUP : BILLS_GROUP;
+}
 
 /** "Everyday" was Daily's old name; any group that isn't one of the fixed ones becomes Daily. */
 export function fixGroup(group: string): string {
-  if (group === DEBT_GROUP || (GROUPS as readonly string[]).includes(group)) return group;
+  if (isManagedGroup(group) || (GROUPS as readonly string[]).includes(group)) return group;
   return 'Daily';
 }
 
@@ -99,7 +116,7 @@ type Actions = {
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
   updateEnvelope: (
     id: string,
-    patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji'>>,
+    patch: Partial<Pick<Envelope, 'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji'>>,
   ) => void;
   /**
    * Saves a new order from sort mode: groups top to bottom, each with its envelopes in
@@ -144,7 +161,8 @@ type Actions = {
   reconcile: (accountId: string, bankBalance: Cents, pendingIds: string[]) => void;
   recordStatement: (debtAccountId: string, statementOwed: Cents, trackedOwed: Cents) => void;
 
-  addRecurring: (r: Omit<Recurring, 'id' | 'active'>) => string;
+  /** Makes the item's envelope too, in Bills or Subscriptions. */
+  addRecurring: (r: Omit<Recurring, 'id' | 'active' | 'envelopeId'>) => string;
   updateRecurring: (id: string, patch: Partial<Omit<Recurring, 'id'>>) => void;
   deleteRecurring: (id: string) => void;
   approveRecurring: (id: string, amount?: Cents) => void;
@@ -546,19 +564,10 @@ export const useStore = create<Store>()((set, get) => ({
 
   addRecurring: (r) => {
     const id = newId();
-    let envelopeId = r.envelopeId;
-    if (!envelopeId) {
-      // Every bill and subscription gets its own Bills envelope, budgeted to what it costs a
-      // month, so approving it always spends money that was set aside for it.
-      const existing = get().envelopes.find(
-        (e) => !e.hidden && !e.debtAccountId && e.name.trim().toLowerCase() === r.name.trim().toLowerCase(),
-      );
-      if (existing) envelopeId = existing.id;
-      else {
-        envelopeId = get().addEnvelope({ name: r.name, group: 'Bills', monthlyTarget: monthlyBudget(r) });
-        get().updateEnvelope(envelopeId, { recurringId: id });
-      }
-    }
+    // Every bill and subscription gets its own envelope in Bills or Subscriptions, budgeted to
+    // what it costs a month, so approving it always spends money that was set aside for it.
+    const envelopeId = get().addEnvelope({ name: r.name, group: recurringGroup(r.kind), monthlyTarget: monthlyBudget(r) });
+    get().updateEnvelope(envelopeId, { recurringId: id });
     set((s) => ({ recurring: [...s.recurring, { ...r, envelopeId, id, active: true }] }));
     return id;
   },
@@ -572,20 +581,21 @@ export const useStore = create<Store>()((set, get) => ({
     const envelope = get().envelopes.find((e) => e.id === after.envelopeId && e.recurringId === id);
     if (!envelope) return;
     if (after.name.trim() && after.name !== before.name) get().updateEnvelope(envelope.id, { name: after.name.trim() });
+    if (after.kind !== before.kind) {
+      const group = recurringGroup(after.kind);
+      const order = get().envelopes.filter((e) => e.group === group).length;
+      get().updateEnvelope(envelope.id, { group, order });
+    }
     if (after.amount !== before.amount || after.frequency !== before.frequency) {
       get().setTarget(envelope.id, today().slice(0, 7), monthlyBudget(after));
     }
   },
 
-  // The envelope stays (it may hold money); it just stops following the deleted item.
+  // Its envelope goes with it. Past transactions keep pointing at the hidden envelope.
   deleteRecurring: (id) =>
     set((s) => ({
       recurring: s.recurring.filter((r) => r.id !== id),
-      envelopes: s.envelopes.map((e) => {
-        if (e.recurringId !== id) return e;
-        const { recurringId: _gone, ...rest } = e;
-        return rest;
-      }),
+      envelopes: s.envelopes.map((e) => (e.recurringId === id ? { ...e, hidden: true } : e)),
     })),
 
   approveRecurring: (id, amount) => {
@@ -628,20 +638,53 @@ export const useStore = create<Store>()((set, get) => ({
   setPayeeEnvelope: (id, envelopeId) =>
     set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId } : p)) })),
 
-  normalizeGroups: () =>
+  normalizeGroups: () => {
     set((s) => {
-      const changed = s.envelopes.some((e) => !e.debtAccountId && fixGroup(e.group) !== e.group);
+      // Each recurring item owns one envelope. Link items to the envelope they already use
+      // when nothing else has claimed it.
+      const owner = new Map<string, string>();
+      for (const e of s.envelopes) if (e.recurringId && s.recurring.some((r) => r.id === e.recurringId)) owner.set(e.id, e.recurringId);
+      for (const r of s.recurring) {
+        if (r.envelopeId && !owner.has(r.envelopeId) && ![...owner.values()].includes(r.id)) owner.set(r.envelopeId, r.id);
+      }
+      const byId = new Map(s.recurring.map((r) => [r.id, r]));
+      const place = (e: Envelope): Envelope => {
+        if (e.debtAccountId) return e;
+        const rid = owner.get(e.id);
+        if (rid) {
+          // Linked envelopes carry the item's name and sit in its group.
+          const r = byId.get(rid)!;
+          const group = recurringGroup(r.kind);
+          const name = r.name.trim() || e.name;
+          return e.recurringId === rid && e.group === group && e.name === name ? e : { ...e, recurringId: rid, group, name };
+        }
+        // Not tied to a bill: it can't sit in a group the app fills on its own.
+        const group = isManagedGroup(e.group) ? 'Daily' : fixGroup(e.group);
+        if (group === e.group && !e.recurringId) return e;
+        const { recurringId: _gone, ...rest } = e;
+        return { ...rest, group };
+      };
+      const envelopes = s.envelopes.map(place);
+      const changed = envelopes.some((e, i) => e !== s.envelopes[i]);
       const order = s.settings.groupOrder;
-      const fixedOrder = order && [...new Set(order.map((g) => (g === DEBT_GROUP ? g : fixGroup(g))))];
+      const fixedOrder = order && [...new Set(order.map(fixGroup))];
       const orderChanged = !!order && JSON.stringify(order) !== JSON.stringify(fixedOrder);
       if (!changed && !orderChanged) return s;
       return {
-        envelopes: changed
-          ? s.envelopes.map((e) => (e.debtAccountId || fixGroup(e.group) === e.group ? e : { ...e, group: fixGroup(e.group) }))
-          : s.envelopes,
+        envelopes: changed ? envelopes : s.envelopes,
         settings: orderChanged ? { ...s.settings, groupOrder: fixedOrder } : s.settings,
       };
-    }),
+    });
+    // Items still sharing an envelope with another get their own.
+    const s = get();
+    const owned = new Set(s.envelopes.filter((e) => e.recurringId).map((e) => e.recurringId));
+    for (const r of s.recurring) {
+      if (owned.has(r.id)) continue;
+      const envelopeId = get().addEnvelope({ name: r.name, group: recurringGroup(r.kind), monthlyTarget: monthlyBudget(r) });
+      get().updateEnvelope(envelopeId, { recurringId: r.id });
+      set((st) => ({ recurring: st.recurring.map((x) => (x.id === r.id ? { ...x, envelopeId } : x)) }));
+    }
+  },
 
   migrateMerchantMemory: () =>
     set((s) => {

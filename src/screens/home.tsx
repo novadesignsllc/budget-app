@@ -26,7 +26,15 @@ import { chartCash, chartDebt, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
 const RECONCILE_EVERY_DAYS = 7;
-const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
+const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' });
+
+/** "Friday, October 23rd": Home's title is today. */
+function todayTitle(d: Date) {
+  const n = d.getDate();
+  const suffix = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
+  return `${weekday.format(d)}, ${monthName.format(d)} ${n}${suffix}`;
+}
 const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
 const monthLong = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
 const k = (cents: number) => `$${Math.round(cents / 100000)}k`;
@@ -51,12 +59,12 @@ export function Home() {
   const health = budgetHealth(ledger);
   const history = balanceHistory({ accounts, transactions }, 12, day);
   const accountById = new Map(all.map((a) => [a.id, a]));
-  const context = weekday.format(fromISODate(day));
+  const title = todayTitle(fromISODate(day));
 
   if (all.length === 0) {
     return (
       <Screen>
-        <ScreenTitle title="Home" context={context} />
+        <ScreenTitle title={title} />
         <Card padded>
           <Text variant="section">Start with your checking account</Text>
           <Text variant="callout" tone="textSecondary">
@@ -86,7 +94,7 @@ export function Home() {
 
   return (
     <Screen>
-      <ScreenTitle title="Home" context={context} />
+      <ScreenTitle title={title} />
 
       {health.short > 0 && (
         <Card tone="urgent">
@@ -248,7 +256,7 @@ export function Home() {
       )}
 
       <Card>
-        <CardHeader title="Accounts" detail="Tap one to reconcile" />
+        <CardHeader title="Accounts" />
         {cash.map((a, i) => {
           const since = a.lastReconciledOn ? daysBetween(a.lastReconciledOn, day) : null;
           const stale = since === null || since >= RECONCILE_EVERY_DAYS;

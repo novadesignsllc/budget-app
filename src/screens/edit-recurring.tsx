@@ -13,8 +13,7 @@ import { FREQUENCY_LABEL } from '@/domain/recurring';
 import { isCashAccount, type Frequency, type RecurringKind } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
-import { orderGroups } from '@/utils/group-order';
-import { groupColor, radius, spacing, useColors } from '@/theme';
+import { radius, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
@@ -25,10 +24,10 @@ const FREQUENCIES: Frequency[] = ['weekly', 'biweekly', 'monthly', 'quarterly', 
 export function EditRecurring({ id }: { id?: string }) {
   const colors = useColors();
   const existing = useStore((s) => s.recurring.find((r) => r.id === id));
-  const envelopes = useStore((s) => s.envelopes);
   const addRecurring = useStore((s) => s.addRecurring);
   const updateRecurring = useStore((s) => s.updateRecurring);
   const deleteRecurring = useStore((s) => s.deleteRecurring);
+  const assign = useStore((s) => s.assign);
   const skipRecurring = useStore((s) => s.skipRecurring);
   const { all: accounts, cash } = useAccounts();
   const ledger = useLedger();
@@ -37,25 +36,15 @@ export function EditRecurring({ id }: { id?: string }) {
   const [kind, setKind] = useState<RecurringKind>(existing?.kind ?? 'bill');
   const [amountText, setAmountText] = useState(existing ? (existing.amount / 100).toFixed(2) : '');
   const [accountId, setAccountId] = useState(existing?.accountId ?? cash[0]?.id);
-  const [envelopeId, setEnvelopeId] = useState(existing?.envelopeId);
   const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? 'monthly');
   const [nextDue, setNextDue] = useState(existing?.nextDue ?? today());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const groupOrder = useStore((s) => s.settings.groupOrder);
 
   const amount = parseMoney(amountText);
   const account = accounts.find((a) => a.id === accountId);
   const onCard = !!account && !isCashAccount(account);
-  const groups = orderGroups(
-    envelopes.map((e) => e.group),
-    groupOrder,
-  );
-  const spendable = envelopes
-    .filter((e) => !e.hidden && !e.debtAccountId)
-    .sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group) || a.order - b.order);
-  // A new item gets its own Bills envelope when it's added, so only edits pick one.
-  const valid = name.trim() && amount && amount > 0 && accountId && (!existing || envelopeId);
+  const valid = name.trim() && amount && amount > 0 && accountId;
 
   // Bank accounts first, then cards in their own red section. Loans can't pay a bill.
   const accountOptions: DropdownOption<string>[] = accounts
@@ -72,12 +61,6 @@ export function EditRecurring({ id }: { id?: string }) {
         detail: formatMoney(ledger.balance.get(a.id) ?? 0),
       };
     });
-  const envelopeOptions: DropdownOption<string>[] = spendable.map((e) => ({
-    value: e.id,
-    label: e.name,
-    dot: groupColor(e.group),
-    section: e.group,
-  }));
 
   function save() {
     if (!valid || !amount || !accountId) return;
@@ -86,7 +69,6 @@ export function EditRecurring({ id }: { id?: string }) {
       kind,
       amount,
       accountId,
-      ...(existing ? { envelopeId } : {}),
       frequency,
       nextDue,
     };
@@ -116,7 +98,6 @@ export function EditRecurring({ id }: { id?: string }) {
       <Field
         ref={amountRef}
         label={kind === 'bill' ? 'Usual amount' : 'Amount'}
-        hint={kind === 'bill' ? 'Bills can change. Fix the amount on the transaction after you approve it.' : undefined}
         value={amountText}
         onChangeText={setAmountText}
         placeholder="0.00"
@@ -164,19 +145,6 @@ export function EditRecurring({ id }: { id?: string }) {
               options={accountOptions}
             />
           </View>
-          {existing && (
-            <View style={rowStyle}>
-              <Dropdown
-                variant="row"
-                label="Envelope"
-                value={envelopeId}
-                onChange={setEnvelopeId}
-                options={envelopeOptions}
-                searchable
-                placeholder={spendable.length ? 'Choose' : 'None yet'}
-              />
-            </View>
-          )}
           <View style={rowStyle}>
             <Dropdown
               variant="row"
@@ -193,16 +161,7 @@ export function EditRecurring({ id }: { id?: string }) {
         </View>
         {onCard && (
           <Text variant="footnote" tone="negative" style={{ paddingHorizontal: 2 }}>
-            Recurring charges on a card are slips every time. Move this to a bank account when you can.
-          </Text>
-        )}
-        {!existing && (
-          <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: 2 }}>
-            {!name.trim()
-              ? 'Adds an envelope in Bills'
-              : spendable.some((e) => e.name.toLowerCase() === name.trim().toLowerCase())
-                ? `Uses your ${name.trim()} envelope`
-                : `Adds a ${name.trim()} envelope in Bills`}
+            On a card, this is a slip every time.
           </Text>
         )}
       </View>
@@ -227,10 +186,13 @@ export function EditRecurring({ id }: { id?: string }) {
             onPress={() => updateRecurring(existing.id, { active: !existing.active })}
           />
           <Button
-            title={confirmDelete ? 'Tap again to delete' : 'Delete'}
+            title={confirmDelete ? 'Tap again to delete it and its envelope' : 'Delete'}
             variant="destructive"
             onPress={() => {
               if (!confirmDelete) return setConfirmDelete(true);
+              // Its envelope goes too; whatever it still holds goes back to Ready to assign.
+              const left = existing.envelopeId ? (ledger.available.get(existing.envelopeId) ?? 0) : 0;
+              if (existing.envelopeId && left > 0) assign(existing.envelopeId, -left);
               deleteRecurring(existing.id);
               closeSheet();
             }}

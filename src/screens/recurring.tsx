@@ -4,7 +4,7 @@ import { Pressable, Text as RNText, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
-import { FilterPills } from '@/components/filter-pills';
+import { Dropdown } from '@/components/dropdown';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -12,7 +12,6 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { daysBetween, formatShortDate, today } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import { monthlyCost } from '@/domain/recurring';
 import { isCashAccount, type Envelope, type Recurring as RecurringItem } from '@/domain/types';
 import { useAccounts } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
@@ -37,11 +36,6 @@ export function Recurring() {
   const accountById = new Map(accounts.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
   const day = today();
-  const active = items.filter((r) => r.active);
-  const monthly = active.reduce((a, r) => a + monthlyCost(r), 0);
-  const context = `${formatMoney(monthly, { whole: true })} a month · ${items.length} ${
-    items.length === 1 ? 'bill or subscription' : 'bills and subscriptions'
-  }`;
 
   const byDate = (a: RecurringItem, b: RecurringItem) =>
     Number(b.active) - Number(a.active) || a.nextDue.localeCompare(b.nextDue);
@@ -57,22 +51,19 @@ export function Recurring() {
   }
 
   const add = (
-    <ScreenActions>
-      <ActionButton
-        variant="ink"
-        icon={{ sf: 'plus', md: 'add' }}
-        label="Add"
-        accessibilityLabel="Add a bill or subscription"
-        onPress={() => router.push('/edit-recurring')}
-      />
-    </ScreenActions>
+    <ActionButton
+      variant="ink"
+      icon={{ sf: 'plus', md: 'add' }}
+      accessibilityLabel="Add a bill or subscription"
+      onPress={() => router.push('/edit-recurring')}
+    />
   );
 
   if (items.length === 0) {
     return (
       <>
         <Screen>
-          <ScreenTitle title="Recurring" context="Bills and subscriptions" />
+          <ScreenTitle title="Recurring" />
           <Card padded>
             <Text variant="section">Add your bills and subscriptions</Text>
             <Text variant="callout" tone="textSecondary">
@@ -86,7 +77,7 @@ export function Recurring() {
             />
           </Card>
         </Screen>
-        {add}
+        <ScreenActions>{add}</ScreenActions>
       </>
     );
   }
@@ -94,19 +85,7 @@ export function Recurring() {
   return (
     <>
       <Screen>
-        <ScreenTitle title="Recurring" context={context} />
-
-        <FilterPills
-          center
-          value={view}
-          onChange={setView}
-          options={[
-            { value: 'date', label: 'By date' },
-            { value: 'amount', label: 'By amount' },
-            { value: 'bill', label: 'Bills' },
-            { value: 'subscription', label: 'Subscriptions' },
-          ]}
-        />
+        <ScreenTitle title="Recurring" />
 
         <View
           onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
@@ -135,13 +114,22 @@ export function Recurring() {
             Nothing here yet.
           </Text>
         )}
-        {list.some((r) => r.kind === 'bill') && (
-          <Text variant="footnote" tone="textSecondary" align="center">
-            Bills marked ~ change each month. Tap the transaction after you approve to fix the amount.
-          </Text>
-        )}
       </Screen>
-      {add}
+      <ScreenActions>
+        <Dropdown
+          variant="compact"
+          value={view}
+          onChange={setView}
+          label="Show"
+          options={[
+            { value: 'date', label: 'By date' },
+            { value: 'amount', label: 'By amount' },
+            { value: 'bill', label: 'Bills' },
+            { value: 'subscription', label: 'Subscriptions' },
+          ]}
+        />
+        {add}
+      </ScreenActions>
     </>
   );
 }

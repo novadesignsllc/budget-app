@@ -16,10 +16,17 @@ export function loadSampleData() {
   s.addAccount({ name: 'Student Loan', kind: 'student_loan', balance: 2280000, apr: 550, minPayment: 26000, dueDay: 1 });
 
   const env = (name: string, group: string, target?: number) => s.addEnvelope({ name, group, monthlyTarget: target });
-  const rent = env('Rent', 'Bills', 110000);
-  const utilities = env('Utilities', 'Bills', 18000);
-  const phone = env('Phone', 'Bills', 6500);
-  const subs = env('Subscriptions', 'Bills', 3500);
+  // Each bill and subscription makes its own envelope.
+  const bill = (name: string, kind: 'bill' | 'subscription', amount: number, accountId: string, inDays: number) => {
+    const rid = s.addRecurring({ name, kind, amount, accountId, frequency: 'monthly', nextDue: addDays(day, inDays) });
+    return useStore.getState().recurring.find((r) => r.id === rid)!.envelopeId!;
+  };
+  const rent = bill('Rent', 'bill', 110000, checking, 9);
+  const utilities = bill('Duke Energy', 'bill', 11500, checking, 24);
+  const phone = bill('Verizon', 'bill', 6500, checking, 0);
+  const subs = bill('Netflix', 'subscription', 1549, checking, 0);
+  bill('Spotify', 'subscription', 1199, chime, 5);
+  bill('iCloud+', 'subscription', 299, chase, 12);
   const groceries = env('Groceries', 'Daily', 50000);
   const eating = env('Eating Out', 'Daily', 12000);
   const gas = env('Gas', 'Daily', 16000);
@@ -32,7 +39,7 @@ export function loadSampleData() {
     [rent, 110000],
     [utilities, 18000],
     [phone, 6500],
-    [subs, 3500],
+    [subs, 1600],
     [groceries, 50000],
     [eating, 12000],
     [gas, 16000],
@@ -54,13 +61,6 @@ export function loadSampleData() {
   st.addTransaction({ date: addDays(day, -4), accountId: chase, amount: 2399, kind: 'slip', payee: 'Amazon', envelopeId: fun });
   st.addTransaction({ date: addDays(day, -7), accountId: checking, amount: 184216, kind: 'income', payee: 'Paycheck' });
   st.transfer({ fromAccountId: checking, toAccountId: chase, amount: 15000, date: addDays(day, -2) });
-
-  st.addRecurring({ name: 'Rent', kind: 'bill', amount: 110000, accountId: checking, envelopeId: rent, frequency: 'monthly', nextDue: addDays(day, 9) });
-  st.addRecurring({ name: 'Duke Energy', kind: 'bill', amount: 11500, accountId: checking, envelopeId: utilities, frequency: 'monthly', nextDue: addDays(day, 24) });
-  st.addRecurring({ name: 'Verizon', kind: 'bill', amount: 6500, accountId: checking, envelopeId: phone, frequency: 'monthly', nextDue: day });
-  st.addRecurring({ name: 'Netflix', kind: 'subscription', amount: 1549, accountId: checking, envelopeId: subs, frequency: 'monthly', nextDue: day });
-  st.addRecurring({ name: 'Spotify', kind: 'subscription', amount: 1199, accountId: chime, envelopeId: subs, frequency: 'monthly', nextDue: addDays(day, 5) });
-  st.addRecurring({ name: 'iCloud+', kind: 'subscription', amount: 299, accountId: chase, envelopeId: subs, frequency: 'monthly', nextDue: addDays(day, 12) });
 
   st.updateSettings({ monthlyDebtPayment: 120000 });
 }

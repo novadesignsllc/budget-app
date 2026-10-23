@@ -167,7 +167,7 @@ export function Debt() {
   return (
     <>
       <Screen>
-        <ScreenTitle title="Debt" context={`${strategyName} · ${formatMoney(monthly, { whole: true })} a month`} />
+        <ScreenTitle title="Debt" />
 
         <Card padded>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>

@@ -48,12 +48,6 @@ const DEBTS: DebtDef[] = [
 ];
 
 const ENVELOPES: { name: string; group: string; target: Cents }[] = [
-  { name: 'Rent', group: 'Bills', target: 115000 },
-  { name: 'Utilities', group: 'Bills', target: 18000 },
-  { name: 'Phone', group: 'Bills', target: 6500 },
-  { name: 'Internet', group: 'Bills', target: 7000 },
-  { name: 'Insurance', group: 'Bills', target: 14000 },
-  { name: 'Subscriptions', group: 'Bills', target: 4000 },
   { name: 'Groceries', group: 'Daily', target: 52000 },
   { name: 'Eating Out', group: 'Daily', target: 14000 },
   { name: 'Gas', group: 'Daily', target: 17000 },
@@ -150,7 +144,25 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
   const accounts = [checking, savings, chime, ...debts];
   const accountByName = new Map(accounts.map((a) => [a.name, a]));
 
+  // Recurring bills and subscriptions. Days near today make some due or overdue now.
+  const recurringDefs: RecurringDef[] = [
+    { name: 'Rent', kind: 'bill', envelope: 'Rent', account: 'Main Checking', day: 1, amount: 115000 },
+    { name: 'Duke Energy', kind: 'bill', envelope: 'Duke Energy', account: 'Main Checking', day: 16, amount: 12400, vary: 2800 },
+    { name: 'City Water', kind: 'bill', envelope: 'City Water', account: 'Main Checking', day: 22, amount: 4200, vary: 400 },
+    { name: 'Verizon', kind: 'bill', envelope: 'Verizon', account: 'Main Checking', day: Math.min(todayDay, 28), amount: 6500, pending: true },
+    { name: 'Spectrum', kind: 'bill', envelope: 'Spectrum', account: 'Main Checking', day: 9, amount: 7000 },
+    { name: 'Progressive', kind: 'bill', envelope: 'Progressive', account: 'Main Checking', day: 12, amount: 14000 },
+    { name: 'Netflix', kind: 'subscription', envelope: 'Netflix', account: 'Main Checking', day: Math.max(todayDay - 1, 1), amount: 1549, pending: todayDay > 1 },
+    { name: 'Spotify', kind: 'subscription', envelope: 'Spotify', account: 'Chime', day: 18, amount: 1199 },
+    { name: 'iCloud+', kind: 'subscription', envelope: 'iCloud+', account: 'Chase Freedom', day: 5, amount: 299 },
+  ];
+
   // Envelopes, plus one payment envelope per debt.
+  // Every bill and subscription has its own envelope, budgeted to what it usually costs.
+  const BILL_EMOJI: Record<string, string> = {
+    Rent: '🏠', 'Duke Energy': '⚡', 'City Water': '💧', Verizon: '📱', Spectrum: '📶',
+    Progressive: '🚗', Netflix: '🎬', Spotify: '🎧', 'iCloud+': '☁️',
+  };
   const envelopes: Envelope[] = ENVELOPES.map((e, i) => ({
     id: id('e'),
     name: e.name,
@@ -160,6 +172,16 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     // Groceries went up this month; earlier months keep the old target.
     ...(e.name === 'Groceries' ? { targets: { [thisMonth]: 56000 } } : {}),
   }));
+  recurringDefs.forEach((r, i) =>
+    envelopes.push({
+      id: id('e'),
+      name: r.name,
+      group: r.kind === 'subscription' ? 'Subscriptions' : 'Bills',
+      order: i,
+      monthlyTarget: Math.ceil((r.amount + (r.vary ?? 0)) / 100) * 100,
+      emoji: BILL_EMOJI[r.name],
+    }),
+  );
   debts.forEach((d, i) =>
     envelopes.push({ id: id('e'), name: d.name, group: DEBT_GROUP, order: i, debtAccountId: d.id }),
   );
@@ -222,18 +244,6 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     allocations.push({ id: id('l'), date, envelopeId, amount, createdAt: fromISODate(date).getTime() + counter });
   }
 
-  // Recurring bills and subscriptions. Days near today make some due or overdue now.
-  const recurringDefs: RecurringDef[] = [
-    { name: 'Rent', kind: 'bill', envelope: 'Rent', account: 'Main Checking', day: 1, amount: 115000 },
-    { name: 'Duke Energy', kind: 'bill', envelope: 'Utilities', account: 'Main Checking', day: 16, amount: 12400, vary: 2800 },
-    { name: 'City Water', kind: 'bill', envelope: 'Utilities', account: 'Main Checking', day: 22, amount: 4200, vary: 400 },
-    { name: 'Verizon', kind: 'bill', envelope: 'Phone', account: 'Main Checking', day: Math.min(todayDay, 28), amount: 6500, pending: true },
-    { name: 'Spectrum', kind: 'bill', envelope: 'Internet', account: 'Main Checking', day: 9, amount: 7000 },
-    { name: 'Progressive', kind: 'bill', envelope: 'Insurance', account: 'Main Checking', day: 12, amount: 14000 },
-    { name: 'Netflix', kind: 'subscription', envelope: 'Subscriptions', account: 'Main Checking', day: Math.max(todayDay - 1, 1), amount: 1549, pending: todayDay > 1 },
-    { name: 'Spotify', kind: 'subscription', envelope: 'Subscriptions', account: 'Chime', day: 18, amount: 1199 },
-    { name: 'iCloud+', kind: 'subscription', envelope: 'Subscriptions', account: 'Chase Freedom', day: 5, amount: 299 },
-  ];
   const recurring: Recurring[] = recurringDefs.map((r) => {
     const here = dateIn(thisMonth, r.day);
     const nextDue = r.pending ? here : here > asOf ? here : addMonths(here, 1, r.day);
@@ -249,6 +259,7 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
       active: true,
     };
   });
+  recurring.forEach((r) => (env(r.name).recurringId = r.id));
 
   // Biweekly paychecks on Fridays.
   let payday = start;

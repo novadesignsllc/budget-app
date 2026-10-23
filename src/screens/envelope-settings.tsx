@@ -14,6 +14,7 @@ import { targetFor } from '@/domain/targets';
 import { GROUPS, type BudgetGroup } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
+import { router } from 'expo-router';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
@@ -24,10 +25,9 @@ import { SheetHeader } from '@/components/sheet-header';
 const GROUP_HINT: Record<BudgetGroup, string> = {
   Daily: 'Day-to-day spending: groceries, eating out, dates',
   Savings: 'A goal you add to every month and leave alone',
-  Bills: 'Fixed costs that come due each month',
 };
 
-/** The three groups you can pick. Debt payments are made automatically, one per debt. */
+/** The groups you can pick. Bills, Subscriptions and Debt payments fill themselves. */
 export function GroupPicker({ group, onGroup }: { group: string; onGroup: (group: BudgetGroup) => void }) {
   const options: DropdownOption<BudgetGroup>[] = GROUPS.map((g) => ({
     value: g,
@@ -103,6 +103,9 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
 
   const available = ledger.available.get(id) ?? 0;
   const isDebt = !!envelope.debtAccountId;
+  // Bills and subscriptions belong to their recurring item: same name, same group, deleted together.
+  const recurringId = envelope.recurringId;
+  const fixed = isDebt || !!recurringId;
   const shown = envelopeEmoji({ name: isDebt ? envelope.name : name, emoji, debtAccountId: envelope.debtAccountId });
 
   return (
@@ -115,7 +118,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             label="Name"
             value={name}
             onChangeText={setName}
-            editable={!isDebt}
+            editable={!fixed}
             returnKeyType={isDebt ? 'done' : 'next'}
             onSubmitEditing={() => targetRef.current?.focus()}
             submitBehavior={isDebt ? 'blurAndSubmit' : 'submit'}
@@ -123,14 +126,13 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
         </View>
       </View>
       <EmojiField value={shown} onChange={setEmoji} />
-      {!isDebt && <GroupPicker group={group} onGroup={setGroup} />}
+      {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
       {!isDebt && (
         <Field
           ref={targetRef}
           label={targetLabel(group)}
           optional
           note={`applies from ${formatMonth(month)} on`}
-          hint="Earlier months keep the target they had."
           value={target}
           onChangeText={setTarget}
           placeholder="0.00"
@@ -144,8 +146,8 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
         disabled={!name.trim()}
         onPress={() => {
           updateEnvelope(id, {
-            name: isDebt ? envelope.name : name.trim(),
-            group: isDebt ? envelope.group : group,
+            name: fixed ? envelope.name : name.trim(),
+            group: fixed ? envelope.group : group,
             ...(emoji && emoji !== envelope.emoji ? { emoji } : {}),
           });
           const next = parseMoney(target);
@@ -154,7 +156,17 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
           closeSheet();
         }}
       />
-      {!isDebt && (
+      {recurringId && (
+        <Button
+          title={envelope.group === 'Subscriptions' ? 'Edit subscription' : 'Edit bill'}
+          variant="secondary"
+          onPress={() => {
+            closeSheet();
+            router.push({ pathname: '/edit-recurring', params: { id: recurringId } });
+          }}
+        />
+      )}
+      {!fixed && (
         <View style={{ gap: spacing.xs + 2 }}>
           <Button
             title={confirmHide ? 'Tap again to hide' : 'Hide envelope'}
@@ -166,11 +178,11 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
               closeSheet();
             }}
           />
-          <Text variant="footnote" tone="textSecondary" align="center">
-            {available !== 0
-              ? 'Move its money out before hiding it.'
-              : 'It leaves the Budget. Its past transactions stay.'}
-          </Text>
+          {available !== 0 && (
+            <Text variant="footnote" tone="textSecondary" align="center">
+              Move its money out before hiding it.
+            </Text>
+          )}
         </View>
       )}
     </SheetScreen>

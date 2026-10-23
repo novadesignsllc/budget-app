@@ -78,6 +78,7 @@ const groupHues: Record<string, string> = {
   Bills: '#2a78d6',
   Daily: '#5B4CF0',
   Savings: '#1baf7a',
+  Subscriptions: '#0E8FA0',
   'Debt payments': '#8B97AA',
 };
 const otherHues = ['#0E7490', '#B4237A', '#B45309'];

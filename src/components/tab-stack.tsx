@@ -20,6 +20,8 @@ function AppHeader({ options, back, navigation }: NativeStackHeaderProps) {
       {options.title}
     </Text>
   );
+  // Tab roots have no back link, so their title gets the full width.
+  const side = back ? 88 : 0;
   return (
     <View
       style={{
@@ -31,7 +33,7 @@ function AppHeader({ options, back, navigation }: NativeStackHeaderProps) {
         backgroundColor: colors.background,
       }}
     >
-      <View style={{ width: 88, alignItems: 'flex-start' }}>
+      <View style={{ width: side, alignItems: 'flex-start' }}>
         {back ? (
           <Pressable
             accessibilityRole="button"
@@ -48,7 +50,7 @@ function AppHeader({ options, back, navigation }: NativeStackHeaderProps) {
         ) : null}
       </View>
       <View style={{ flex: 1, alignItems: 'center' }}>{title}</View>
-      <View style={{ width: 88 }} />
+      <View style={{ width: side }} />
     </View>
   );
 }

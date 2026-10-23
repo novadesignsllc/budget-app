@@ -411,9 +411,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             />
           )}
         </View>
-        <Text variant="footnote" tone="textTertiary" align="center">
-          It stops when you pause. If everything is filled in, it saves on its own.
-        </Text>
       </SheetScreen>
     );
   }

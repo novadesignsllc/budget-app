@@ -35,7 +35,8 @@ export type Account = {
  * month toward a goal, Bills are fixed monthly costs. Debt payment envelopes live in
  * their own group (DEBT_GROUP in the store) and are made automatically.
  */
-export const GROUPS = ['Daily', 'Savings', 'Bills'] as const;
+/** The groups you put your own envelopes in. */
+export const GROUPS = ['Daily', 'Savings'] as const;
 export type BudgetGroup = (typeof GROUPS)[number];
 
 export type Envelope = {

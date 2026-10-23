@@ -41,9 +41,10 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `npx expo start --web`: desktop and web preview against the real Firebase
 - `EXPO_PUBLIC_FAKE_BACKEND=1 npx expo start --web`: same, with the fake backend (any email and password signs in; `window.__fakeBackend.setOnline(false)` simulates no signal)
 - `npx expo start`: the iPhone dev build connects to this. Expo Go doesn't work: native Firebase needs a dev build.
+- `eas update --channel production -m "..."`: ship JS and design changes to the TestFlight app over the air. Adding a native module changes the runtime fingerprint, which needs a new build instead.
 - `eas build -p ios --profile production --auto-submit`: build and send to TestFlight
 - `eas build -p ios --profile development`: dev build for live reloading. Register the phone first with `eas device:create`.
 
 ## Not built yet
 
-Notifications (evening check-in, weekly reconcile, bill due), the iOS widget and Siri shortcut for quick-add, and the AI fallback for messy quick-add text.
+Notifications (evening check-in, weekly reconcile, bill due), the iOS widget and Siri shortcut for quick-add, the AI fallback for messy quick-add text, and Apple and email account linking.

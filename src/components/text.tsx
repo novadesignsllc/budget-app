@@ -4,12 +4,22 @@ import { type Palette, type TypeVariant, type as typeScale, useColors } from '@/
 
 export type TextTone = keyof Pick<
   Palette,
-  'text' | 'textSecondary' | 'textTertiary' | 'accent' | 'positive' | 'negative' | 'warning' | 'onInk'
+  | 'text'
+  | 'textSecondary'
+  | 'textTertiary'
+  | 'placeholder'
+  | 'accent'
+  | 'blue'
+  | 'positive'
+  | 'negative'
+  | 'warning'
+  | 'onInk'
 >;
 
 export function Text({
   variant = 'body',
   tone = 'text',
+  color,
   weight,
   align,
   style,
@@ -17,6 +27,8 @@ export function Text({
 }: TextProps & {
   variant?: TypeVariant;
   tone?: TextTone;
+  /** A raw color, for text on a colored surface (a card face, a group hue). */
+  color?: string;
   weight?: '400' | '500' | '600' | '700';
   align?: 'left' | 'center' | 'right';
 }) {
@@ -25,7 +37,7 @@ export function Text({
     <RNText
       style={[
         typeScale[variant],
-        { color: colors[tone] },
+        { color: color ?? colors[tone] },
         weight && { fontWeight: weight },
         align && { textAlign: align },
         style,

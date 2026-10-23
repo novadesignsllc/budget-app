@@ -1,13 +1,13 @@
-import { View, useWindowDimensions } from 'react-native';
+import { View } from 'react-native';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { FullWindowOverlay } from 'react-native-screens';
 
 import { useSession } from '@/sync/session';
 import { useSyncStatus, type SyncPhase } from '@/sync/status';
-import { palettes, radius, spacing } from '@/theme';
+import { palettes, radius, shadows, spacing } from '@/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import { useFloatingBottom } from './floating-action';
 import { Icon } from './icon';
 import { Text } from './text';
 
@@ -36,14 +36,12 @@ export function SyncIndicator() {
   const signedIn = useSession((s) => s.status === 'signedIn');
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = palettes[scheme];
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
+  const floatingBottom = useFloatingBottom();
 
   const visible = signedIn && phase !== 'idle';
-  // Sit just above the tab bar and quick-add bar so neither gets covered.
-  const bottom =
-    process.env.EXPO_OS === 'web' ? (width >= 900 ? spacing.lg : 148) : insets.bottom + 116;
+  // Same row as the screen's add button, above the tab bar and quick-add bar.
+  const bottom = floatingBottom + 3;
   const green = colors.positive;
   const busy = phase === 'syncing' || phase === 'waiting';
 
@@ -64,8 +62,10 @@ export function SyncIndicator() {
           width: phase === 'synced' ? 28 : undefined,
           justifyContent: 'center',
           borderRadius: radius.full,
-          backgroundColor: phase === 'synced' ? green : colors.surface,
-          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.12)',
+          backgroundColor: phase === 'synced' ? green : colors.floating,
+          borderWidth: phase === 'synced' ? 0 : 0.5,
+          borderColor: colors.hairline,
+          boxShadow: shadows.float,
         }}
       >
         {busy && (

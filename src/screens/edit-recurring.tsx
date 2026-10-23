@@ -26,6 +26,7 @@ export function EditRecurring({ id }: { id?: string }) {
   const addRecurring = useStore((s) => s.addRecurring);
   const updateRecurring = useStore((s) => s.updateRecurring);
   const deleteRecurring = useStore((s) => s.deleteRecurring);
+  const skipRecurring = useStore((s) => s.skipRecurring);
   const { all: accounts, cash } = useAccounts();
 
   const [name, setName] = useState(existing?.name ?? '');
@@ -129,6 +130,16 @@ export function EditRecurring({ id }: { id?: string }) {
 
       {existing && (
         <View style={{ gap: spacing.sm }}>
+          {existing.active && existing.nextDue <= today() && (
+            <Button
+              title="Skip this time"
+              variant="secondary"
+              onPress={() => {
+                skipRecurring(existing.id);
+                closeSheet();
+              }}
+            />
+          )}
           <Button
             title={existing.active ? 'Pause' : 'Resume'}
             variant="secondary"

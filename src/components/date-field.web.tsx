@@ -26,6 +26,7 @@ export function DateField({
         onChange: (e: { target: { value: string } }) => e.target.value && onChange(e.target.value),
         style: {
           ...typeScale.callout,
+          lineHeight: 'normal',
           color: colors.text,
           background: colors.fill,
           border: 'none',

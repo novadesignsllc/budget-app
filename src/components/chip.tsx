@@ -21,8 +21,7 @@ export function Chip({
   accessibilityLabel?: string;
 }) {
   const colors = useColors();
-  const bg =
-    tone === 'negative' ? colors.negativeSoft : selected ? colors.ink : colors.fill;
+  const bg = tone === 'negative' ? colors.negativeSoft : selected ? colors.ink : colors.fill;
   const fg = tone === 'negative' ? 'negative' : selected ? 'onInk' : tone === 'muted' ? 'textSecondary' : 'text';
   return (
     <Pressable
@@ -38,7 +37,7 @@ export function Chip({
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.xs,
-        height: 34,
+        height: 30,
         paddingHorizontal: spacing.md,
         borderRadius: radius.full,
         backgroundColor: pressed && !selected ? colors.fillPressed : bg,

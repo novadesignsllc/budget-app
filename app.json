@@ -14,6 +14,13 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "config": {
         "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "Zero Budget turns what you say, like “McDonald’s 10.99”, into a transaction.",
+        "NSMicrophoneUsageDescription": "Zero Budget uses the microphone so you can say a transaction instead of typing it."
+      },
+      "runtimeVersion": {
+        "policy": "fingerprint"
       }
     },
     "android": {
@@ -23,7 +30,11 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "single",
@@ -50,7 +61,14 @@
           }
         }
       ],
-      "expo-apple-authentication"
+      "expo-apple-authentication",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Zero Budget uses the microphone so you can say a transaction instead of typing it.",
+          "speechRecognitionPermission": "Zero Budget turns what you say, like “McDonald’s 10.99”, into a transaction."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -66,6 +84,9 @@
         "projectId": "bf90fb8c-48ba-478b-9e47-8f83824c4b69"
       }
     },
-    "owner": "lldavell"
+    "owner": "lldavell",
+    "updates": {
+      "url": "https://u.expo.dev/bf90fb8c-48ba-478b-9e47-8f83824c4b69"
+    }
   }
 }

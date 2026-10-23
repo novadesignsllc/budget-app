@@ -18,12 +18,7 @@ export function Segmented<T extends string>({
   return (
     <View
       accessibilityRole="tablist"
-      style={{
-        flexDirection: 'row',
-        backgroundColor: colors.fill,
-        borderRadius: radius.full,
-        padding: spacing.xxs + 1,
-      }}
+      style={{ flexDirection: 'row', backgroundColor: colors.fill, borderRadius: radius.full, padding: 2 }}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -38,15 +33,15 @@ export function Segmented<T extends string>({
             }}
             style={{
               flex: 1,
-              height: 34,
+              height: 30,
+              paddingHorizontal: spacing.sm,
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: radius.full,
-              backgroundColor: selected ? colors.surface : 'transparent',
-              boxShadow: selected ? '0 1px 3px rgba(0, 0, 0, 0.10)' : undefined,
+              backgroundColor: selected ? colors.ink : 'transparent',
             }}
           >
-            <Text variant="callout" weight={selected ? '600' : '500'} tone={selected ? 'text' : 'textSecondary'}>
+            <Text variant="callout" weight={selected ? '600' : '500'} tone={selected ? 'onInk' : 'textSecondary'} numberOfLines={1}>
               {o.label}
             </Text>
           </Pressable>

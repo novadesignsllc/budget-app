@@ -1,8 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
 
-import { EnvelopeSheet } from '@/screens/envelope';
+import { EnvelopeSettings } from '@/screens/envelope-settings';
 
-export default function EnvelopeRoute() {
+export default function EnvelopeSettingsRoute() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  return <EnvelopeSheet id={id} />;
+  return <EnvelopeSettings id={id} />;
 }

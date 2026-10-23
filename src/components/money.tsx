@@ -14,6 +14,7 @@ export function Money({
   cents,
   variant = 'body',
   tone = 'text',
+  color,
   signed,
   whole,
   weight,
@@ -23,6 +24,7 @@ export function Money({
   cents: Cents;
   variant?: TypeVariant;
   tone?: TextTone | 'auto';
+  color?: string;
   signed?: boolean;
   whole?: boolean;
   weight?: '400' | '500' | '600' | '700';
@@ -32,6 +34,7 @@ export function Money({
     <Text
       variant={variant}
       tone={resolved}
+      color={color}
       weight={weight}
       selectable
       style={[{ fontVariant: ['tabular-nums'] }, style]}

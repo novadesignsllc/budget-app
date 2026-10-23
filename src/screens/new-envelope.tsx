@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Chip } from '@/components/chip';
-import { Field } from '@/components/field';
+import { Field, FieldLabel } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { parseMoney } from '@/domain/money';
@@ -38,19 +38,24 @@ export function NewEnvelope() {
         error={duplicate ? 'You already have an envelope with this name.' : undefined}
       />
       <View style={{ gap: spacing.sm }}>
-        <Text variant="footnote" weight="500" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          Group
-        </Text>
+        <FieldLabel label="Group" />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
           {groups.map((g) => (
             <Chip key={g} label={g} selected={!newGroup && g === group} onPress={() => { setGroup(g); setNewGroup(''); }} />
           ))}
         </View>
         <Field label="Or a new group" value={newGroup} onChangeText={setNewGroup} placeholder="Kids" />
+        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
+          {finalGroup === 'Savings'
+            ? 'Savings: money you add each month and leave alone.'
+            : finalGroup === 'Bills'
+              ? 'Bills: the same amount goes out every month.'
+              : 'Money you spend through the month.'}
+        </Text>
       </View>
       <Field
-        label="Monthly target"
-        hint="Optional."
+        label={finalGroup === 'Savings' ? 'Put in each month' : 'Monthly target'}
+        optional
         value={target}
         onChangeText={setTarget}
         placeholder="0.00"

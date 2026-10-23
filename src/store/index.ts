@@ -68,8 +68,12 @@ type Actions = {
     id: string,
     patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden'>>,
   ) => void;
-  assign: (envelopeId: string, amount: Cents) => void;
-  moveMoney: (fromEnvelopeId: string, toEnvelopeId: string, amount: Cents) => void;
+  /** `date` defaults to today; pass a month's date to assign in a past or future month. */
+  assign: (envelopeId: string, amount: Cents, date?: ISODate) => void;
+  moveMoney: (fromEnvelopeId: string, toEnvelopeId: string, amount: Cents, date?: ISODate) => void;
+  /** Several assignments at once (filling targets). Returns their ids so they can be undone. */
+  assignMany: (entries: { envelopeId: string; amount: Cents; date: ISODate }[]) => string[];
+  removeAllocations: (ids: string[]) => void;
 
   addTransaction: (t: NewTransaction) => string;
   updateTransaction: (
@@ -201,27 +205,38 @@ export const useStore = create<Store>()((set, get) => ({
   updateEnvelope: (id, patch) =>
     set((s) => ({ envelopes: s.envelopes.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
 
-  assign: (envelopeId, amount) => {
+  assign: (envelopeId, amount, date) => {
     if (!amount) return;
     set((s) => ({
       allocations: [
         ...s.allocations,
-        { id: newId(), date: today(), envelopeId, amount, createdAt: Date.now() },
+        { id: newId(), date: date ?? today(), envelopeId, amount, createdAt: Date.now() },
       ],
     }));
   },
 
-  moveMoney: (fromEnvelopeId, toEnvelopeId, amount) => {
+  moveMoney: (fromEnvelopeId, toEnvelopeId, amount, date) => {
     if (!amount || fromEnvelopeId === toEnvelopeId) return;
     const now = Date.now();
     set((s) => ({
       allocations: [
         ...s.allocations,
-        { id: newId(), date: today(), envelopeId: fromEnvelopeId, amount: -amount, createdAt: now },
-        { id: newId(), date: today(), envelopeId: toEnvelopeId, amount, createdAt: now },
+        { id: newId(), date: date ?? today(), envelopeId: fromEnvelopeId, amount: -amount, createdAt: now },
+        { id: newId(), date: date ?? today(), envelopeId: toEnvelopeId, amount, createdAt: now },
       ],
     }));
   },
+
+  assignMany: (entries) => {
+    const now = Date.now();
+    const rows = entries
+      .filter((e) => e.amount)
+      .map((e) => ({ id: newId(), date: e.date, envelopeId: e.envelopeId, amount: e.amount, createdAt: now }));
+    set((s) => ({ allocations: [...s.allocations, ...rows] }));
+    return rows.map((r) => r.id);
+  },
+
+  removeAllocations: (ids) => set((s) => ({ allocations: s.allocations.filter((a) => !ids.includes(a.id)) })),
 
   addTransaction: (t) => {
     const id = newId();

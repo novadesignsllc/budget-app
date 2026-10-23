@@ -74,6 +74,13 @@ describe('parseQuickAdd', () => {
     expect(parseQuickAdd('spent 10.99 at mcdonalds', ctx).payee).toBe('Mcdonalds');
   });
 
+  it('understands amounts the way dictation writes them', () => {
+    expect(parseQuickAdd('Best Buy 47 dollars and 27 cents', ctx)).toMatchObject({ amount: 4727, payee: 'Best Buy' });
+    expect(parseQuickAdd('Best Buy 47 point 27', ctx)).toMatchObject({ amount: 4727, payee: 'Best Buy' });
+    expect(parseQuickAdd('gas 40 dollars', ctx)).toMatchObject({ amount: 4000, payee: 'Gas' });
+    expect(parseQuickAdd('Starbucks 6 dollars and 5 cents', ctx).amount).toBe(605);
+  });
+
   it('returns no amount when there is none yet', () => {
     expect(parseQuickAdd('mcdonalds', ctx).amount).toBeNull();
   });

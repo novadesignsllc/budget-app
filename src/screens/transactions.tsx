@@ -3,7 +3,7 @@ import { FlatList, TextInput, View, useWindowDimensions } from 'react-native';
 
 import { Chip } from '@/components/chip';
 import { EmptyState } from '@/components/empty-state';
-import { Section } from '@/components/list';
+import { ICON_INSET, Section } from '@/components/list';
 import { Text } from '@/components/text';
 import { TransactionRow } from '@/components/transaction-row';
 import { formatDay } from '@/domain/dates';
@@ -110,7 +110,7 @@ export function TransactionList({ accountId, header }: { accountId?: string; hea
         )
       }
       renderItem={({ item }) => (
-        <Section title={formatDay(item.date)}>
+        <Section title={formatDay(item.date)} inset={ICON_INSET}>
           {item.items.map((t) => (
             <TransactionRow
               key={t.id}

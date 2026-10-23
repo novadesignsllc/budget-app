@@ -5,10 +5,10 @@ import { radius, spacing, useColors } from '@/theme';
 
 import { Text } from './text';
 
-type Variant = 'primary' | 'secondary' | 'accent' | 'destructive' | 'ghost';
+type Variant = 'primary' | 'secondary' | 'tinted' | 'destructive' | 'ghost';
 type Size = 'sm' | 'md' | 'lg';
 
-const heights: Record<Size, number> = { sm: 34, md: 44, lg: 54 };
+const heights: Record<Size, number> = { sm: 32, md: 40, lg: 48 };
 
 export function Button({
   title,
@@ -35,14 +35,14 @@ export function Button({
   const bg: Record<Variant, string> = {
     primary: colors.ink,
     secondary: colors.fill,
-    accent: colors.accent,
+    tinted: colors.accentSoft,
     destructive: colors.negativeSoft,
     ghost: 'transparent',
   };
   const fg = {
     primary: 'onInk',
     secondary: 'text',
-    accent: 'onInk',
+    tinted: 'accent',
     destructive: 'negative',
     ghost: 'accent',
   } as const;
@@ -61,14 +61,14 @@ export function Button({
       style={({ pressed }) => [
         {
           height: heights[size],
-          paddingHorizontal: size === 'sm' ? spacing.md : spacing.xl,
+          paddingHorizontal: size === 'sm' ? spacing.md : spacing.lg,
           borderRadius: radius.full,
-          backgroundColor: variant === 'accent' ? colors.accent : bg[variant],
+          backgroundColor: bg[variant],
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
-          gap: spacing.sm,
-          opacity: disabled ? 0.4 : pressed ? 0.75 : 1,
+          gap: spacing.xs + 2,
+          opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
         },
         style,
       ]}

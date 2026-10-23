@@ -4,14 +4,13 @@ import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Field } from '@/components/field';
-import { HeroCard } from '@/components/hero-card';
-import { Row, Section } from '@/components/list';
+import { CardFace } from '@/components/card-face';
+import { ICON_INSET, Row, Section } from '@/components/list';
 import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
-import { Text } from '@/components/text';
 import { TransactionRow } from '@/components/transaction-row';
 import { formatMoney, parseMoney } from '@/domain/money';
-import { useDebtPlan, useLedger } from '@/hooks/use-ledger';
+import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { payoffLabel } from '@/screens/debt';
 import { useStore } from '@/store';
 import { spacing } from '@/theme';
@@ -24,6 +23,7 @@ export function DebtDetail({ id }: { id: string }) {
   const transactions = useStore((s) => s.transactions);
   const updateAccount = useStore((s) => s.updateAccount);
   const { comparison } = useDebtPlan();
+  const { debts } = useAccounts();
 
   const [apr, setApr] = useState(account?.apr ? (account.apr / 100).toFixed(2) : '');
   const [min, setMin] = useState(account?.minPayment ? (account.minPayment / 100).toFixed(2) : '');
@@ -46,23 +46,23 @@ export function DebtDetail({ id }: { id: string }) {
   return (
     <Screen>
       <Stack.Screen options={{ title: account.name, headerLargeTitleEnabled: false }} />
-      <HeroCard>
-        <Text variant="callout" weight="500" tone="textSecondary">
-          You owe
-        </Text>
-        <Money cents={owed} variant="display" />
-        {owed > 0 && result && (
-          <Text variant="callout" tone="textSecondary">
-            Paid off {payoffLabel(result.payoffMonth)} on your plan, with about {formatMoney(result.interest, { whole: true })} more
-            in interest.
-          </Text>
-        )}
-        {owed <= 0 && (
-          <Text variant="headline" tone="positive">
-            Paid off.
-          </Text>
-        )}
-      </HeroCard>
+      <View style={{ alignItems: 'center' }}>
+        <CardFace
+          face={Math.max(0, debts.findIndex((d) => d.id === id))}
+          width={340}
+          title={account.name}
+          caption={account.apr ? `${(account.apr / 100).toFixed(2)}% APR` : undefined}
+          amount={formatMoney(owed)}
+          footnote={
+            owed <= 0
+              ? 'Paid off'
+              : result
+                ? `Paid off ${payoffLabel(result.payoffMonth)} · about ${formatMoney(result.interest, { whole: true })} more interest`
+                : undefined
+          }
+          footnoteTone={owed <= 0 ? 'good' : 'muted'}
+        />
+      </View>
 
       <View style={{ gap: spacing.sm }}>
         <Button
@@ -111,7 +111,7 @@ export function DebtDetail({ id }: { id: string }) {
       </Section>
 
       {slips.length > 0 && (
-        <Section title={`Slips (${slips.length})`}>
+        <Section title={`Slips (${slips.length})`} inset={ICON_INSET}>
           {slips.map((t) => (
             <TransactionRow key={t.id} t={t} envelope={t.envelopeId ? envelopeById.get(t.envelopeId) : undefined} showAccount={false} />
           ))}
@@ -119,7 +119,7 @@ export function DebtDetail({ id }: { id: string }) {
       )}
 
       {activity.length > 0 && (
-        <Section title="Activity">
+        <Section title="Activity" inset={ICON_INSET}>
           {activity
             .filter((t) => t.kind !== 'slip')
             .slice(0, 20)

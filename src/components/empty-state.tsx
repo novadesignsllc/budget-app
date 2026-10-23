@@ -4,15 +4,7 @@ import { radius, spacing, useColors } from '@/theme';
 
 import { Text } from './text';
 
-export function EmptyState({
-  title,
-  body,
-  action,
-}: {
-  title: string;
-  body?: string;
-  action?: React.ReactNode;
-}) {
+export function EmptyState({ title, body, action }: { title: string; body?: string; action?: React.ReactNode }) {
   const colors = useColors();
   return (
     <View
@@ -20,8 +12,8 @@ export function EmptyState({
         backgroundColor: colors.surface,
         borderRadius: radius.lg,
         borderCurve: 'continuous',
-        padding: spacing.xl,
-        gap: spacing.sm,
+        padding: spacing.xl - 4,
+        gap: spacing.xs + 2,
         alignItems: 'flex-start',
       }}
     >
@@ -31,7 +23,7 @@ export function EmptyState({
           {body}
         </Text>
       )}
-      {action && <View style={{ marginTop: spacing.sm }}>{action}</View>}
+      {action && <View style={{ marginTop: spacing.sm, alignSelf: 'stretch' }}>{action}</View>}
     </View>
   );
 }

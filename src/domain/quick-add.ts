@@ -26,9 +26,12 @@ export type ParsedEntry = {
 
 const AMOUNT_RE = /(^|[\s(])([+-]?)\$?\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)(?![\d%/])/g;
 const INCOME_RE = /\b(paycheck|payday|salary|income|direct deposit|deposit|got paid|paid me)\b/i;
-const FILLER = '(?:spent|spend|paid|pay|bought|buy|for|at|on|from|with|using|via|to|in|dollars?|bucks)';
-const LEADING_FILLER_RE = new RegExp(`^${FILLER}\\b\\s*`, 'i');
-const TRAILING_FILLER_RE = new RegExp(`\\s*\\b${FILLER}$`, 'i');
+// Verbs only ever lead ("spent 10 at..."); prepositions can trail ("...10.99 on chime").
+// Keeping "buy" out of the trailing list is what lets "Best Buy" survive.
+const LEADING = '(?:spent|spend|paid|pay|bought|for|at|on|from|with|using|via|to|in|dollars?|bucks)';
+const TRAILING = '(?:for|at|on|from|with|using|via|to|in|dollars?|bucks)';
+const LEADING_FILLER_RE = new RegExp(`^${LEADING}\\b\\s*`, 'i');
+const TRAILING_FILLER_RE = new RegExp(`\\s*\\b${TRAILING}$`, 'i');
 const ACCOUNT_STOPWORDS = new Set([
   'checking',
   'savings',
@@ -77,7 +80,7 @@ const CATEGORY_HINTS: { merchants: RegExp; envelope: RegExp }[] = [
     merchants: /\b(cvs|walgreens|pharmacy|doctor|dentist|copay|hospital|urgent care)\b/i,
     envelope: /health|medical|pharm|doctor/i,
   },
-  { merchants: /\b(amazon|target|home depot|lowe'?s|ikea)\b/i, envelope: /shopping|household|home/i },
+  { merchants: /\b(amazon|target|best buy|walmart\.com|home depot|lowe'?s|ikea|costco\.com)\b/i, envelope: /shopping|household|home|fun/i },
 ];
 
 export function normalizePayee(payee: string): string {
@@ -177,8 +180,16 @@ function guessEnvelope(payee: string, envelopes: Envelope[]): string | null {
  * Turns "McDonald's 10.99", "$54.20 kroger yesterday", or "netflix 15.49 chime" into a
  * transaction draft. Runs on-device, so it works offline and instantly.
  */
+/** Spoken amounts come back in a few shapes; turn them into plain numbers first. */
+export function normalizeSpoken(input: string): string {
+  return input
+    .replace(/(\d+)\s*dollars?\s*(?:and\s*)?(\d{1,2})\s*cents?/gi, (_m, d, c) => `${d}.${c.padStart(2, '0')}`)
+    .replace(/(\d+)\s+point\s+(\d{1,2})\b/gi, '$1.$2')
+    .replace(/(\d+(?:\.\d{1,2})?)\s*(?:dollars?|bucks)\b/gi, '$1');
+}
+
 export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
-  let rest = ` ${input.trim()} `;
+  let rest = ` ${normalizeSpoken(input.trim())} `;
 
   const date = findDate(rest, ctx.today);
   if (date) rest = rest.replace(new RegExp(escapeRe(date.matched), 'i'), ' ');

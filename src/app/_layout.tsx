@@ -1,8 +1,10 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { SyncIndicator } from '@/components/sync-indicator';
+import { ToastHost } from '@/components/toast';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSession, useSessionBootstrap } from '@/sync/session';
 import { palettes } from '@/theme';
@@ -38,38 +40,41 @@ export default function RootLayout() {
   });
 
   return (
-    <ThemeProvider
-      value={{
-        ...base,
-        colors: {
-          ...base.colors,
-          background: colors.background,
-          card: colors.background,
-          text: colors.text,
-          primary: colors.accent,
-          border: colors.separator,
-        },
-      }}
-    >
-      <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Protected guard={status === 'signedIn'}>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="add" options={sheetStyle([0.62, 1])} />
-          <Stack.Screen name="transaction/[id]" options={sheetStyle([0.8, 1])} />
-          <Stack.Screen name="new-account" options={sheetStyle([1])} />
-          <Stack.Screen name="reconcile" options={sheetStyle([0.7, 1])} />
-          <Stack.Screen name="envelope/[id]" options={sheetStyle([0.75, 1])} />
-          <Stack.Screen name="new-envelope" options={sheetStyle([0.6, 1])} />
-          <Stack.Screen name="transfer" options={sheetStyle([0.6, 1])} />
-          <Stack.Screen name="statement" options={sheetStyle([0.6, 1])} />
-          <Stack.Screen name="edit-recurring" options={sheetStyle([1])} />
-          <Stack.Screen name="settings" options={sheetStyle([0.5, 1])} />
-        </Stack.Protected>
-        <Stack.Protected guard={status !== 'signedIn'}>
-          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-        </Stack.Protected>
-      </Stack>
-      <SyncIndicator />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider
+        value={{
+          ...base,
+          colors: {
+            ...base.colors,
+            background: colors.background,
+            card: colors.background,
+            text: colors.text,
+            primary: colors.accent,
+            border: colors.separator,
+          },
+        }}
+      >
+        <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
+          <Stack.Protected guard={status === 'signedIn'}>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="add" options={sheetStyle([0.62, 1])} />
+            <Stack.Screen name="transaction/[id]" options={sheetStyle([0.8, 1])} />
+            <Stack.Screen name="new-account" options={sheetStyle([1])} />
+            <Stack.Screen name="reconcile" options={sheetStyle([0.7, 1])} />
+            <Stack.Screen name="envelope/[id]" options={sheetStyle([0.75, 1])} />
+            <Stack.Screen name="new-envelope" options={sheetStyle([0.6, 1])} />
+            <Stack.Screen name="transfer" options={sheetStyle([0.6, 1])} />
+            <Stack.Screen name="statement" options={sheetStyle([0.6, 1])} />
+            <Stack.Screen name="edit-recurring" options={sheetStyle([1])} />
+            <Stack.Screen name="settings" options={sheetStyle([0.5, 1])} />
+          </Stack.Protected>
+          <Stack.Protected guard={status !== 'signedIn'}>
+            <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+          </Stack.Protected>
+        </Stack>
+        <SyncIndicator />
+        <ToastHost />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }

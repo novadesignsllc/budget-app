@@ -5,14 +5,14 @@ Every UI change gets checked against these principles. When we decide something 
 ## Core principles
 
 1. **One system, every screen.** Cards, rows, buttons, dropdowns, and headers come from one component set with the same radius, border, padding, and type. No screen gets its own one-off style. If a screen needs something new, it becomes a shared component first.
-2. **Every main screen opens the same way.** First the screen title, then a summary card (two numbers and a visual in the middle), then sections. You always know where you are and where to look.
+2. **Every main screen opens the same way.** A centered title with one line of context above it, then content in the same bordered cards. A summary chart appears only where it means something (see 5b).
 3. **Pills are only for sorts and filters** (1M / 3M / YTD, All / Not cleared). Anything you choose (account, envelope, type, group, month, date) is a dropdown: a labeled field with a ⇅ chevron that opens a clean menu.
 4. **Small, quiet text, dense screens.** 13px body, 11px secondary, 10px uppercase column labels, SF Pro. Numbers are the only big type.
 5. **Flat.** Cards have a hairline border, never a drop shadow. No liquid glass, blur, or frosted bars. Solid colors.
 5a. **One-handed.** Search, add, and selectors (month, strategy) sit in the bottom right, just above quick-add. Screen titles are centered and carry no buttons.
 5b. **A chart only where it says something.** Home: cash vs debt over time. Budget: spent-of-assigned ring. Debt: each debt's projected balance to its payoff date. Transactions and Recurring have no summary.
 6. **Color carries meaning.** One blue accent for actions and selection. Group hues for envelopes. Red only for money problems (overspent, slips, debt warnings). Green only for money in and money synced.
-7. **Rectangular buttons.** Radius 10, filled for the main action, outlined for the rest. Round icon buttons only for icon-only actions.
+7. **Rectangular buttons.** Radius 8, filled for the main action, outlined for the rest. Round icon buttons only for icon-only actions.
 8. **Follow `.claude/agents/product-designer.md`.** No em dashes, no marketing words, no emoji in the interface, real states for empty and loading.
 9. **Approved images first.** UI gets mocked up and approved before it's built.
 

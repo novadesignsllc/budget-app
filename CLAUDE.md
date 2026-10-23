@@ -1,4 +1,4 @@
-# Budget app
+# Zero Budget
 
 A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPhone first, with web for desktop. One owner, meant to be used for years.
 

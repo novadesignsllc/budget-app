@@ -105,7 +105,7 @@ function Sidebar() {
     >
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl }}>
         <Text variant="title" style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
-          Budget
+          Zero Budget
         </Text>
 
         <Pressable

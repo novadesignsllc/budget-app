@@ -1,4 +1,4 @@
-# Budget
+# Zero Budget
 
 A personal budgeting app for paying off debt. Every dollar gets a job, cards only exist as debt, and every transaction is typed in by hand.
 

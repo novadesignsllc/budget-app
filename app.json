@@ -17,7 +17,8 @@
       },
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Zero Budget turns what you say, like “McDonald’s 10.99”, into a transaction.",
-        "NSMicrophoneUsageDescription": "Zero Budget uses the microphone so you can say a transaction instead of typing it."
+        "NSMicrophoneUsageDescription": "Zero Budget uses the microphone so you can say a transaction instead of typing it.",
+        "NSPhotoLibraryUsageDescription": "Zero Budget doesn’t use your photos. A library it includes can load images from the photo library, and Apple asks every app with that code to say so."
       },
       "runtimeVersion": {
         "policy": "fingerprint"

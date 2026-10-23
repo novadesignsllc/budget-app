@@ -100,3 +100,20 @@ describe('editing transactions', () => {
     expect(t).toMatchObject({ accountId: account, kind: 'spend' });
   });
 });
+
+describe('sorting envelopes', () => {
+  it('saves group order and moves envelopes between groups', () => {
+    const { groceries } = setup();
+    const s = useStore.getState();
+    const rent = s.addEnvelope({ name: 'Rent', group: 'Bills' });
+    const gas = s.addEnvelope({ name: 'Gas', group: 'Everyday' });
+    useStore.getState().reorderEnvelopes([
+      { name: 'Everyday', ids: [groceries] },
+      { name: 'Bills', ids: [gas, rent] },
+    ]);
+    const after = useStore.getState();
+    expect(after.settings.groupOrder).toEqual(['Everyday', 'Bills']);
+    expect(after.envelopes.find((e) => e.id === gas)).toMatchObject({ group: 'Bills', order: 0 });
+    expect(after.envelopes.find((e) => e.id === rent)).toMatchObject({ group: 'Bills', order: 1 });
+  });
+});

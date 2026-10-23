@@ -28,6 +28,8 @@ export type Settings = {
   debtStrategy: Strategy;
   /** Total the user plans to put toward debt each month, minimums included. */
   monthlyDebtPayment: Cents;
+  /** Budget groups top to bottom, as sorted by the user. Groups not listed follow. */
+  groupOrder?: string[];
 };
 
 export type NewTransaction = {
@@ -81,6 +83,11 @@ type Actions = {
     id: string,
     patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden'>>,
   ) => void;
+  /**
+   * Saves a new order from sort mode: groups top to bottom, each with its envelopes in
+   * order. An envelope listed under a different group moves to it. Applies to every month.
+   */
+  reorderEnvelopes: (groups: { name: string; ids: string[] }[]) => void;
   /** `date` defaults to today; pass a month's date to assign in a past or future month. */
   assign: (envelopeId: string, amount: Cents, date?: ISODate) => void;
   moveMoney: (fromEnvelopeId: string, toEnvelopeId: string, amount: Cents, date?: ISODate) => void;
@@ -251,6 +258,20 @@ export const useStore = create<Store>()((set, get) => ({
 
   updateEnvelope: (id, patch) =>
     set((s) => ({ envelopes: s.envelopes.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
+
+  reorderEnvelopes: (groups) =>
+    set((s) => {
+      const place = new Map<string, { group: string; order: number }>();
+      groups.forEach((g) => g.ids.forEach((id, order) => place.set(id, { group: g.name, order })));
+      return {
+        settings: { ...s.settings, groupOrder: groups.map((g) => g.name) },
+        // Only envelopes that actually moved change, so sync writes just those.
+        envelopes: s.envelopes.map((e) => {
+          const p = place.get(e.id);
+          return p && (p.group !== e.group || p.order !== e.order) ? { ...e, ...p } : e;
+        }),
+      };
+    }),
 
   assign: (envelopeId, amount, date) => {
     if (!amount) return;

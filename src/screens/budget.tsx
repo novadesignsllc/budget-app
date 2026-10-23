@@ -12,6 +12,7 @@ import { ProgressRing } from '@/components/progress-ring';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
+import { SortList, type SortGroup } from '@/components/sort-list';
 import { SwipeRow, useSwipeGuard } from '@/components/swipe-row';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
@@ -25,6 +26,8 @@ import { useLedger } from '@/hooks/use-ledger';
 import { DEBT_GROUP, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary } from '@/utils/envelope-status';
+import { orderGroups } from '@/utils/group-order';
+import { haptic } from '@/utils/haptics';
 import { useMonthOptions } from '@/utils/month-options';
 
 const STARTERS: { name: string; group: string }[] = [
@@ -41,7 +44,6 @@ const STARTERS: { name: string; group: string }[] = [
   { name: 'Gifts', group: 'Savings' },
 ];
 
-const GROUP_ORDER = ['Bills', 'Everyday', 'Savings'];
 /** Assigned, Spent and Left share one width, so the columns always line up. Names get "…" first. */
 const COL = 70;
 const EMPTY: EnvelopeMonth = {
@@ -69,13 +71,19 @@ export function Budget() {
   const budget = useBudgetMonth(month);
   const ledger = useLedger();
   const envelopes = useStore((s) => s.envelopes);
+  const groupOrder = useStore((s) => s.settings.groupOrder);
+  const reorderEnvelopes = useStore((s) => s.reorderEnvelopes);
   const accounts = useStore((s) => s.accounts);
   const addEnvelope = useStore((s) => s.addEnvelope);
   const assign = useStore((s) => s.assign);
   const assignMany = useStore((s) => s.assignMany);
   const removeAllocations = useStore((s) => s.removeAllocations);
   const showToast = useToast((s) => s.show);
-  const { scrollRef, onScroll, watch: revealAboveKeyboard } = useKeyboardReveal();
+  const { scrollRef, onScroll, watch: revealAboveKeyboard, offset, scrollBy } = useKeyboardReveal();
+  // Sort mode: a draft order that only saves on Confirm.
+  const [sorting, setSorting] = useState<SortGroup[] | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [confirmUnassign, setConfirmUnassign] = useState(false);
   // The row being edited and the amount typed so far, for the live "to assign" preview.
   const [editing, setEditing] = useState<{ id: string; draft: number } | null>(null);
   // Years are section labels in the menu, so each option only needs the month name.
@@ -86,15 +94,14 @@ export function Budget() {
 
   const groups = useMemo(() => {
     const visible = envelopes.filter((e) => !e.hidden);
-    const names = [...new Set(visible.map((e) => e.group))].sort((a, b) => {
-      const rank = (g: string) => (g === DEBT_GROUP ? 99 : GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : 50);
-      return rank(a) - rank(b) || a.localeCompare(b);
-    });
-    return names.map((name) => ({
+    return orderGroups(
+      visible.map((e) => e.group),
+      groupOrder,
+    ).map((name) => ({
       name,
       items: visible.filter((e) => e.group === name).sort((a, b) => a.order - b.order),
     }));
-  }, [envelopes]);
+  }, [envelopes, groupOrder]);
 
   const rta = budget.readyToAssign;
   // A past month is drawn in greys so it never passes for this month.
@@ -147,11 +154,75 @@ export function Budget() {
     };
   }
 
+  // Targets in the order the envelopes are listed, so the top of the list fills first.
+  const listed = groups.flatMap((g) => g.items.map((e) => e.id));
+  const orderedGaps = [...gaps].sort((a, b) => listed.indexOf(a.envelopeId) - listed.indexOf(b.envelopeId));
   const fillTargets = () =>
     fill(
-      gaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
+      orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
       `Filled ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
     );
+
+  const assignedTotal = listed.reduce((sum, id) => sum + (budget.envelopes.get(id)?.assigned ?? 0), 0);
+  function unassignAll() {
+    if (!confirmUnassign) {
+      setConfirmUnassign(true);
+      setTimeout(() => setConfirmUnassign(false), 4000);
+      return;
+    }
+    setConfirmUnassign(false);
+    const ids = assignMany(
+      listed
+        .map((id) => ({ envelopeId: id, amount: -(budget.envelopes.get(id)?.assigned ?? 0), date }))
+        .filter((e) => e.amount !== 0),
+    );
+    haptic('warning');
+    showToast({
+      message: `Sent ${formatDollars(assignedTotal)} back to Ready to assign`,
+      actionLabel: 'Undo',
+      onAction: () => removeAllocations(ids),
+    });
+  }
+
+  function startSorting() {
+    haptic('light');
+    setSorting(
+      groups.map((g) => ({
+        name: g.name,
+        color: groupColor(g.name),
+        locked: g.name === DEBT_GROUP,
+        items: g.items.map((e) => ({ id: e.id, name: e.name })),
+      })),
+    );
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }
+
+  function confirmSorting() {
+    if (!sorting) return;
+    reorderEnvelopes(sorting.filter((g) => g.items.length).map((g) => ({ name: g.name, ids: g.items.map((i) => i.id) })));
+    haptic('success');
+    setSorting(null);
+    showToast({ message: 'Order saved' });
+  }
+
+  if (sorting) {
+    return (
+      <>
+        <Screen ref={scrollRef} onScroll={onScroll} scrollEnabled={!dragging}>
+          <ScreenTitle title="Budget" context="Sorting envelopes" />
+          <Text variant="footnote" tone="textSecondary" align="center">
+            Press and hold to pick something up. Drag a group to move it with its envelopes, or drop an envelope into
+            any group.
+          </Text>
+          <SortList groups={sorting} onChange={setSorting} scroller={{ offset, scrollBy }} onDragChange={setDragging} />
+        </Screen>
+        <ScreenActions>
+          <ActionButton label="Cancel" onPress={() => setSorting(null)} />
+          <ActionButton label="Confirm" variant="accent" icon={{ sf: 'checkmark', md: 'check' }} onPress={confirmSorting} />
+        </ScreenActions>
+      </>
+    );
+  }
 
   return (
     <>
@@ -411,6 +482,52 @@ export function Budget() {
         })}
 
         {spendable.length > 0 && (
+          <Card>
+            <CardHeader title={formatMonth(month)} detail={`${formatDollars(rta)} to assign`} />
+            <ControlRow
+              icon={{ sf: 'bolt.fill', md: 'bolt' }}
+              tint={past ? colors.textSecondary : colors.accent}
+              soft={past ? colors.control : colors.accentSoft}
+              title="Auto-assign"
+              detail={
+                gaps.length === 0
+                  ? 'Every target is already funded'
+                  : rta < 100
+                    ? 'Nothing left to assign'
+                    : 'Fill every target, top to bottom, with what’s left to assign'
+              }
+              disabled={gaps.length === 0 || rta < 100}
+              onPress={() => {
+                haptic('light');
+                fill(
+                  orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
+                  `Auto-assigned ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
+                );
+              }}
+            />
+            <ControlRow
+              icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
+              tint={colors.textSecondary}
+              soft={colors.control}
+              title="Sort envelopes"
+              detail="Drag groups and envelopes into a new order"
+              onPress={startSorting}
+            />
+            <ControlRow
+              icon={{ sf: 'arrow.uturn.backward', md: 'undo' }}
+              tint={colors.negative}
+              soft={colors.negativeSoft}
+              title={confirmUnassign ? `Tap again to unassign ${formatDollars(assignedTotal)}` : 'Unassign all'}
+              detail={`Send all of ${formatMonth(month)}’s assigned money back to Ready to assign`}
+              danger
+              disabled={assignedTotal === 0}
+              last
+              onPress={unassignAll}
+            />
+          </Card>
+        )}
+
+        {spendable.length > 0 && (
           <Text variant="footnote" tone="textTertiary" align="center">
             Tap an amount to change it. Swipe right to fill, left to edit.
           </Text>
@@ -539,5 +656,63 @@ function EnvelopeRow({
           </View>
         )}
     </View>
+  );
+}
+
+/** One of the month controls at the bottom of the budget: icon tile, title, one line. */
+function ControlRow({
+  icon,
+  tint,
+  soft,
+  title,
+  detail,
+  danger,
+  disabled,
+  last,
+  onPress,
+}: {
+  icon: { sf: Parameters<typeof Icon>[0]['sf']; md: Parameters<typeof Icon>[0]['md'] };
+  tint: string;
+  soft: string;
+  title: string;
+  detail: string;
+  danger?: boolean;
+  disabled?: boolean;
+  last?: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.md,
+        paddingHorizontal: spacing.md + 2,
+        paddingVertical: 11,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: colors.hairline,
+        backgroundColor: pressed ? colors.control : colors.surface,
+        opacity: disabled ? 0.45 : 1,
+      })}
+    >
+      <View
+        style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: soft, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Icon sf={icon.sf} md={icon.md} size={14} color={tint} weight="semibold" />
+      </View>
+      <View style={{ flex: 1, gap: 1 }}>
+        <Text variant="body" weight="600" tone={danger ? 'negative' : 'text'}>
+          {title}
+        </Text>
+        <Text variant="footnote" tone="textSecondary">
+          {detail}
+        </Text>
+      </View>
+    </Pressable>
   );
 }

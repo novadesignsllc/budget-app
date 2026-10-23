@@ -44,3 +44,6 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Budget columns Assigned · Spent · Left, equal width; names truncate first | Columns must always line up |
 | 2026-10-23 | Tap Assigned to edit in place; no Assign / Take back form | Too many taps |
 | 2026-10-23 | Custom calendar for every date instead of the iOS date pill | The native pill looked out of place |
+| 2026-10-23 | Month controls at the bottom of Budget: Auto-assign, Sort envelopes, Unassign all (tap twice, with Undo) | User request |
+| 2026-10-23 | Sort mode: press and hold to drag groups or envelopes (across groups too); Cancel and Confirm bottom right; the order applies to every month | User request; Confirm on the right per user |
+| 2026-10-23 | Past months are drawn in greys with a banner and a way back to this month | Make it obvious you're not in the current month |

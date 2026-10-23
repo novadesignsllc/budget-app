@@ -31,6 +31,9 @@ export function useKeyboardReveal() {
 
   return {
     scrollRef,
+    /** Current scroll position and a nudge, for things that scroll while dragging. */
+    offset: () => offset.current,
+    scrollBy: (dy: number) => scrollRef.current?.scrollTo({ y: Math.max(0, offset.current + dy), animated: false }),
     onScroll: (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       offset.current = e.nativeEvent.contentOffset.y;
     },

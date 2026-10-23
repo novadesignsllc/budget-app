@@ -8,7 +8,6 @@ import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
-import { ProgressRing } from '@/components/progress-ring';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -26,6 +25,7 @@ import { useLedger } from '@/hooks/use-ledger';
 import { DEBT_GROUP, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary } from '@/utils/envelope-status';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
 import { useMonthOptions } from '@/utils/month-options';
@@ -112,17 +112,6 @@ export function Budget() {
   const existing = new Set(envelopes.map((e) => e.name.toLowerCase()));
   const spendable = envelopes.filter((e) => !e.debtAccountId);
 
-  // The ring: how much of this month's spending money (Bills and Daily) is gone.
-  let spent = 0;
-  let spendingTotal = 0;
-  for (const e of envelopes) {
-    if (e.hidden || e.debtAccountId || e.group === 'Savings') continue;
-    const row = budget.envelopes.get(e.id) ?? EMPTY;
-    spent += row.spent;
-    spendingTotal += Math.max(0, row.spent + row.available);
-  }
-  const ringValue = spendingTotal > 0 ? spent / spendingTotal : 0;
-
   function fill(entries: { envelopeId: string; amount: number }[], message: string) {
     // Whole dollars only: the cents in Ready to assign stay put.
     let left = floorDollars(rta);
@@ -157,11 +146,6 @@ export function Budget() {
   // Targets in the order the envelopes are listed, so the top of the list fills first.
   const listed = groups.flatMap((g) => g.items.map((e) => e.id));
   const orderedGaps = [...gaps].sort((a, b) => listed.indexOf(a.envelopeId) - listed.indexOf(b.envelopeId));
-  const fillTargets = () =>
-    fill(
-      orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
-      `Filled ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
-    );
 
   const assignedTotal = listed.reduce((sum, id) => sum + (budget.envelopes.get(id)?.assigned ?? 0), 0);
   function unassignAll() {
@@ -272,71 +256,7 @@ export function Budget() {
           </View>
         )}
 
-        <Card padded>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            <View style={{ flex: 1, gap: 1 }}>
-              <AnimatedNumber
-                variant="number"
-                tone={rta < 0 && !past ? 'negative' : past ? 'textSecondary' : 'text'}
-                value={rta}
-                format={formatDollars}
-              />
-              <Text variant="footnote" tone="textSecondary">
-                to assign
-              </Text>
-            </View>
-            <ProgressRing
-              value={ringValue}
-              color={hueFor('Daily')}
-              accessibilityLabel={`${Math.round(ringValue * 100)} percent of ${formatMonth(month)}'s spending money spent`}
-            />
-            <View style={{ flex: 1, gap: 1, alignItems: 'flex-end' }}>
-              <AnimatedNumber
-                variant="number"
-                tone={past ? 'textSecondary' : 'text'}
-                value={spent}
-                format={(v) => formatDollars(v, 'up')}
-              />
-              <Text variant="footnote" tone="textSecondary">
-                spent of {formatDollars(spendingTotal)}
-              </Text>
-            </View>
-          </View>
-          <View
-            style={{
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              gap: spacing.sm,
-              borderTopWidth: 1,
-              borderTopColor: colors.separator,
-              paddingTop: spacing.md - 2,
-            }}
-          >
-            <Text variant="footnote" tone={rta < 0 && !past ? 'negative' : 'textSecondary'} style={{ flex: 1 }}>
-              {rta < 0
-                ? 'More is assigned than you have. Take some back.'
-                : gaps.length > 0
-                  ? `${gaps.length} ${gaps.length === 1 ? 'envelope still needs' : 'envelopes still need'} money`
-                  : spendable.length > 0
-                    ? 'Every target is funded'
-                    : 'No envelopes yet'}
-            </Text>
-            {rta >= 100 && gaps.length > 0 && !past && (
-              <Pressable accessibilityRole="button" hitSlop={8} onPress={fillTargets}>
-                <Text variant="footnote" weight="600" tone="accent">
-                  Fill targets ›
-                </Text>
-              </Pressable>
-            )}
-          </View>
-        </Card>
+        <LeftToAssign cents={rta} past={past} />
 
         {spendable.length === 0 && (
           <Card>
@@ -606,9 +526,20 @@ function EnvelopeRow({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Text variant="body" weight="500" tone={red ? 'negative' : past ? 'textSecondary' : 'text'} numberOfLines={1}>
-              {envelope.name}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ width: 20, textAlign: 'center', fontSize: 16, lineHeight: 20, opacity: past ? 0.6 : 1 }}>
+                {envelopeEmoji(envelope)}
+              </Text>
+              <Text
+                variant="body"
+                weight="500"
+                tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
+                numberOfLines={1}
+                style={{ flex: 1 }}
+              >
+                {envelope.name}
+              </Text>
+            </View>
           </Pressable>
           <InlineAmount
             cents={row.assigned}
@@ -714,5 +645,73 @@ function ControlRow({
         </Text>
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * The top of the budget, one message: green while money is waiting for a job, red when
+ * more is assigned than you have, grey with a check once every dollar is assigned.
+ * Whole dollars, rounded down, so a few leftover cents count as assigned.
+ */
+function LeftToAssign({ cents, past }: { cents: number; past: boolean }) {
+  const colors = useColors();
+  const left = floorDollars(cents);
+  if (left === 0) {
+    return (
+      <View
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: spacing.sm,
+          padding: spacing.lg,
+          borderRadius: radius.card,
+          borderWidth: 1,
+          borderColor: colors.border,
+          backgroundColor: '#E9EDF3',
+        }}
+      >
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            backgroundColor: past ? colors.textTertiary : colors.positive,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Icon sf="checkmark" md="check" size={12} color={colors.onInk} weight="bold" />
+        </View>
+        <Text variant="section" tone="textSecondary">
+          All money assigned
+        </Text>
+      </View>
+    );
+  }
+  const over = left < 0;
+  const ink = past ? colors.textSecondary : over ? colors.negative : colors.positive;
+  const soft = past ? colors.textSecondary : over ? '#7A271A' : '#2E6B45';
+  return (
+    <View
+      accessibilityRole="summary"
+      style={{
+        alignItems: 'center',
+        gap: 2,
+        padding: spacing.lg,
+        borderRadius: radius.card,
+        borderWidth: 1,
+        borderColor: past ? colors.border : over ? 'rgba(180,35,24,0.25)' : 'rgba(19,128,63,0.25)',
+        backgroundColor: past ? '#E9EDF3' : over ? colors.negativeSoft : '#E9F6EE',
+      }}
+    >
+      <Text variant="callout" color={soft}>
+        {over ? 'You assigned' : 'You have'}
+      </Text>
+      <AnimatedNumber variant="display" color={ink} value={Math.abs(left)} format={formatDollars} />
+      <Text variant="callout" color={soft}>
+        {over ? 'more than you have' : 'left to assign'}
+      </Text>
+    </View>
   );
 }

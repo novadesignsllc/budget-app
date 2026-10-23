@@ -88,12 +88,18 @@ type Actions = {
   moveAccount: (id: string, direction: -1 | 1) => void;
 
   /** `month` is when the target starts; it defaults to the current month. */
-  addEnvelope: (input: { name: string; group: string; monthlyTarget?: Cents; month?: MonthKey }) => string;
+  addEnvelope: (input: {
+    name: string;
+    group: string;
+    monthlyTarget?: Cents;
+    month?: MonthKey;
+    emoji?: string;
+  }) => string;
   /** Sets the target from `month` on. Earlier months keep the target they had. */
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
   updateEnvelope: (
     id: string,
-    patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden' | 'recurringId'>>,
+    patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji'>>,
   ) => void;
   /**
    * Saves a new order from sort mode: groups top to bottom, each with its envelopes in
@@ -251,7 +257,7 @@ export const useStore = create<Store>()((set, get) => ({
       return { accounts: sorted.map((a, order) => ({ ...a, order })) };
     }),
 
-  addEnvelope: ({ name, group, monthlyTarget, month }) => {
+  addEnvelope: ({ name, group, monthlyTarget, month, emoji }) => {
     const id = newId();
     const from = month ?? today().slice(0, 7);
     set((s) => ({
@@ -263,6 +269,7 @@ export const useStore = create<Store>()((set, get) => ({
           group: group.trim() || 'Daily',
           order: s.envelopes.length,
           ...(monthlyTarget ? { targets: { [from]: monthlyTarget } } : {}),
+          ...(emoji ? { emoji } : {}),
         },
       ],
     }));

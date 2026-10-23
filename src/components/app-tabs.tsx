@@ -19,8 +19,11 @@ const TABS = [
   { name: 'budget', href: '/budget', label: 'Budget', sf: 'envelope', sfOn: 'envelope.fill', md: 'mail' },
   { name: 'debt', href: '/debt', label: 'Debt', sf: 'creditcard', sfOn: 'creditcard.fill', md: 'credit_card' },
   { name: 'recurring', href: '/recurring', label: 'Recurring', sf: 'arrow.triangle.2.circlepath', sfOn: 'arrow.triangle.2.circlepath', md: 'autorenew' },
-  { name: 'settings', href: '/settings', label: 'Settings', sf: 'gearshape', sfOn: 'gearshape.fill', md: 'settings' },
 ] as const;
+
+/** The phone tab bar puts Home in the middle. (The hidden TabList keeps Home first, so the app opens on it.) */
+const BAR_ORDER = ['recurring', 'transactions', 'home', 'budget', 'debt'] as const;
+const BAR = BAR_ORDER.map((name) => TABS.find((t) => t.name === name)!);
 
 type Tab = (typeof TABS)[number];
 type TabProps = Omit<TabTriggerSlotProps, 'ref'> & { ref?: React.Ref<React.ComponentRef<typeof View>> };
@@ -85,7 +88,7 @@ function Dock() {
           paddingBottom: paddingBottom + 4,
         }}
       >
-        {TABS.map((t) => (
+        {BAR.map((t) => (
           <TabTrigger key={t.name} name={t.name} href={t.href} resetOnFocus asChild>
             <BarTab tab={t} />
           </TabTrigger>
@@ -131,6 +134,9 @@ function Sidebar() {
               <SideItem label={t.label} />
             </TabTrigger>
           ))}
+          <Link href="/settings" asChild>
+            <SideItem label="Settings" />
+          </Link>
         </View>
         {[
           { title: 'Accounts', rows: cash, debt: false },

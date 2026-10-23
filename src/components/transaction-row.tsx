@@ -5,6 +5,7 @@ import { fromISODate } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { isDebtAccount, type Account, type Envelope, type Transaction } from '@/domain/types';
 import { useStore } from '@/store';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 import { spacing, useColors } from '@/theme';
 
@@ -13,14 +14,16 @@ import { Text } from './text';
 
 const month = new Intl.DateTimeFormat('en-US', { month: 'short' });
 
-/** Column widths shared by the row and its TableHeader. */
-export const TXN_COLUMNS = { date: 28, money: 62, amount: 70, check: 20 } as const;
+/** Column widths shared by the row and its TableHeader. Put an empty-label `emoji` column after Date. */
+export const TXN_COLUMNS = { date: 36, emoji: 22, money: 74, amount: 84, check: 20 } as const;
+/** Every row is the same height, note or not. */
+const ROW_HEIGHT = 50;
 
 function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
   const d = fromISODate(date);
   return (
     <View style={{ width: TXN_COLUMNS.date, alignItems: 'center' }}>
-      <Text variant="caption" weight="600" tone={tone ?? 'textTertiary'} style={{ fontSize: 8, lineHeight: 10 }} caps>
+      <Text variant="caption" weight="600" tone={tone ?? 'textTertiary'} style={{ fontSize: 9, lineHeight: 11 }} caps>
         {month.format(d)}
       </Text>
       <Text variant="body" weight="600" tone={tone ?? 'text'} style={{ fontVariant: ['tabular-nums'] }}>
@@ -30,33 +33,28 @@ function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
   );
 }
 
-/** "Groceries · weekly run", "Slip on Chase Freedom · Fun Money", "Debt payment · Capital One". */
-export function transactionDetail(
-  t: Transaction,
-  account?: Account,
-  envelope?: Envelope,
-  showAccount?: boolean,
-  other?: Account,
-) {
+/** The emoji in a row: the envelope's, or one for money that has no envelope. */
+export function transactionEmoji(t: Transaction, envelope?: Envelope, other?: Account): string {
+  if (envelope) return envelopeEmoji(envelope);
+  if (t.kind === 'income') return '💵';
+  if (t.kind === 'interest') return '📈';
+  if (t.kind === 'adjustment') return '⚖️';
+  if (t.kind === 'transfer') return other && isDebtAccount(other) ? '💳' : '🔁';
+  return '✉️';
+}
+
+/** The line under the payee: which card a slip went on, then the note. Empty when there's neither. */
+export function transactionNote(t: Transaction, account?: Account): string {
   const parts: string[] = [];
   if (t.kind === 'slip') parts.push(`Slip on ${account?.name ?? 'a card'}`);
-  if (t.kind === 'transfer' && other) {
-    if (isDebtAccount(other)) parts.push(`Debt payment · ${other.name}`);
-    else if (account && isDebtAccount(account)) parts.push(`Payment from ${other.name}`);
-    else parts.push(t.amount < 0 ? `Transfer to ${other.name}` : `Transfer from ${other.name}`);
-  } else if (envelope) parts.push(envelope.name);
-  else if (t.kind === 'income') parts.push('Ready to assign');
-  else if (t.kind === 'interest') parts.push('Interest and fees');
-  else if (t.kind === 'adjustment') parts.push('Balance adjustment');
-  if (showAccount && account && t.kind !== 'slip') parts.push(account.name);
   if (t.memo) parts.push(t.memo);
   return parts.join(' · ');
 }
 
 /**
- * One transaction on one dense line: date, payee with flag or lock, envelope and note,
- * then outflow and inflow columns (or one signed amount). Slips are tinted red.
- * In reconcile mode the row gets a checkbox instead of opening the editor.
+ * One transaction on one line: date, the envelope's emoji, the payee (with its note
+ * underneath when there is one), then outflow in red and inflow in green. Slips are tinted
+ * red. In reconcile mode the row gets a checkbox instead of opening the editor.
  */
 export function TransactionRow({
   t,
@@ -70,6 +68,7 @@ export function TransactionRow({
   t: Transaction;
   account?: Account;
   envelope?: Envelope;
+  /** Add the account to the note line (lists that mix accounts). */
   showAccount?: boolean;
   columns?: 'split' | 'single';
   /** Reconcile mode. */
@@ -81,7 +80,13 @@ export function TransactionRow({
   const slip = t.kind === 'slip';
   const out = t.amount < 0 ? -t.amount : 0;
   const inn = t.amount > 0 ? t.amount : 0;
-  const detail = select?.disabled && t.flagged ? 'Flagged · unflag it to reconcile' : transactionDetail(t, account, envelope, showAccount, other);
+  const base = transactionNote(t, account);
+  const note =
+    select?.disabled && t.flagged
+      ? 'Flagged · unflag it to reconcile'
+      : showAccount && account && !slip
+        ? [account.name, base].filter(Boolean).join(' · ')
+        : base;
 
   return (
     <Pressable
@@ -96,11 +101,11 @@ export function TransactionRow({
         } else router.push(`/transaction/${t.id}`);
       }}
       style={({ pressed }) => ({
+        height: ROW_HEIGHT,
         flexDirection: 'row',
         alignItems: 'center',
         gap: spacing.sm,
         paddingHorizontal: spacing.md,
-        paddingVertical: 7,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
         backgroundColor: pressed ? colors.control : slip ? colors.negativeTint : colors.surface,
@@ -125,7 +130,11 @@ export function TransactionRow({
         </View>
       )}
       <DateBlock date={t.date} tone={slip ? 'negative' : undefined} />
-      <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
+      <Text style={{ width: TXN_COLUMNS.emoji, textAlign: 'center', fontSize: 17, lineHeight: 22 }} accessible={false}>
+        {transactionEmoji(t, envelope, other)}
+      </Text>
+      {/* Payee centered on the row; the note sits under it only when there is one. */}
+      <View style={{ flex: 1, minWidth: 0, justifyContent: 'center', gap: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Text variant="row" weight="600" tone={slip ? 'negative' : 'text'} numberOfLines={1} style={{ flexShrink: 1 }}>
             {t.payee || 'Untitled'}
@@ -133,28 +142,26 @@ export function TransactionRow({
           {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={colors.orange} />}
           {t.reconciled && !select && <Icon sf="lock.fill" md="lock" size={9} color={colors.textTertiary} />}
         </View>
-        <Text
-          variant="caption"
-          tone={slip ? 'negative' : select?.disabled ? 'orange' : 'textSecondary'}
-          numberOfLines={1}
-        >
-          {detail}
-        </Text>
+        {note ? (
+          <Text variant="caption" tone={slip ? 'negative' : select?.disabled ? 'orange' : 'textSecondary'} numberOfLines={1}>
+            {note}
+          </Text>
+        ) : null}
       </View>
       {columns === 'split' ? (
         <>
-          <Text variant="row" align="right" tone={slip ? 'negative' : 'text'} style={{ width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }}>
-            {out ? formatMoney(out) : ''}
+          <Text variant="row" align="right" tone="negative" style={{ width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }}>
+            {out ? formatMoney(-out) : ''}
           </Text>
           <Text variant="row" align="right" tone="positive" style={{ width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }}>
-            {inn ? formatMoney(inn) : ''}
+            {inn ? formatMoney(inn, { signed: true }) : ''}
           </Text>
         </>
       ) : (
         <Text
           variant="row"
           align="right"
-          tone={t.amount > 0 ? 'positive' : slip ? 'negative' : 'text'}
+          tone={t.amount > 0 ? 'positive' : 'negative'}
           style={{ width: TXN_COLUMNS.amount, fontVariant: ['tabular-nums'] }}
         >
           {formatMoney(t.amount, { signed: true })}

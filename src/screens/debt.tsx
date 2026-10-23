@@ -183,7 +183,7 @@ export function Debt() {
               <Text variant="footnote" tone="textSecondary">
                 Owed now
               </Text>
-              <Money cents={ledger.debtTotal} whole weight="600" style={{ fontSize: 15, lineHeight: 19 }} />
+              <Money cents={ledger.debtTotal} whole weight="600" style={{ fontSize: 16, lineHeight: 20 }} />
               {comparison && comparison.interestSaved > 0 ? (
                 <Text variant="footnote" tone="positive">
                   Saves {formatMoney(comparison.interestSaved, { whole: true })} vs minimums

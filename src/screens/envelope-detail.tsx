@@ -187,6 +187,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
               <TableHeader
                 columns={[
                   { label: 'Date', width: TXN_COLUMNS.date },
+  { label: '', width: TXN_COLUMNS.emoji },
                   { label: 'Payee' },
                   { label: 'Out', width: TXN_COLUMNS.money, align: 'right' },
                   { label: 'In', width: TXN_COLUMNS.money, align: 'right' },
@@ -198,6 +199,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                   key={t.id}
                   t={t}
                   account={accountById.get(t.accountId)}
+                  envelope={envelope}
                   showAccount
                   last={i === list.length - 1}
                 />

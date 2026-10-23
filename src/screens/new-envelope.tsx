@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { TextInput } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Field } from '@/components/field';
@@ -8,10 +8,12 @@ import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
 import { useStore } from '@/store';
+import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 
-import { GroupPicker, targetLabel } from './envelope-settings';
+import { EmojiField, EmojiPreview, GroupPicker, targetLabel } from './envelope-settings';
 import { SheetHeader } from '@/components/sheet-header';
 
 export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
@@ -21,23 +23,32 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   const [name, setName] = useState('');
   const [group, setGroup] = useState<string>('Daily');
   const [target, setTarget] = useState('');
+  // Only set once the user picks one; until then the name decides.
+  const [emoji, setEmoji] = useState<string>();
+  const shown = envelopeEmoji({ name, emoji });
   const targetRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const duplicate = envelopes.some((e) => e.name.toLowerCase() === name.trim().toLowerCase() && !e.hidden);
 
   return (
     <SheetScreen>
       <SheetHeader title="New envelope" />
-      <Field
-        label="Name"
-        value={name}
-        onChangeText={setName}
-        placeholder="Groceries"
-        autoFocus
-        returnKeyType="next"
-        submitBehavior="submit"
-        onSubmitEditing={() => targetRef.current?.focus()}
-        error={duplicate ? 'You already have an envelope with this name.' : undefined}
-      />
+      <View style={{ flexDirection: 'row', alignItems: duplicate ? 'center' : 'flex-end', gap: spacing.md }}>
+        <EmojiPreview emoji={shown} />
+        <View style={{ flex: 1 }}>
+          <Field
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Groceries"
+            autoFocus
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => targetRef.current?.focus()}
+            error={duplicate ? 'You already have an envelope with this name.' : undefined}
+          />
+        </View>
+      </View>
+      <EmojiField value={shown} onChange={setEmoji} />
       <GroupPicker group={group} onGroup={setGroup} />
       <Field
         ref={targetRef}
@@ -60,6 +71,7 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
             group,
             monthlyTarget: parseMoney(target) ?? undefined,
             month,
+            emoji,
           });
           haptic('success');
           closeSheet();

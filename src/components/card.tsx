@@ -166,7 +166,7 @@ export function TableHeader({ columns, leading = 0 }: { columns: Column[]; leadi
           tone="textTertiary"
           caps
           numberOfLines={1}
-          style={[c.width ? { width: c.width } : { flex: 1 }, { textAlign: c.align ?? 'left', fontSize: 9 }]}
+          style={[c.width ? { width: c.width } : { flex: 1 }, { textAlign: c.align ?? 'left' }]}
         >
           {c.label}
         </Text>

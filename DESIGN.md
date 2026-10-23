@@ -30,7 +30,7 @@ Light only for now. `useColors()` stays a hook so dark can come back later.
 | negative / negativeStrong | #B42318 / #D92D20 | slips, overspent, urgent |
 | negativeTint | #FFF6F5 | slip row background |
 
-Group hues: Bills #2a78d6, Everyday #5B4CF0, Savings #1baf7a, Debt payments #8B97AA. Other groups get teal, pink, or amber. Red is never a group color.
+Groups are fixed: Daily #5B4CF0, Savings #1baf7a, Bills #2a78d6, Debt payments #8B97AA. Red is never a group color. Every envelope has an emoji (`envelopeEmoji`).
 
 Chart series (`chartColors`) go in fixed order and are never cycled: #2a78d6, #eb6834, #1baf7a, #eda100, then more. A debt keeps its color by its place in the accounts list, not by payoff rank. Slots 3 and 4 are low contrast, so every chart has direct labels and a legend.
 
@@ -42,14 +42,15 @@ SF Pro. Small and dense; numbers are the only big type.
 
 | Style | Size / weight | Use |
 | --- | --- | --- |
-| number | 22 / 600, tabular | the one big number on a card |
-| title | 17 / 700 | centered screen title |
-| section | 14 / 600 | card headings |
-| body | 13 / 400 | rows, fields |
-| row | 12 / 400 | dense table cells |
-| footnote | 11 / 400 | row details, hints |
-| caption | 10 / 400 | chart ticks, tiny stats |
-| label | 10 / 600 caps, +0.7 | column labels |
+| number | 24 / 600, tabular | the one big number on a card |
+| display | 28 / 700 | left to assign |
+| title | 18 / 700 | centered screen title |
+| section | 15 / 600 | card headings |
+| body | 14 / 400 | rows, fields |
+| row | 13 / 400 | dense table cells |
+| footnote | 12 / 400 | row details, hints |
+| caption | 11 / 400 | notes under payees, chart ticks |
+| label | 11 / 600 caps, +0.7 | column labels |
 
 ## Spacing and shape
 
@@ -70,7 +71,7 @@ Screens build only from these (`src/components/`):
 - `ScreenTitle` (centered title plus context line), `Screen`, `SheetScreen`
 - `ScreenActions` and `ActionButton` (bottom right, above quick-add)
 - `LineChart`, `ChartLegend`, `ProgressRing`, `MiniCard`
-- The dock (quick-add bar above a classic tab bar: Home, Transactions, Budget, Debt, Recurring, Settings) and the sync pill are global. Pushed screens use our own flat header (`TabStack`), never the native glass back button.
+- The dock (quick-add bar above a classic tab bar: Recurring, Transactions, Home, Budget, Debt; Settings is a row at the bottom of Home) and the sync pill are global. Pushed screens use our own flat header (`TabStack`), never the native glass back button.
 - `InlineAmount` for any amount you edit in place, `DateRow` / `DateField` (date-picker.tsx) for every date, `AnimatedNumber` for totals that change.
 
 ## Rules for this app

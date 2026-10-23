@@ -47,3 +47,10 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Month controls at the bottom of Budget: Auto-assign, Sort envelopes, Unassign all (tap twice, with Undo) | User request |
 | 2026-10-23 | Sort mode: press and hold to drag groups or envelopes (across groups too); Cancel and Confirm bottom right; the order applies to every month | User request; Confirm on the right per user |
 | 2026-10-23 | Past months are drawn in greys with a banner and a way back to this month | Make it obvious you're not in the current month |
+| 2026-10-23 | Five tabs: Recurring, Transactions, Home (middle), Budget, Debt; Settings is a row at the bottom of Home | User request |
+| 2026-10-23 | Every envelope has an emoji (custom picker, ~1,300 emojis); transaction rows show it in its own column | Clearer than envelope names; user prefers emojis to icons |
+| 2026-10-23 | Transaction rows: fixed height, payee centered, note only when there is one; outflow red with a minus, inflow green with a plus | User request |
+| 2026-10-23 | Transactions filters move to the bottom bar next to the month and search | One-handed use |
+| 2026-10-23 | Budget top card is one message: green "left to assign", red "assigned more than you have", grey check "All money assigned" | Every dollar needs a job; targets don't matter there |
+| 2026-10-23 | Groups are fixed: Daily, Savings, Bills, Debt payments. Recurring items get their own Bills envelope | Simpler; bills never go over |
+| 2026-10-23 | Type one point larger across the app | User request |

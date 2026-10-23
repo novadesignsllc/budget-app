@@ -15,7 +15,7 @@ export function SheetHeader({ title, onClose = closeSheet }: { title: string; on
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
       <View style={{ width: 30 }} />
-      <Text variant="section" align="center" style={{ flex: 1, fontSize: 15, fontWeight: '700' }} accessibilityRole="header">
+      <Text variant="section" align="center" style={{ flex: 1, fontSize: 16, fontWeight: '700' }} accessibilityRole="header">
         {title}
       </Text>
       <Pressable

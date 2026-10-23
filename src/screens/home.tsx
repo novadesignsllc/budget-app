@@ -6,6 +6,7 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader } from '@/components/card';
 import { ChartLegend, LineChart } from '@/components/line-chart';
+import { Icon } from '@/components/icon';
 import { MiniCard } from '@/components/mini-card';
 import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
@@ -302,6 +303,43 @@ export function Home() {
           <Text variant="callout" weight="600" tone="accent">
             Add account
           </Text>
+        </Pressable>
+      </Card>
+
+      {/* Settings lives at the bottom of Home instead of in the tab bar. */}
+      <Card>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          onPress={() => router.push('/settings')}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: spacing.md,
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+            backgroundColor: pressed ? colors.control : colors.surface,
+          })}
+        >
+          <View
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              backgroundColor: colors.control,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Icon sf="gearshape" md="settings" size={16} color={colors.textSecondary} />
+          </View>
+          <View style={{ flex: 1, gap: 1 }}>
+            <Text variant="section">Settings</Text>
+            <Text variant="footnote" tone="textSecondary">
+              Payees, demo, sign out
+            </Text>
+          </View>
+          <Icon sf="chevron.right" md="chevron_right" size={12} color={colors.textTertiary} weight="semibold" />
         </Pressable>
       </Card>
     </Screen>

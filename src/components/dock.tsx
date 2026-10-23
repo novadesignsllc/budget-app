@@ -29,6 +29,6 @@ export function useDock() {
     /** Bottom edge, from the window, for things that float just above the dock. */
     floatBottom: height + (desktop ? spacing.xl : spacing.md),
     /** Space to leave under a screen's content so the action bar never covers the last row. */
-    contentBottom: desktop ? spacing.xxxl + spacing.xl : 64,
+    contentBottom: desktop ? spacing.xxxl + spacing.xl : 76,
   };
 }

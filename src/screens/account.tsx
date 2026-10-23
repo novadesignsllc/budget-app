@@ -35,7 +35,8 @@ const KIND_LABEL: Record<AccountKind, string> = {
 
 const SINGLE_COLUMNS = [
   { label: 'Date', width: TXN_COLUMNS.date },
-  { label: 'Payee · Envelope' },
+  { label: '', width: TXN_COLUMNS.emoji },
+  { label: 'Payee' },
   { label: 'Amount', width: TXN_COLUMNS.amount, align: 'right' as const },
 ];
 

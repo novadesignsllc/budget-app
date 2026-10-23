@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, Text as RNText, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Card, IconTile } from '@/components/card';
+import { Card } from '@/components/card';
 import { FilterPills } from '@/components/filter-pills';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -13,18 +13,17 @@ import { useToast } from '@/components/toast';
 import { daysBetween, formatShortDate, today } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { monthlyCost } from '@/domain/recurring';
-import { isCashAccount, type Recurring as RecurringItem } from '@/domain/types';
+import { isCashAccount, type Envelope, type Recurring as RecurringItem } from '@/domain/types';
 import { useAccounts } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
-import { groupColor, softOf, spacing, useColors } from '@/theme';
-import { envelopeIcon } from '@/utils/envelope-icon';
+import { softOf, spacing, useColors } from '@/theme';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 
 type Sort = 'date' | 'amount' | 'bill' | 'subscription';
 
 const COLUMNS = 3;
 const GAP = 8;
-const BILLS = groupColor('Bills');
 
 export function Recurring() {
   const items = useStore((s) => s.recurring);
@@ -124,7 +123,7 @@ export function Recurring() {
                   width={tileWidth}
                   day={day}
                   onCard={!!account && !isCashAccount(account)}
-                  envelopeName={envelope?.name}
+                  envelope={envelope}
                   onApprove={() => approveItem(r)}
                 />
               );
@@ -147,31 +146,26 @@ export function Recurring() {
   );
 }
 
-/** One bill or subscription: icon, name, amount, and when it's due (or Approve). */
+/** One bill or subscription: its envelope's emoji, name, amount, and when it's due (or Approve). */
 function Tile({
   item,
   width,
   day,
   onCard,
-  envelopeName,
+  envelope,
   onApprove,
 }: {
   item: RecurringItem;
   width: number;
   day: string;
   onCard: boolean;
-  envelopeName?: string;
+  envelope?: Envelope;
   onApprove: () => void;
 }) {
   const colors = useColors();
   const due = item.active && item.nextDue <= day;
   const days = daysBetween(day, item.nextDue);
-  const byName = envelopeIcon(item.name);
-  const icon = onCard
-    ? { sf: 'creditcard.fill' as const, md: 'credit_card' as const }
-    : byName.md === 'inbox' && envelopeName
-      ? envelopeIcon(envelopeName)
-      : byName;
+  const emoji = envelopeEmoji(envelope ?? { name: item.name });
   const amount =
     item.kind === 'bill'
       ? `~${formatMoney(item.amount, { whole: item.amount % 100 === 0 })}`
@@ -202,12 +196,18 @@ function Tile({
           backgroundColor: pressed ? colors.control : 'transparent',
         })}
       >
-        <IconTile
-          sf={icon.sf}
-          md={icon.md}
-          color={onCard ? colors.negativeStrong : BILLS}
-          bg={onCard ? softOf(colors.negativeStrong, 0.14) : colors.blueSoft}
-        />
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: onCard ? softOf(colors.negativeStrong, 0.14) : colors.control,
+          }}
+        >
+          <RNText style={{ fontSize: 22, lineHeight: 28 }}>{emoji}</RNText>
+        </View>
         <Text variant="row" weight="600" tone={ink} numberOfLines={1} align="center">
           {item.name}
         </Text>

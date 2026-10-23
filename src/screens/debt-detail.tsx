@@ -138,7 +138,7 @@ export function DebtDetail({ id }: { id: string }) {
             <Text variant="footnote" tone="textSecondary">
               {owed <= 0 ? 'Done' : 'Paid off in the plan'}
             </Text>
-            <Text variant="body" weight="600" tone={owed <= 0 ? 'positive' : 'text'} style={{ fontSize: 15, lineHeight: 19 }}>
+            <Text variant="body" weight="600" tone={owed <= 0 ? 'positive' : 'text'} style={{ fontSize: 16, lineHeight: 20 }}>
               {owed <= 0 ? 'Paid off' : result ? payoffLabel(result.payoffMonth) : 'Not in the plan'}
             </Text>
             {result && result.interest > 0 && (

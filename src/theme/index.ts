@@ -163,22 +163,22 @@ const numeric: TextStyle = { fontVariant: ['tabular-nums'] };
 
 export const type = {
   /** The one big number on a card. */
-  number: { fontFamily, fontSize: 22, lineHeight: 27, fontWeight: '600', letterSpacing: -0.4, ...numeric },
-  display: { fontFamily, fontSize: 22, lineHeight: 27, fontWeight: '600', letterSpacing: -0.4, ...numeric },
+  number: { fontFamily, fontSize: 24, lineHeight: 29, fontWeight: '600', letterSpacing: -0.4, ...numeric },
+  display: { fontFamily, fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5, ...numeric },
   /** Screen title, centered. */
-  title: { fontFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
-  largeTitle: { fontFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  title: { fontFamily, fontSize: 18, lineHeight: 23, fontWeight: '700' },
+  largeTitle: { fontFamily, fontSize: 18, lineHeight: 23, fontWeight: '700' },
   /** Card and section headings. */
-  section: { fontFamily, fontSize: 14, lineHeight: 18, fontWeight: '600' },
-  headline: { fontFamily, fontSize: 13, lineHeight: 17, fontWeight: '600' },
-  body: { fontFamily, fontSize: 13, lineHeight: 17, fontWeight: '400' },
+  section: { fontFamily, fontSize: 15, lineHeight: 19, fontWeight: '600' },
+  headline: { fontFamily, fontSize: 14, lineHeight: 18, fontWeight: '600' },
+  body: { fontFamily, fontSize: 14, lineHeight: 18, fontWeight: '400' },
   /** Dense table text. */
-  row: { fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '400' },
-  callout: { fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '400' },
-  footnote: { fontFamily, fontSize: 11, lineHeight: 14, fontWeight: '400' },
-  caption: { fontFamily, fontSize: 10, lineHeight: 13, fontWeight: '400' },
+  row: { fontFamily, fontSize: 13, lineHeight: 17, fontWeight: '400' },
+  callout: { fontFamily, fontSize: 13, lineHeight: 17, fontWeight: '400' },
+  footnote: { fontFamily, fontSize: 12, lineHeight: 15, fontWeight: '400' },
+  caption: { fontFamily, fontSize: 11, lineHeight: 14, fontWeight: '400' },
   /** Uppercase column labels. */
-  label: { fontFamily, fontSize: 10, lineHeight: 13, fontWeight: '600', letterSpacing: 0.7 },
+  label: { fontFamily, fontSize: 11, lineHeight: 14, fontWeight: '600', letterSpacing: 0.7 },
 } as const satisfies Record<string, TextStyle>;
 
 export type TypeVariant = keyof typeof type;

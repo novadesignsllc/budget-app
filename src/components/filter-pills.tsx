@@ -11,18 +11,26 @@ export function FilterPills<T extends string>({
   options,
   onChange,
   center,
+  floating,
 }: {
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
   center?: boolean;
+  /** In the bottom action bar, over the list: button-height pills with a fill so they stay readable. */
+  floating?: boolean;
 }) {
   const colors = useColors();
   return (
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ gap: spacing.xs, flexGrow: 1, justifyContent: center ? 'center' : 'flex-start' }}
+      contentContainerStyle={{
+        gap: floating ? 6 : spacing.xs,
+        flexGrow: 1,
+        justifyContent: center ? 'center' : 'flex-start',
+        alignItems: 'center',
+      }}
     >
       {options.map((o) => {
         const selected = o.value === value;
@@ -36,16 +44,20 @@ export function FilterPills<T extends string>({
               onChange(o.value);
             }}
             style={{
-              height: 26,
-              paddingHorizontal: 11,
-              borderRadius: 13,
+              height: floating ? 34 : 26,
+              paddingHorizontal: floating ? 13 : 11,
+              borderRadius: floating ? 17 : 13,
               borderWidth: 1,
-              borderColor: selected ? 'rgba(20,40,80,0.16)' : 'transparent',
-              backgroundColor: selected ? colors.surface : 'transparent',
+              borderColor: selected ? 'rgba(20,40,80,0.16)' : floating ? colors.hairline : 'transparent',
+              backgroundColor: selected ? colors.surface : floating ? '#E9EDF3' : 'transparent',
               justifyContent: 'center',
             }}
           >
-            <Text variant="footnote" weight={selected ? '600' : '500'} tone={selected ? 'text' : 'textSecondary'}>
+            <Text
+              variant={floating ? 'callout' : 'footnote'}
+              weight={selected ? '600' : '500'}
+              tone={selected ? 'text' : 'textSecondary'}
+            >
               {o.label}
             </Text>
           </Pressable>

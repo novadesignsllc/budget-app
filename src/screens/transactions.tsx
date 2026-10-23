@@ -33,6 +33,12 @@ export function newestFirst(a: Transaction, b: Transaction) {
  * A table card that a FlatList can render row by row: the top edge carries the column
  * labels, each row draws the card's sides, and the last row closes the bottom.
  */
+const monthFormat = new Intl.DateTimeFormat('en-US', { month: 'short' });
+function shortMonth(key: MonthKey) {
+  const [y, m] = key.split('-').map(Number);
+  return monthFormat.format(new Date(y, m - 1, 1));
+}
+
 export function TableCardTop({ columns, leading }: { columns: Column[]; leading?: number }) {
   const colors = useColors();
   return (
@@ -76,7 +82,8 @@ export function TableCardRow({ last, children }: { last: boolean; children: Reac
 
 const SPLIT_COLUMNS: Column[] = [
   { label: 'Date', width: TXN_COLUMNS.date },
-  { label: 'Payee · Envelope · Note' },
+  { label: '', width: TXN_COLUMNS.emoji },
+  { label: 'Payee' },
   { label: 'Outflow', width: TXN_COLUMNS.money, align: 'right' },
   { label: 'Inflow', width: TXN_COLUMNS.money, align: 'right' },
 ];
@@ -88,7 +95,8 @@ export function TransactionList() {
   const transactions = useStore((s) => s.transactions);
   const envelopes = useStore((s) => s.envelopes);
   const { all: accounts } = useAccounts();
-  const monthOptions = useMonthOptions();
+  // Short month names ("Oct") so the filters have room next to it; years are menu sections.
+  const monthOptions = useMonthOptions().map((o) => ({ ...o, label: shortMonth(o.value) }));
   const [month, setMonth] = useState<MonthKey>(monthOf(today()));
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -193,20 +201,6 @@ export function TransactionList() {
                 />
               </View>
             )}
-            <FilterPills
-              center
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: 'all', label: 'All' },
-                {
-                  value: 'flagged',
-                  label: flaggedCount ? `Flagged ${flaggedCount}` : 'Flagged',
-                },
-                { value: 'open', label: 'Not reconciled' },
-                { value: 'slips', label: 'Slips' },
-              ]}
-            />
             {rows.length > 0 && <TableCardTop columns={SPLIT_COLUMNS} />}
           </View>
         }
@@ -232,6 +226,20 @@ export function TransactionList() {
         }}
       />
       <ScreenActions>
+        {/* Filters sit down here with the month and search, for one-handed use. */}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <FilterPills
+            floating
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'flagged', label: flaggedCount ? `Flagged ${flaggedCount}` : 'Flagged' },
+              { value: 'open', label: 'Not reconciled' },
+              { value: 'slips', label: 'Slips' },
+            ]}
+          />
+        </View>
         {!searching && (
           <Dropdown variant="compact" value={month} options={monthOptions} onChange={setMonth} label="Month" />
         )}

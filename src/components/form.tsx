@@ -88,7 +88,7 @@ export function InputRow({
 }
 
 /** "85.30" shown as "$85.30"; typing keeps only digits, one point, and a leading minus if allowed. */
-function cleanAmount(v: string, negative: boolean) {
+export function cleanAmount(v: string, negative = false) {
   const minus = negative && v.trim().startsWith('-') ? '-' : '';
   const digits = v.replace(/[^0-9.]/g, '');
   const [whole, ...rest] = digits.split('.');
@@ -243,5 +243,62 @@ export function ActionList({ actions }: { actions: FormAction[] }) {
         </Pressable>
       ))}
     </FormCard>
+  );
+}
+
+/** Two choices side by side inside a row, like Outflow and Inflow. */
+export function SegmentRow<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: { value: T; label: string; tone?: 'negative' | 'positive' }[];
+  onChange: (v: T) => void;
+}) {
+  const colors = useColors();
+  return (
+    <FormRow label={label}>
+      <View
+        accessibilityRole="radiogroup"
+        style={{ flexDirection: 'row', padding: 2, gap: 2, borderRadius: 9, backgroundColor: colors.control }}
+      >
+        {options.map((o) => {
+          const on = o.value === value;
+          const tint = o.tone === 'negative' ? colors.negative : o.tone === 'positive' ? colors.positive : colors.text;
+          return (
+            <Pressable
+              key={o.value}
+              accessibilityRole="radio"
+              accessibilityLabel={o.label}
+              accessibilityState={{ selected: on }}
+              onPress={() => {
+                if (on) return;
+                haptic('selection');
+                onChange(o.value);
+              }}
+              style={{
+                height: 30,
+                minWidth: 72,
+                paddingHorizontal: spacing.md,
+                borderRadius: 7,
+                borderCurve: 'continuous',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: on ? colors.surface : 'transparent',
+                borderWidth: on ? 1 : 0,
+                borderColor: colors.borderStrong,
+              }}
+            >
+              <Text variant="callout" weight={on ? '600' : '500'} color={on ? tint : colors.textSecondary}>
+                {o.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </FormRow>
   );
 }

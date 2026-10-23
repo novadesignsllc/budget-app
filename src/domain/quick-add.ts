@@ -8,6 +8,12 @@ export type ParseContext = {
   /** Normalized payee → envelope id, learned from past transactions. */
   merchantMemory: Record<string, string>;
   today: ISODate;
+  /**
+   * The text came from dictation. Speech turns "two twenty-seven" into "227", so a bare
+   * number of three or more digits reads as dollars and cents ($2.27). Saying "dollars",
+   * a "$", a decimal point, or a thousands comma keeps it whole.
+   */
+  spoken?: boolean;
 };
 
 export type EnvelopeSource = 'remembered' | 'guessed' | 'none';
@@ -180,6 +186,45 @@ function guessEnvelope(payee: string, envelopes: Envelope[]): string | null {
  * Turns "McDonald's 10.99", "$54.20 kroger yesterday", or "netflix 15.49 chime" into a
  * transaction draft. Runs on-device, so it works offline and instantly.
  */
+const NO_ENVELOPE = { envelopeId: null, envelopeSource: 'none' as EnvelopeSource };
+
+/** The first bank account in the user's order: where a new transaction lands unless told otherwise. */
+export function defaultAccount(accounts: Account[]): Account | undefined {
+  return accounts.filter((a) => !a.closed && isCashAccount(a)).sort((a, b) => a.order - b.order)[0];
+}
+
+/** The envelope a payee usually goes to: remembered from the payee list, else guessed from the name. */
+export function envelopeFor(payee: string, ctx: Pick<ParseContext, 'envelopes' | 'merchantMemory'>) {
+  if (!payee) return NO_ENVELOPE;
+  const remembered = ctx.merchantMemory[normalizePayee(payee)];
+  if (remembered && ctx.envelopes.some((e) => e.id === remembered && !e.hidden)) {
+    return { envelopeId: remembered as string | null, envelopeSource: 'remembered' as EnvelopeSource };
+  }
+  const guessed = guessEnvelope(payee, ctx.envelopes);
+  return guessed ? { envelopeId: guessed, envelopeSource: 'guessed' as EnvelopeSource } : NO_ENVELOPE;
+}
+
+/**
+ * A draft from the two typed fields. The name is taken as written (so "7-Eleven" stays a
+ * name), and a name like "Paycheck" starts out as income.
+ */
+export function draftFromFields(payee: string, amount: Cents | null, ctx: ParseContext): ParsedEntry {
+  const name = payee.trim();
+  const isIncome = INCOME_RE.test(name);
+  const account = defaultAccount(ctx.accounts) ?? null;
+  const { envelopeId, envelopeSource } = isIncome ? NO_ENVELOPE : envelopeFor(name, ctx);
+  return {
+    amount,
+    payee: name,
+    date: ctx.today,
+    accountId: account?.id ?? null,
+    accountMentioned: false,
+    kind: isIncome ? 'income' : 'spend',
+    envelopeId,
+    envelopeSource,
+  };
+}
+
 /** Spoken amounts come back in a few shapes; turn them into plain numbers first. */
 export function normalizeSpoken(input: string): string {
   return input
@@ -202,7 +247,12 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
     [...candidates].reverse().find((c) => /\$|\./.test(c[0])) ?? candidates[candidates.length - 1];
   if (best) {
     sign = best[2];
-    amount = Math.round(parseFloat(best[3].replace(/,/g, '')) * 100);
+    const said = best[3];
+    const wholeDollars = /\$|\b(dollars?|bucks)\b/i.test(input) || /[.,]/.test(said);
+    amount =
+      ctx.spoken && !wholeDollars && said.length >= 3
+        ? parseInt(said, 10)
+        : Math.round(parseFloat(said.replace(/,/g, '')) * 100);
     rest = rest.replace(best[0], best[1] + ' ');
   }
 
@@ -210,10 +260,7 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
   if (found) rest = rest.replace(new RegExp(escapeRe(found.matched), 'i'), ' ');
 
   const isIncome = sign === '+' || INCOME_RE.test(input);
-  const defaultAccount = ctx.accounts
-    .filter((a) => !a.closed && isCashAccount(a))
-    .sort((a, b) => a.order - b.order)[0];
-  const account = found?.account ?? defaultAccount ?? null;
+  const account = found?.account ?? defaultAccount(ctx.accounts) ?? null;
 
   const payee = titleCase(stripFiller(rest));
 
@@ -223,18 +270,7 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
       ? 'slip'
       : 'spend';
 
-  let envelopeId: string | null = null;
-  let envelopeSource: EnvelopeSource = 'none';
-  if (kind !== 'income' && payee) {
-    const remembered = ctx.merchantMemory[normalizePayee(payee)];
-    if (remembered && ctx.envelopes.some((e) => e.id === remembered && !e.hidden)) {
-      envelopeId = remembered;
-      envelopeSource = 'remembered';
-    } else {
-      envelopeId = guessEnvelope(payee, ctx.envelopes);
-      if (envelopeId) envelopeSource = 'guessed';
-    }
-  }
+  const { envelopeId, envelopeSource } = kind === 'income' ? NO_ENVELOPE : envelopeFor(payee, ctx);
 
   return {
     amount,

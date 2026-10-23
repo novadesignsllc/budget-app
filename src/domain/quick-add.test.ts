@@ -89,3 +89,23 @@ describe('parseQuickAdd', () => {
     expect(parseQuickAdd('random shop 12', ctx)).toMatchObject({ envelopeId: null, envelopeSource: 'none' });
   });
 });
+
+describe('spoken amounts', () => {
+  const spoken = { ...ctx, spoken: true };
+  it('reads a bare three-digit number as dollars and cents', () => {
+    expect(parseQuickAdd('McDonalds 227', spoken).amount).toBe(227);
+    expect(parseQuickAdd('Chipotle 1150', spoken).amount).toBe(1150);
+  });
+  it('keeps short numbers as whole dollars', () => {
+    expect(parseQuickAdd('Shell 20', spoken).amount).toBe(2000);
+  });
+  it('keeps dollars when they were said or written', () => {
+    expect(parseQuickAdd("McDonald's $2.27", spoken).amount).toBe(227);
+    expect(parseQuickAdd('Best Buy $227', spoken).amount).toBe(22700);
+    expect(parseQuickAdd('rent 227 dollars', spoken).amount).toBe(22700);
+    expect(parseQuickAdd('rent 1,150', spoken).amount).toBe(115000);
+  });
+  it('leaves typed text alone', () => {
+    expect(parseQuickAdd('McDonalds 227', ctx).amount).toBe(22700);
+  });
+});

@@ -1,27 +1,27 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
-import { AmountHero, FlagRow, FormCard, InputRow } from '@/components/form';
+import { cleanAmount, FlagRow, FormCard, InputRow, SegmentRow } from '@/components/form';
 import { Icon } from '@/components/icon';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
-import { formatDollars, formatMoney } from '@/domain/money';
+import { formatDollars, formatMoney, parseMoney } from '@/domain/money';
 import { payeeMemory } from '@/domain/payees';
-import { parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
+import { draftFromFields, parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type FlagColor, type ISODate } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useVoiceEntry } from '@/hooks/use-voice-entry';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { groupColor, radius, spacing, type as typeScale, useColors } from '@/theme';
+import { groupColor, spacing, type as typeScale, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -40,9 +40,12 @@ function Bar({ volume, weight, color }: { volume: SharedValue<number>; weight: n
 
 export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const colors = useColors();
-  const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const nameRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  // What dictation heard, in voice mode. Typing uses the two fields instead.
   const [text, setText] = useState('');
-  const [focused, setFocused] = useState(false);
+  const [payee, setPayee] = useState('');
+  const [amountText, setAmountText] = useState('');
   const [mode, setMode] = useState<'voice' | 'type'>(voice ? 'voice' : 'type');
   const [override, setOverride] = useState<Override>({});
   const [note, setNote] = useState('');
@@ -63,11 +66,12 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const showToast = useToast((s) => s.show);
   const { all: accounts, cash } = useAccounts();
 
-  const parse = useCallback(
-    (input: string) => parseQuickAdd(input, { accounts, envelopes, merchantMemory, today: today() }),
-    [accounts, envelopes, merchantMemory],
+  const ctx = useMemo(() => ({ accounts, envelopes, merchantMemory, today: today() }), [accounts, envelopes, merchantMemory]);
+  const parse = useCallback((input: string) => parseQuickAdd(input, { ...ctx, spoken: true }), [ctx]);
+  const parsed = useMemo(
+    () => (mode === 'voice' ? parse(text) : draftFromFields(payee, parseMoney(amountText), ctx)),
+    [mode, parse, text, payee, amountText, ctx],
   );
-  const parsed = useMemo(() => parse(text), [parse, text]);
 
   const resolve = useCallback(
     (p: ParsedEntry, o: Override) => {
@@ -126,8 +130,9 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     onPartial: setText,
     onFinal: (finalText) => {
       setText(finalText);
-      // Said everything we need? Save it. Otherwise drop to the form to finish up.
-      if (!save(parse(finalText), override)) setMode('type');
+      // Said everything we need? Save it. Otherwise fill the form with what was heard.
+      const heard = parse(finalText);
+      if (!save(heard, override)) fillFrom(heard);
     },
   });
 
@@ -138,10 +143,28 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Moves what dictation heard into the typed fields, keeping any picks already made. */
+  function fillFrom(heard: ParsedEntry) {
+    setPayee(heard.payee);
+    setAmountText(heard.amount ? (heard.amount / 100).toFixed(2) : '');
+    setOverride((o) => ({
+      envelopeId: heard.envelopeId ?? undefined,
+      accountId: heard.accountMentioned ? (heard.accountId ?? undefined) : undefined,
+      date: heard.date,
+      income: heard.kind === 'income' ? true : undefined,
+      ...o,
+    }));
+    setMode('type');
+    setTimeout(() => (heard.payee ? amountRef : nameRef).current?.focus(), 50);
+  }
+
   const typeInstead = () => {
     voiceEntry.abort();
-    setMode('type');
-    setTimeout(() => inputRef.current?.focus(), 50);
+    if (text) fillFrom(parse(text));
+    else {
+      setMode('type');
+      setTimeout(() => nameRef.current?.focus(), 50);
+    }
   };
 
   // Envelopes listed in the Budget's group order.
@@ -204,24 +227,27 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
 
   const day = today();
 
-  const saveLabel = !parsed.amount
-    ? 'Type an amount'
-    : !r.envelope && !r.isIncome
-      ? 'Choose an envelope'
-      : r.isIncome
-        ? `Add ${formatMoney(parsed.amount)} income`
-        : `Add ${formatMoney(parsed.amount)} from ${r.envelope!.name}`;
-
-  const summary = (
-    <AmountHero
-      value={parsed.amount ? (parsed.amount / 100).toFixed(2) : ''}
-      caption={parsed.payee || undefined}
-      tone={r.isIncome ? 'positive' : r.isSlip ? 'negative' : undefined}
-    />
-  );
+  const saveLabel = !parsed.payee
+    ? 'Add a name'
+    : !parsed.amount
+      ? 'Type an amount'
+      : !r.envelope && !r.isIncome
+        ? 'Choose an envelope'
+        : r.isIncome
+          ? `Add ${formatMoney(parsed.amount)} income`
+          : `Add ${formatMoney(parsed.amount)} from ${r.envelope!.name}`;
 
   const details = (
     <FormCard>
+      <SegmentRow<'out' | 'in'>
+        label="Type"
+        value={r.isIncome ? 'in' : 'out'}
+        options={[
+          { value: 'out', label: 'Outflow' },
+          { value: 'in', label: 'Inflow', tone: 'positive' },
+        ]}
+        onChange={(v) => setOverride((o) => ({ ...o, income: v === 'in' }))}
+      />
       {!r.isIncome && (
         <Dropdown
           variant="row"
@@ -241,16 +267,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
         onChange={(v) => setOverride((o) => ({ ...o, accountId: v }))}
       />
       <DateRow label="Date" value={r.date} max={day} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} last />
-      <Dropdown<'out' | 'in'>
-        variant="row"
-        label="Type"
-        value={r.isIncome ? 'in' : 'out'}
-        options={[
-          { value: 'out', label: 'Outflow' },
-          { value: 'in', label: 'Inflow' },
-        ]}
-        onChange={(v) => setOverride((o) => ({ ...o, income: v === 'in' }))}
-      />
       <InputRow label="Note" value={note} onChangeText={setNote} placeholder="Add a note" returnKeyType="done" />
       <FlagRow value={flag} onChange={setFlagColor} />
     </FormCard>
@@ -291,7 +307,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
         </View>
         {text ? (
           <>
-            {summary}
             {details}
             {slipWarning}
           </>
@@ -317,62 +332,53 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     <SheetScreen contentContainerStyle={{ gap: spacing.md }}>
       <SheetHeader title="New transaction" />
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-        <TextInput
-          ref={inputRef}
-          autoFocus={!voice}
-          value={text}
-          onChangeText={setText}
-          onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
-          placeholder="McDonald’s 10.99"
-          placeholderTextColor={colors.placeholder}
-          returnKeyType="done"
-          submitBehavior="submit"
-          onSubmitEditing={() => save(parsed, override)}
-          autoCorrect={false}
-          accessibilityLabel="Describe the transaction"
-          style={[
-            typeScale.body,
-            {
-              flex: 1,
-              fontSize: 16,
-              fontWeight: '600',
-              color: colors.text,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: focused ? colors.accent : colors.borderStrong,
-              borderRadius: radius.control,
-              borderCurve: 'continuous',
-              paddingHorizontal: spacing.md,
-              height: 46,
-            },
-          ]}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Say it instead"
-          onPress={() => {
-            setMode('voice');
-            void voiceEntry.start();
-          }}
-          style={({ pressed }) => ({
-            width: 46,
-            height: 46,
-            borderRadius: radius.control,
-            borderCurve: 'continuous',
-            borderWidth: 1,
-            borderColor: colors.borderStrong,
-            backgroundColor: pressed ? colors.control : colors.surface,
-            alignItems: 'center',
-            justifyContent: 'center',
-          })}
-        >
-          <Icon sf="mic" md="mic" size={17} color={colors.text} />
-        </Pressable>
-      </View>
+      <FormCard>
+        <View style={{ flexDirection: 'row', alignItems: 'center', height: 52 }}>
+          <TextInput
+            ref={nameRef}
+            autoFocus={!voice}
+            value={payee}
+            onChangeText={setPayee}
+            placeholder="Name"
+            placeholderTextColor={colors.placeholder}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => amountRef.current?.focus()}
+            accessibilityLabel="Name"
+            style={[typeScale.body, { flex: 1, height: 52, paddingHorizontal: spacing.md, fontSize: 17, fontWeight: '600', color: colors.text, outlineWidth: 0 }]}
+          />
+          <View style={{ width: 1, height: 26, backgroundColor: colors.hairline }} />
+          <TextInput
+            ref={amountRef}
+            value={amountText ? `$${amountText}` : ''}
+            onChangeText={(v) => setAmountText(cleanAmount(v))}
+            placeholder="$0.00"
+            placeholderTextColor={colors.placeholder}
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            returnKeyType="done"
+            onSubmitEditing={() => save(parsed, override)}
+            accessibilityLabel="Amount"
+            style={[
+              typeScale.body,
+              {
+                width: 130,
+                height: 52,
+                paddingHorizontal: spacing.md,
+                textAlign: 'right',
+                fontSize: 17,
+                fontWeight: '600',
+                fontVariant: ['tabular-nums'],
+                color: r.isIncome ? colors.positive : r.isSlip ? colors.negative : colors.text,
+                outlineWidth: 0,
+              },
+            ]}
+          />
+        </View>
+      </FormCard>
 
-      {summary}
       {details}
       {slipWarning}
 

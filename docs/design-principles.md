@@ -65,3 +65,6 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Home has one Upcoming card: items waiting for approval plus the next 7 days of bills and subscriptions | Replaces the separate To approve card |
 | 2026-10-23 | Every sheet uses one layout: big amount on top, one card of label/value rows (46pt), Save, then secondary actions in one card | Menus each looked different |
 | 2026-10-23 | Flags pick a color (none plus red, orange, yellow, green, blue, purple) from a custom row, not a switch | User asked for a custom flag color selector |
+| 2026-10-23 | New transaction is two fields (Name, Amount on the right) plus an Outflow/Inflow toggle; no mic in the sheet, voice starts from the quick-add bar | Typing one line and re-showing the name was redundant |
+| 2026-10-23 | Dictated bare numbers of 3+ digits are dollars and cents ("two twenty-seven" → $2.27); "$", "dollars", a decimal, or a comma keeps whole dollars | Speech turns "two twenty-seven" into "227" |
+| 2026-10-23 | Menus and the calendar open only after the keyboard has finished closing | They measured mid-slide and opened in the wrong place |

@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } fr
 import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
 import { haptic } from '@/utils/haptics';
-import { dismissKeyboard } from '@/utils/keyboard';
+import { afterKeyboard } from '@/utils/keyboard';
 import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/theme';
 
 import { FieldLabel } from './field';
@@ -114,12 +114,13 @@ export function Dropdown<T extends string>({
 
   const openMenu = () => {
     haptic('selection');
-    dismissKeyboard();
-    triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-      setFrame({ x, y, w, h });
-      setQuery('');
-      setOpen(true);
-    });
+    afterKeyboard(() =>
+      triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+        setFrame({ x, y, w, h });
+        setQuery('');
+        setOpen(true);
+      }),
+    );
   };
 
   const pick = (o: DropdownOption<T>) => {

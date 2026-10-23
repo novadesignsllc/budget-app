@@ -13,7 +13,7 @@ import { addDays, fromISODate, toISODate, today } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
 import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
-import { dismissKeyboard } from '@/utils/keyboard';
+import { afterKeyboard } from '@/utils/keyboard';
 
 import { Button } from './button';
 import { FieldLabel } from './field';
@@ -60,13 +60,18 @@ function useExpand() {
   const easing = Easing.out(Easing.cubic);
 
   const set = (next: boolean) => {
-    if (next) dismissKeyboard();
-    setOpen(next);
-    if (next) setMounted(true);
-    else
-      height.value = withTiming(0, { duration, easing }, (done) => {
-        if (done) runOnJS(setMounted)(false);
+    if (next) {
+      // Open once the keyboard is down, so the calendar doesn't grow while the sheet slides.
+      afterKeyboard(() => {
+        setOpen(true);
+        setMounted(true);
       });
+      return;
+    }
+    setOpen(false);
+    height.value = withTiming(0, { duration, easing }, (done) => {
+      if (done) runOnJS(setMounted)(false);
+    });
   };
   const onContentLayout = (e: LayoutChangeEvent) => {
     if (open) height.value = withTiming(e.nativeEvent.layout.height, { duration, easing });

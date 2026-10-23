@@ -7,7 +7,7 @@ import type { Account, Allocation, Envelope, Transaction } from './types';
 const checking: Account = { id: 'chk', name: 'Checking', kind: 'checking', openingBalance: 100000, openedOn: '2026-09-01', order: 0 };
 const visa: Account = { id: 'visa', name: 'Visa', kind: 'credit_card', openingBalance: -50000, openedOn: '2026-09-01', order: 1 };
 const envelopes: Envelope[] = [
-  { id: 'groc', name: 'Groceries', group: 'Everyday', order: 0, monthlyTarget: 40000 },
+  { id: 'groc', name: 'Groceries', group: 'Daily', order: 0, monthlyTarget: 40000 },
   { id: 'save', name: 'Emergency', group: 'Savings', order: 1, monthlyTarget: 10000 },
   { id: 'vpay', name: 'Visa', group: 'Debt payments', order: 2, debtAccountId: 'visa' },
 ];

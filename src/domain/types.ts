@@ -30,6 +30,14 @@ export type Account = {
   lastReconciledOn?: ISODate;
 };
 
+/**
+ * The only budget groups. Daily is day-to-day spending, Savings is money put aside each
+ * month toward a goal, Bills are fixed monthly costs. Debt payment envelopes live in
+ * their own group (DEBT_GROUP in the store) and are made automatically.
+ */
+export const GROUPS = ['Daily', 'Savings', 'Bills'] as const;
+export type BudgetGroup = (typeof GROUPS)[number];
+
 export type Envelope = {
   id: string;
   name: string;
@@ -37,6 +45,8 @@ export type Envelope = {
   order: number;
   /** Set when this is the auto-created payment envelope for a debt account. */
   debtAccountId?: string;
+  /** Set when this Bills envelope was made for a recurring bill or subscription. */
+  recurringId?: string;
   /**
    * Monthly target by month: an entry applies from that month on, until a later entry.
    * `null` clears the target from that month. Older envelopes may only have

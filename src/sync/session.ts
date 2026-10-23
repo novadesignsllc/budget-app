@@ -39,6 +39,8 @@ export function useSessionBootstrap() {
         onReady: () => {
           // Older data kept payee memory as a map; move it into the payees list once.
           useStore.getState().migrateMerchantMemory();
+          // Groups are fixed now: rename Everyday to Daily and fold custom groups into it.
+          useStore.getState().normalizeGroups();
           useSession.setState({ dataReady: true });
         },
       });

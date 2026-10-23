@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState } from 'react';
+import { TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
@@ -10,74 +10,46 @@ import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
 import { targetFor } from '@/domain/targets';
-import type { Envelope } from '@/domain/types';
+import { GROUPS, type BudgetGroup } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
-import { DEBT_GROUP, useStore } from '@/store';
+import { fixGroup, useStore } from '@/store';
 import { groupColor, spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
 import { SheetHeader } from '@/components/sheet-header';
 
-const NEW_GROUP = '__new__';
-const GROUP_HINT: Record<string, string> = {
-  Bills: 'The same amount goes out every month',
-  Everyday: 'Money you spend through the month',
-  Savings: 'Added each month and left alone',
+const GROUP_HINT: Record<BudgetGroup, string> = {
+  Daily: 'Day-to-day spending: groceries, eating out, dates',
+  Savings: 'A goal you add to every month and leave alone',
+  Bills: 'Fixed costs that come due each month',
 };
 
-/** Group choice for envelope sheets: the existing groups, then "New group…" which reveals a name field. */
-export function GroupPicker({
-  envelopes,
-  group,
-  newGroup,
-  onGroup,
-  onNewGroup,
-}: {
-  envelopes: Envelope[];
-  /** The chosen group, or NEW_GROUP while typing a new one. */
-  group: string;
-  newGroup: string;
-  onGroup: (group: string) => void;
-  onNewGroup: (name: string) => void;
-}) {
-  const groups = [...new Set(['Bills', 'Everyday', 'Savings', ...envelopes.map((e) => e.group)])].filter(
-    (g) => g !== DEBT_GROUP,
-  );
-  const options: DropdownOption<string>[] = [
-    ...groups.map((g) => ({
-      value: g,
-      label: g,
-      dot: groupColor(g),
-      description: GROUP_HINT[g],
-    })),
-    { value: NEW_GROUP, label: 'New group…' },
-  ];
-  return (
-    <>
-      <Dropdown label="Group" value={group} options={options} onChange={onGroup} />
-      {group === NEW_GROUP && (
-        <Field label="Group name" value={newGroup} onChangeText={onNewGroup} placeholder="Kids" autoFocus />
-      )}
-    </>
-  );
+/** The three groups you can pick. Debt payments are made automatically, one per debt. */
+export function GroupPicker({ group, onGroup }: { group: string; onGroup: (group: BudgetGroup) => void }) {
+  const options: DropdownOption<BudgetGroup>[] = GROUPS.map((g) => ({
+    value: g,
+    label: g,
+    dot: groupColor(g),
+    description: GROUP_HINT[g],
+  }));
+  return <Dropdown label="Group" value={fixGroup(group) as BudgetGroup} options={options} onChange={onGroup} />;
 }
 
-export function resolveGroup(group: string, newGroup: string): string | null {
-  if (group !== NEW_GROUP) return group;
-  return newGroup.trim() || null;
+/** Savings targets are what goes in each month; Bills and Daily targets are the month's budget. */
+export function targetLabel(group: string) {
+  return group === 'Savings' ? 'Put in each month' : 'Monthly budget';
 }
 
 export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?: MonthKey }) {
   const month = monthParam ?? monthOf(today());
   const envelope = useStore((s) => s.envelopes.find((e) => e.id === id));
-  const envelopes = useStore((s) => s.envelopes);
   const updateEnvelope = useStore((s) => s.updateEnvelope);
   const setTargetFor = useStore((s) => s.setTarget);
   const ledger = useLedger();
   const [name, setName] = useState(envelope?.name ?? '');
-  const [group, setGroup] = useState(envelope?.group ?? 'Everyday');
-  const [newGroup, setNewGroup] = useState('');
+  const [group, setGroup] = useState<string>(fixGroup(envelope?.group ?? 'Daily'));
+  const targetRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const current = envelope ? targetFor(envelope, month) : null;
   const [target, setTarget] = useState(current ? (current / 100).toFixed(2) : '');
   const [confirmHide, setConfirmHide] = useState(false);
@@ -95,24 +67,24 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
 
   const available = ledger.available.get(id) ?? 0;
   const isDebt = !!envelope.debtAccountId;
-  const finalGroup = resolveGroup(group, newGroup);
 
   return (
     <SheetScreen>
       <SheetHeader title="Edit envelope" />
-      <Field label="Name" value={name} onChangeText={setName} editable={!isDebt} />
-      {!isDebt && (
-        <GroupPicker
-          envelopes={envelopes}
-          group={group}
-          newGroup={newGroup}
-          onGroup={setGroup}
-          onNewGroup={setNewGroup}
-        />
-      )}
+      <Field
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        editable={!isDebt}
+        returnKeyType={isDebt ? 'done' : 'next'}
+        onSubmitEditing={() => targetRef.current?.focus()}
+        submitBehavior={isDebt ? 'blurAndSubmit' : 'submit'}
+      />
+      {!isDebt && <GroupPicker group={group} onGroup={setGroup} />}
       {!isDebt && (
         <Field
-          label={finalGroup === 'Savings' ? 'Put in each month' : 'Monthly target'}
+          ref={targetRef}
+          label={targetLabel(group)}
           optional
           note={`applies from ${formatMonth(month)} on`}
           hint="Earlier months keep the target they had."
@@ -126,11 +98,11 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
       <Button
         title="Save"
         size="lg"
-        disabled={!name.trim() || !finalGroup}
+        disabled={!name.trim()}
         onPress={() => {
           updateEnvelope(id, {
             name: isDebt ? envelope.name : name.trim(),
-            group: isDebt || !finalGroup ? envelope.group : finalGroup,
+            group: isDebt ? envelope.group : group,
           });
           const next = parseMoney(target);
           if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);

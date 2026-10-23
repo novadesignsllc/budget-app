@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Field } from '@/components/field';
@@ -10,7 +11,7 @@ import { useStore } from '@/store';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
-import { GroupPicker, resolveGroup } from './envelope-settings';
+import { GroupPicker, targetLabel } from './envelope-settings';
 import { SheetHeader } from '@/components/sheet-header';
 
 export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
@@ -18,11 +19,9 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   const envelopes = useStore((s) => s.envelopes);
   const addEnvelope = useStore((s) => s.addEnvelope);
   const [name, setName] = useState('');
-  const [group, setGroup] = useState('Everyday');
-  const [newGroup, setNewGroup] = useState('');
+  const [group, setGroup] = useState<string>('Daily');
   const [target, setTarget] = useState('');
-
-  const finalGroup = resolveGroup(group, newGroup);
+  const targetRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const duplicate = envelopes.some((e) => e.name.toLowerCase() === name.trim().toLowerCase() && !e.hidden);
 
   return (
@@ -34,17 +33,15 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
         onChangeText={setName}
         placeholder="Groceries"
         autoFocus
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => targetRef.current?.focus()}
         error={duplicate ? 'You already have an envelope with this name.' : undefined}
       />
-      <GroupPicker
-        envelopes={envelopes}
-        group={group}
-        newGroup={newGroup}
-        onGroup={setGroup}
-        onNewGroup={setNewGroup}
-      />
+      <GroupPicker group={group} onGroup={setGroup} />
       <Field
-        label={finalGroup === 'Savings' ? 'Put in each month' : 'Monthly target'}
+        ref={targetRef}
+        label={targetLabel(group)}
         optional
         note={`applies from ${formatMonth(month)} on`}
         value={target}
@@ -56,12 +53,11 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
       <Button
         title="Create envelope"
         size="lg"
-        disabled={!name.trim() || duplicate || !finalGroup}
+        disabled={!name.trim() || duplicate}
         onPress={() => {
-          if (!finalGroup) return;
           addEnvelope({
             name,
-            group: finalGroup,
+            group,
             monthlyTarget: parseMoney(target) ?? undefined,
             month,
           });

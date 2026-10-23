@@ -9,7 +9,7 @@ beforeEach(() => resetStore());
 function setup() {
   const s = useStore.getState();
   const account = s.addAccount({ name: 'Checking', kind: 'checking', balance: 100000 });
-  const groceries = s.addEnvelope({ name: 'Groceries', group: 'Everyday' });
+  const groceries = s.addEnvelope({ name: 'Groceries', group: 'Daily' });
   return { account, groceries };
 }
 
@@ -70,14 +70,14 @@ describe('reconciling', () => {
 
 describe('targets', () => {
   it('a new envelope’s target starts in the given month', () => {
-    const id = useStore.getState().addEnvelope({ name: 'Gas', group: 'Everyday', monthlyTarget: 16000, month: '2026-10' });
+    const id = useStore.getState().addEnvelope({ name: 'Gas', group: 'Daily', monthlyTarget: 16000, month: '2026-10' });
     const e = useStore.getState().envelopes.find((x) => x.id === id)!;
     expect(targetFor(e, '2026-09')).toBeNull();
     expect(targetFor(e, '2026-10')).toBe(16000);
   });
 
   it('changing November leaves October alone', () => {
-    const id = useStore.getState().addEnvelope({ name: 'Gas', group: 'Everyday', monthlyTarget: 16000, month: '2026-10' });
+    const id = useStore.getState().addEnvelope({ name: 'Gas', group: 'Daily', monthlyTarget: 16000, month: '2026-10' });
     useStore.getState().setTarget(id, '2026-11', 20000);
     const e = useStore.getState().envelopes.find((x) => x.id === id)!;
     expect(targetFor(e, '2026-10')).toBe(16000);
@@ -106,14 +106,96 @@ describe('sorting envelopes', () => {
     const { groceries } = setup();
     const s = useStore.getState();
     const rent = s.addEnvelope({ name: 'Rent', group: 'Bills' });
-    const gas = s.addEnvelope({ name: 'Gas', group: 'Everyday' });
+    const gas = s.addEnvelope({ name: 'Gas', group: 'Daily' });
     useStore.getState().reorderEnvelopes([
-      { name: 'Everyday', ids: [groceries] },
+      { name: 'Daily', ids: [groceries] },
       { name: 'Bills', ids: [gas, rent] },
     ]);
     const after = useStore.getState();
-    expect(after.settings.groupOrder).toEqual(['Everyday', 'Bills']);
+    expect(after.settings.groupOrder).toEqual(['Daily', 'Bills']);
     expect(after.envelopes.find((e) => e.id === gas)).toMatchObject({ group: 'Bills', order: 0 });
     expect(after.envelopes.find((e) => e.id === rent)).toMatchObject({ group: 'Bills', order: 1 });
+  });
+});
+
+describe('fixed groups', () => {
+  it('renames Everyday to Daily and folds custom groups in, leaving debt and valid envelopes alone', () => {
+    useStore.setState({
+      envelopes: [
+        { id: 'a', name: 'Groceries', group: 'Everyday', order: 0 },
+        { id: 'b', name: 'Dates', group: 'Fun stuff', order: 1 },
+        { id: 'c', name: 'Rent', group: 'Bills', order: 2 },
+        { id: 'd', name: 'Visa', group: 'Debt payments', order: 0, debtAccountId: 'x' },
+      ],
+      settings: { debtStrategy: 'snowball', monthlyDebtPayment: 0, groupOrder: ['Bills', 'Everyday', 'Fun stuff'] },
+    });
+    const rent = useStore.getState().envelopes[2];
+    useStore.getState().normalizeGroups();
+    const s = useStore.getState();
+    expect(s.envelopes.map((e) => e.group)).toEqual(['Daily', 'Daily', 'Bills', 'Debt payments']);
+    expect(s.envelopes[2]).toBe(rent);
+    expect(s.settings.groupOrder).toEqual(['Bills', 'Daily']);
+  });
+
+  it('does nothing when every group is already valid', () => {
+    setup();
+    const before = useStore.getState();
+    useStore.getState().normalizeGroups();
+    expect(useStore.getState().envelopes).toBe(before.envelopes);
+    expect(useStore.getState().settings).toBe(before.settings);
+  });
+});
+
+describe('recurring envelopes', () => {
+  const bill = (account: string) =>
+    ({ name: 'Verizon', kind: 'bill', amount: 6550, accountId: account, frequency: 'monthly', nextDue: '2026-11-01' }) as const;
+
+  it('makes a Bills envelope budgeted to the monthly cost, in whole dollars', () => {
+    const { account } = setup();
+    const id = useStore.getState().addRecurring(bill(account));
+    const s = useStore.getState();
+    const r = s.recurring.find((x) => x.id === id)!;
+    const e = s.envelopes.find((x) => x.id === r.envelopeId)!;
+    expect(e).toMatchObject({ name: 'Verizon', group: 'Bills', recurringId: id });
+    expect(Object.values(e.targets ?? {})).toEqual([6600]);
+  });
+
+  it('turns a weekly amount into a monthly target', () => {
+    const { account } = setup();
+    const id = useStore.getState().addRecurring({ ...bill(account), name: 'Lawn care', amount: 2500, frequency: 'weekly' });
+    const r = useStore.getState().recurring.find((x) => x.id === id)!;
+    const e = useStore.getState().envelopes.find((x) => x.id === r.envelopeId)!;
+    // 25 × 52 / 12 = 108.33, rounded up.
+    expect(Object.values(e.targets ?? {})).toEqual([10900]);
+  });
+
+  it('follows renames and amount changes, and lets go of the envelope when deleted', () => {
+    const { account } = setup();
+    const id = useStore.getState().addRecurring(bill(account));
+    const envelopeId = useStore.getState().recurring[0].envelopeId!;
+    useStore.getState().updateRecurring(id, { name: 'Verizon Wireless', amount: 8000 });
+    let e = useStore.getState().envelopes.find((x) => x.id === envelopeId)!;
+    expect(e.name).toBe('Verizon Wireless');
+    expect(Object.values(e.targets ?? {}).at(-1)).toBe(8000);
+    useStore.getState().deleteRecurring(id);
+    e = useStore.getState().envelopes.find((x) => x.id === envelopeId)!;
+    expect(e).toBeDefined();
+    expect(e.recurringId).toBeUndefined();
+  });
+
+  it('approving spends from the linked envelope', () => {
+    const { account } = setup();
+    const id = useStore.getState().addRecurring({ ...bill(account), nextDue: '2026-10-01' });
+    useStore.getState().approveRecurring(id);
+    const s = useStore.getState();
+    expect(s.transactions[0].envelopeId).toBe(s.recurring[0].envelopeId);
+  });
+
+  it('links an existing envelope with the same name instead of making a second one', () => {
+    const { account } = setup();
+    const existing = useStore.getState().addEnvelope({ name: 'Verizon', group: 'Bills' });
+    useStore.getState().addRecurring(bill(account));
+    expect(useStore.getState().recurring[0].envelopeId).toBe(existing);
+    expect(useStore.getState().envelopes.filter((e) => e.name === 'Verizon')).toHaveLength(1);
   });
 });

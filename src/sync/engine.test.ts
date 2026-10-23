@@ -63,7 +63,7 @@ describe('startSync', () => {
     await tick(200);
     events.length = 0;
     const a = useStore.getState().addAccount({ name: 'Checking', kind: 'checking', balance: 0 });
-    useStore.getState().addEnvelope({ name: 'Groceries', group: 'Everyday' });
+    useStore.getState().addEnvelope({ name: 'Groceries', group: 'Daily' });
     useStore.getState().updateAccount(a, { name: 'Main Checking' });
     await tick(200);
     expect(events).toEqual(['begin', 'end']);
@@ -166,7 +166,7 @@ describe('startSync', () => {
     await tick(100);
     events.length = 0;
     const commit = backend.commit(UID, [
-      { collection: 'envelopes', id: 'e', data: { id: 'e', name: 'Groceries', group: 'Everyday', order: 0 } },
+      { collection: 'envelopes', id: 'e', data: { id: 'e', name: 'Groceries', group: 'Daily', order: 0 } },
     ]);
     await tick(100);
     await commit;

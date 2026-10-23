@@ -20,7 +20,7 @@ const m = (c: Cents) => formatDollars(c);
 const up = (c: Cents) => formatDollars(c, 'up');
 
 /**
- * How an envelope is doing in a month, in one line. Bills and Everyday show spending
+ * How an envelope is doing in a month, in one line. Bills and Daily show spending
  * against what's there; Savings shows what went in; debt payments show coverage.
  */
 export function envelopeStatus(

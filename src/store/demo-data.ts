@@ -54,17 +54,17 @@ const ENVELOPES: { name: string; group: string; target: Cents }[] = [
   { name: 'Internet', group: 'Bills', target: 7000 },
   { name: 'Insurance', group: 'Bills', target: 14000 },
   { name: 'Subscriptions', group: 'Bills', target: 4000 },
-  { name: 'Groceries', group: 'Everyday', target: 52000 },
-  { name: 'Eating Out', group: 'Everyday', target: 14000 },
-  { name: 'Gas', group: 'Everyday', target: 17000 },
-  { name: 'Household', group: 'Everyday', target: 8000 },
-  { name: 'Fun Money', group: 'Everyday', target: 9000 },
+  { name: 'Groceries', group: 'Daily', target: 52000 },
+  { name: 'Eating Out', group: 'Daily', target: 14000 },
+  { name: 'Gas', group: 'Daily', target: 17000 },
+  { name: 'Household', group: 'Daily', target: 8000 },
+  { name: 'Fun Money', group: 'Daily', target: 9000 },
   { name: 'Emergency Fund', group: 'Savings', target: 15000 },
   { name: 'Car Repairs', group: 'Savings', target: 5000 },
   { name: 'Gifts', group: 'Savings', target: 4000 },
 ];
 
-/** Everyday spending: trips per month, merchants, and the cents range of each trip. */
+/** Daily spending: trips per month, merchants, and the cents range of each trip. */
 const SPENDING: { envelope: string; trips: number; merchants: string[]; min: Cents; max: Cents; chime?: number }[] = [
   { envelope: 'Groceries', trips: 7, merchants: ['Kroger', 'Aldi', "Trader Joe's", 'Kroger', 'Costco'], min: 3800, max: 11800 },
   {
@@ -319,7 +319,7 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
       if (onCard && dateIn(month, r.day) <= asOf) owed.set(account.id, owed.get(account.id)! + amount);
     });
 
-    // Everyday spending, spread through the month.
+    // Daily spending, spread through the month.
     const lastDay = Number(monthEnd(month).slice(8));
     for (const s of SPENDING) {
       let trips = s.trips;

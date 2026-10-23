@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState } from 'react';
+import { TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -52,6 +52,9 @@ export function NewAccount({ debt }: { debt?: boolean }) {
   const cents = parseMoney(balance);
   const due = dueDay ? Number(dueDay) : undefined;
   const dueInvalid = due !== undefined && (!Number.isInteger(due) || due < 1 || due > 31);
+  const balanceRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const minRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const dueRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const valid = !!name.trim() && cents !== null && !dueInvalid && (isCash || cents >= 0);
 
   return (
@@ -64,8 +67,14 @@ export function NewAccount({ debt }: { debt?: boolean }) {
         onChangeText={setName}
         placeholder={isCash ? 'Main Checking' : 'Chase Freedom'}
         autoFocus
+        autoCapitalize="words"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => balanceRef.current?.focus()}
       />
       <Field
+        ref={balanceRef}
+        returnKeyType="done"
         label={isCash ? 'Balance today' : 'Amount owed today'}
         note={isCash ? 'copy it from your bank app' : 'copy it from the lender'}
         value={balance}
@@ -93,6 +102,9 @@ export function NewAccount({ debt }: { debt?: boolean }) {
         <>
           <Field
             label="Interest rate (APR %)"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => minRef.current?.focus()}
             value={apr}
             onChangeText={setApr}
             placeholder="24.99"
@@ -102,7 +114,11 @@ export function NewAccount({ debt }: { debt?: boolean }) {
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
               <Field
+                ref={minRef}
                 label="Minimum"
+                returnKeyType="next"
+                submitBehavior="submit"
+                onSubmitEditing={() => dueRef.current?.focus()}
                 optional
                 value={min}
                 onChangeText={setMin}
@@ -113,7 +129,9 @@ export function NewAccount({ debt }: { debt?: boolean }) {
             </View>
             <View style={{ flex: 1 }}>
               <Field
+                ref={dueRef}
                 label="Due day"
+                returnKeyType="done"
                 optional
                 value={dueDay}
                 onChangeText={setDueDay}

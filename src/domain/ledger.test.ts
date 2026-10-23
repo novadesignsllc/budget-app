@@ -7,8 +7,8 @@ const savings: Account = { id: 'sav', name: 'Savings', kind: 'savings', openingB
 const visa: Account = { id: 'visa', name: 'Visa', kind: 'credit_card', openingBalance: -300000, openedOn: '2026-10-01', order: 2, apr: 2499, minPayment: 9000 };
 
 const envelopes: Envelope[] = [
-  { id: 'food', name: 'Eating Out', group: 'Everyday', order: 0 },
-  { id: 'groc', name: 'Groceries', group: 'Everyday', order: 1 },
+  { id: 'food', name: 'Eating Out', group: 'Daily', order: 0 },
+  { id: 'groc', name: 'Groceries', group: 'Daily', order: 1 },
   { id: 'visa-pay', name: 'Visa', group: 'Debt payments', order: 0, debtAccountId: 'visa' },
 ];
 

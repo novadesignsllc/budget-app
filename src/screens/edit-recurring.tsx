@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useRef, useState } from 'react';
+import { TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { DateRow } from '@/components/date-picker';
@@ -13,6 +13,7 @@ import { FREQUENCY_LABEL } from '@/domain/recurring';
 import { isCashAccount, type Frequency, type RecurringKind } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
+import { orderGroups } from '@/utils/group-order';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
@@ -20,7 +21,6 @@ import { haptic } from '@/utils/haptics';
 import { SheetHeader } from '@/components/sheet-header';
 
 const FREQUENCIES: Frequency[] = ['weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
-const GROUP_ORDER = ['Bills', 'Everyday', 'Savings'];
 
 export function EditRecurring({ id }: { id?: string }) {
   const colors = useColors();
@@ -41,15 +41,21 @@ export function EditRecurring({ id }: { id?: string }) {
   const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? 'monthly');
   const [nextDue, setNextDue] = useState(existing?.nextDue ?? today());
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const groupOrder = useStore((s) => s.settings.groupOrder);
 
   const amount = parseMoney(amountText);
   const account = accounts.find((a) => a.id === accountId);
   const onCard = !!account && !isCashAccount(account);
-  const rank = (g: string) => (GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : 50);
+  const groups = orderGroups(
+    envelopes.map((e) => e.group),
+    groupOrder,
+  );
   const spendable = envelopes
     .filter((e) => !e.hidden && !e.debtAccountId)
-    .sort((a, b) => rank(a.group) - rank(b.group) || a.group.localeCompare(b.group) || a.order - b.order);
-  const valid = name.trim() && amount && amount > 0 && accountId && envelopeId;
+    .sort((a, b) => groups.indexOf(a.group) - groups.indexOf(b.group) || a.order - b.order);
+  // A new item gets its own Bills envelope when it's added, so only edits pick one.
+  const valid = name.trim() && amount && amount > 0 && accountId && (!existing || envelopeId);
 
   // Bank accounts first, then cards in their own red section. Loans can't pay a bill.
   const accountOptions: DropdownOption<string>[] = accounts
@@ -80,7 +86,7 @@ export function EditRecurring({ id }: { id?: string }) {
       kind,
       amount,
       accountId,
-      envelopeId,
+      ...(existing ? { envelopeId } : {}),
       frequency,
       nextDue,
     };
@@ -96,8 +102,19 @@ export function EditRecurring({ id }: { id?: string }) {
     <SheetScreen>
       <SheetHeader title={existing ? existing.name : 'New recurring'} />
 
-      <Field label="Name" value={name} onChangeText={setName} placeholder={kind === 'bill' ? 'Electric' : 'Netflix'} />
       <Field
+        label="Name"
+        value={name}
+        onChangeText={setName}
+        placeholder={kind === 'bill' ? 'Electric' : 'Netflix'}
+        autoFocus={!existing}
+        autoCapitalize="words"
+        returnKeyType="next"
+        submitBehavior="submit"
+        onSubmitEditing={() => amountRef.current?.focus()}
+      />
+      <Field
+        ref={amountRef}
         label={kind === 'bill' ? 'Usual amount' : 'Amount'}
         hint={kind === 'bill' ? 'Bills can change. Fix the amount on the transaction after you approve it.' : undefined}
         value={amountText}
@@ -147,17 +164,19 @@ export function EditRecurring({ id }: { id?: string }) {
               options={accountOptions}
             />
           </View>
-          <View style={rowStyle}>
-            <Dropdown
-              variant="row"
-              label="Envelope"
-              value={envelopeId}
-              onChange={setEnvelopeId}
-              options={envelopeOptions}
-              searchable
-              placeholder={spendable.length ? 'Choose' : 'None yet'}
-            />
-          </View>
+          {existing && (
+            <View style={rowStyle}>
+              <Dropdown
+                variant="row"
+                label="Envelope"
+                value={envelopeId}
+                onChange={setEnvelopeId}
+                options={envelopeOptions}
+                searchable
+                placeholder={spendable.length ? 'Choose' : 'None yet'}
+              />
+            </View>
+          )}
           <View style={rowStyle}>
             <Dropdown
               variant="row"
@@ -177,9 +196,13 @@ export function EditRecurring({ id }: { id?: string }) {
             Recurring charges on a card are slips every time. Move this to a bank account when you can.
           </Text>
         )}
-        {spendable.length === 0 && (
+        {!existing && (
           <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: 2 }}>
-            Make envelopes on the Budget tab first.
+            {!name.trim()
+              ? 'Adds an envelope in Bills'
+              : spendable.some((e) => e.name.toLowerCase() === name.trim().toLowerCase())
+                ? `Uses your ${name.trim()} envelope`
+                : `Adds a ${name.trim()} envelope in Bills`}
           </Text>
         )}
       </View>

@@ -13,6 +13,7 @@ import { addDays, fromISODate, toISODate, today } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
 import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
+import { dismissKeyboard } from '@/utils/keyboard';
 
 import { Button } from './button';
 import { FieldLabel } from './field';
@@ -58,6 +59,7 @@ function useExpand() {
   const easing = Easing.out(Easing.cubic);
 
   const set = (next: boolean) => {
+    if (next) dismissKeyboard();
     setOpen(next);
     if (next) setMounted(true);
     else

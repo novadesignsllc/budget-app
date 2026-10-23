@@ -10,10 +10,10 @@ const ctx: ParseContext = {
     { id: 'visa', name: 'Chase Visa', kind: 'credit_card', openingBalance: 0, openedOn: '2026-10-01', order: 3 },
   ],
   envelopes: [
-    { id: 'eat', name: 'Eating Out', group: 'Everyday', order: 0 },
-    { id: 'groc', name: 'Groceries', group: 'Everyday', order: 1 },
-    { id: 'gas', name: 'Gas', group: 'Everyday', order: 2 },
-    { id: 'fun', name: 'Fun Money', group: 'Everyday', order: 3 },
+    { id: 'eat', name: 'Eating Out', group: 'Daily', order: 0 },
+    { id: 'groc', name: 'Groceries', group: 'Daily', order: 1 },
+    { id: 'gas', name: 'Gas', group: 'Daily', order: 2 },
+    { id: 'fun', name: 'Fun Money', group: 'Daily', order: 3 },
   ],
   merchantMemory: { kroger: 'groc', targetcom: 'fun' },
 };

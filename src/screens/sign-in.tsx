@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { backend } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
@@ -28,6 +28,7 @@ export function SignIn() {
   const [mode, setMode] = useState<Mode>('signIn');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const passwordRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -93,8 +94,13 @@ export function SignIn() {
             keyboardType="email-address"
             inputMode="email"
             textContentType="emailAddress"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => passwordRef.current?.focus()}
           />
           <Field
+            ref={passwordRef}
+            returnKeyType="go"
             label="Password"
             value={password}
             onChangeText={setPassword}

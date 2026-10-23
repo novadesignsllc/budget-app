@@ -23,7 +23,9 @@ import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
 import { groupColor, radius, spacing, type as typeScale, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
+import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
+import { dismissKeyboard } from '@/utils/keyboard';
 
 type Override = { envelopeId?: string; accountId?: string; date?: ISODate; income?: boolean };
 
@@ -175,11 +177,29 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  // Envelopes listed in the Budget's group order.
+
+  const groupOrder = useStore((s) => s.settings.groupOrder);
+
+  const listedGroups = useMemo(
+
+    () => orderGroups(
+
+      envelopes.map((e) => e.group),
+
+      groupOrder,
+
+    ),
+
+    [envelopes, groupOrder],
+
+  );
+
   const envelopeOptions = useMemo<DropdownOption<string>[]>(
     () =>
       envelopes
         .filter((e) => !e.hidden && !e.debtAccountId)
-        .sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order)
+        .sort((a, b) => listedGroups.indexOf(a.group) - listedGroups.indexOf(b.group) || a.order - b.order)
         .map((e) => {
           const left = ledger.available.get(e.id) ?? 0;
           return {
@@ -191,7 +211,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             tone: left < 0 ? 'negative' : undefined,
           };
         }),
-    [envelopes, ledger],
+    [envelopes, ledger, listedGroups],
   );
 
   const accountOptions = useMemo<DropdownOption<string>[]>(
@@ -322,6 +342,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
           value={flagged}
           onValueChange={(v) => {
             haptic('selection');
+            dismissKeyboard();
             setFlagged(v);
           }}
           trackColor={{ false: colors.fillPressed, true: colors.orange }}

@@ -1,10 +1,10 @@
 import { DEBT_GROUP } from '@/store';
 
-const DEFAULT = ['Bills', 'Everyday', 'Savings'];
+const DEFAULT = ['Daily', 'Savings', 'Bills'];
 
 /**
  * Budget groups top to bottom: the user's saved order first, then any group they haven't
- * placed yet (Bills, Everyday, Savings, others by name, debt payments last).
+ * placed yet (Daily, Savings, Bills, debt payments last).
  */
 export function orderGroups(names: string[], saved: string[] = []): string[] {
   const rank = (g: string) => {

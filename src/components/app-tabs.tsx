@@ -86,7 +86,7 @@ function Dock() {
         }}
       >
         {TABS.map((t) => (
-          <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+          <TabTrigger key={t.name} name={t.name} href={t.href} resetOnFocus asChild>
             <BarTab tab={t} />
           </TabTrigger>
         ))}
@@ -127,7 +127,7 @@ function Sidebar() {
         </Pressable>
         <View style={{ gap: 2 }}>
           {TABS.map((t) => (
-            <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+            <TabTrigger key={t.name} name={t.name} href={t.href} resetOnFocus asChild>
               <SideItem label={t.label} />
             </TabTrigger>
           ))}

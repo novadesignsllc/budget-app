@@ -20,10 +20,10 @@ export function loadSampleData() {
   const utilities = env('Utilities', 'Bills', 18000);
   const phone = env('Phone', 'Bills', 6500);
   const subs = env('Subscriptions', 'Bills', 3500);
-  const groceries = env('Groceries', 'Everyday', 50000);
-  const eating = env('Eating Out', 'Everyday', 12000);
-  const gas = env('Gas', 'Everyday', 16000);
-  const fun = env('Fun Money', 'Everyday', 8000);
+  const groceries = env('Groceries', 'Daily', 50000);
+  const eating = env('Eating Out', 'Daily', 12000);
+  const gas = env('Gas', 'Daily', 16000);
+  const fun = env('Fun Money', 'Daily', 8000);
   const emergency = env('Emergency Fund', 'Savings', 100000);
 
   const st = useStore.getState();

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Switch, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
@@ -14,13 +14,13 @@ import { formatDollars, formatMoney, parseMoney } from '@/domain/money';
 import { isCashAccount } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
-import { DEBT_GROUP, isLocked, useStore } from '@/store';
+import { isLocked, useStore } from '@/store';
 import { groupColor, radius, spacing, type as typeScale, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
+import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
+import { dismissKeyboard } from '@/utils/keyboard';
 
-const GROUP_ORDER = ['Bills', 'Everyday', 'Savings'];
-const groupRank = (g: string) => (g === DEBT_GROUP ? 99 : GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : 50);
 
 /** A label-and-control line inside the sheet's grouped card, same height as a dropdown row. */
 function CardRow({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
@@ -79,12 +79,32 @@ export function EditTransaction({ id }: { id: string }) {
   const [flagged, setFlagged] = useState(!!t?.flagged);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmSave, setConfirmSave] = useState(false);
+  const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const noteRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+
+  // Envelopes listed in the Budget's group order.
+
+  const groupOrder = useStore((s) => s.settings.groupOrder);
+
+  const listedGroups = useMemo(
+
+    () => orderGroups(
+
+      envelopes.map((e) => e.group),
+
+      groupOrder,
+
+    ),
+
+    [envelopes, groupOrder],
+
+  );
 
   const envelopeOptions = useMemo(
     () =>
       envelopes
         .filter((e) => !e.hidden && !e.debtAccountId)
-        .sort((a, b) => groupRank(a.group) - groupRank(b.group) || a.group.localeCompare(b.group) || a.order - b.order)
+        .sort((a, b) => listedGroups.indexOf(a.group) - listedGroups.indexOf(b.group) || a.order - b.order)
         .map((e): DropdownOption<string> => {
           const available = ledger.available.get(e.id) ?? 0;
           return {
@@ -96,7 +116,7 @@ export function EditTransaction({ id }: { id: string }) {
             tone: available < 0 ? 'negative' : undefined,
           };
         }),
-    [envelopes, ledger],
+    [envelopes, ledger, listedGroups],
   );
 
   if (!t) {
@@ -207,11 +227,23 @@ export function EditTransaction({ id }: { id: string }) {
 
       <View style={{ flexDirection: 'row', gap: spacing.sm }}>
         <View style={{ flex: 1 }}>
-          <Field label="Payee" value={payee} onChangeText={setPayee} autoCapitalize="words" />
+          <Field
+            label="Payee"
+            value={payee}
+            onChangeText={setPayee}
+            autoCapitalize="words"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => amountRef.current?.focus()}
+          />
         </View>
         <View style={{ width: 120 }}>
           <Field
+            ref={amountRef}
             label="Amount"
+            returnKeyType="next"
+            submitBehavior="submit"
+            onSubmitEditing={() => noteRef.current?.focus()}
             value={amountText}
             onChangeText={setAmountText}
             keyboardType="decimal-pad"
@@ -255,8 +287,10 @@ export function EditTransaction({ id }: { id: string }) {
         <DateRow label="Date" value={date} onChange={setDate} max={today()} />
         <CardRow label="Note">
           <TextInput
+            ref={noteRef}
             value={memo}
             onChangeText={setMemo}
+            returnKeyType="done"
             placeholder="Optional"
             placeholderTextColor={colors.placeholder}
             accessibilityLabel="Note"
@@ -268,6 +302,7 @@ export function EditTransaction({ id }: { id: string }) {
             value={flagged}
             onValueChange={(v) => {
               haptic('selection');
+              dismissKeyboard();
               setFlagged(v);
             }}
             trackColor={{ true: colors.accent, false: colors.fillPressed }}

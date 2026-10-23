@@ -7,7 +7,8 @@ import { findPayee } from '@/domain/payees';
 import { canReconcile, isLocked } from '@/domain/reconcile';
 import { withTarget } from '@/domain/targets';
 import { normalizePayee } from '@/domain/quick-add';
-import { advance } from '@/domain/recurring';
+import { ceilDollars } from '@/domain/money';
+import { advance, monthlyCost } from '@/domain/recurring';
 import type {
   Account,
   AccountKind,
@@ -20,9 +21,20 @@ import type {
   Transaction,
   TransactionKind,
 } from '@/domain/types';
-import { isCashAccount } from '@/domain/types';
+import { GROUPS, isCashAccount } from '@/domain/types';
 
 export const DEBT_GROUP = 'Debt payments';
+
+/** "Everyday" was Daily's old name; any group that isn't one of the fixed ones becomes Daily. */
+export function fixGroup(group: string): string {
+  if (group === DEBT_GROUP || (GROUPS as readonly string[]).includes(group)) return group;
+  return 'Daily';
+}
+
+/** What a recurring item costs a month, rounded up to whole dollars, as its envelope's target. */
+function monthlyBudget(r: Pick<Recurring, 'amount' | 'frequency'>): Cents {
+  return ceilDollars(monthlyCost(r));
+}
 
 export type Settings = {
   debtStrategy: Strategy;
@@ -81,7 +93,7 @@ type Actions = {
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
   updateEnvelope: (
     id: string,
-    patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden'>>,
+    patch: Partial<Pick<Envelope, 'name' | 'group' | 'monthlyTarget' | 'hidden' | 'recurringId'>>,
   ) => void;
   /**
    * Saves a new order from sort mode: groups top to bottom, each with its envelopes in
@@ -138,6 +150,12 @@ type Actions = {
   setPayeeEnvelope: (id: string, envelopeId: string | undefined) => void;
   /** One-time move of the old merchant memory into `payees`. Does nothing once payees exist. */
   migrateMerchantMemory: () => void;
+  /**
+   * Puts every envelope in one of the fixed groups: "Everyday" (the old name) and any
+   * custom group become Daily. Debt payment envelopes are left alone. Does nothing when
+   * everything is already valid.
+   */
+  normalizeGroups: () => void;
 
   updateSettings: (patch: Partial<Settings>) => void;
   replaceAll: (state: State) => void;
@@ -242,7 +260,7 @@ export const useStore = create<Store>()((set, get) => ({
         {
           id,
           name: name.trim(),
-          group: group.trim() || 'Everyday',
+          group: group.trim() || 'Daily',
           order: s.envelopes.length,
           ...(monthlyTarget ? { targets: { [from]: monthlyTarget } } : {}),
         },
@@ -521,14 +539,47 @@ export const useStore = create<Store>()((set, get) => ({
 
   addRecurring: (r) => {
     const id = newId();
-    set((s) => ({ recurring: [...s.recurring, { ...r, id, active: true }] }));
+    let envelopeId = r.envelopeId;
+    if (!envelopeId) {
+      // Every bill and subscription gets its own Bills envelope, budgeted to what it costs a
+      // month, so approving it always spends money that was set aside for it.
+      const existing = get().envelopes.find(
+        (e) => !e.hidden && !e.debtAccountId && e.name.trim().toLowerCase() === r.name.trim().toLowerCase(),
+      );
+      if (existing) envelopeId = existing.id;
+      else {
+        envelopeId = get().addEnvelope({ name: r.name, group: 'Bills', monthlyTarget: monthlyBudget(r) });
+        get().updateEnvelope(envelopeId, { recurringId: id });
+      }
+    }
+    set((s) => ({ recurring: [...s.recurring, { ...r, envelopeId, id, active: true }] }));
     return id;
   },
 
-  updateRecurring: (id, patch) =>
-    set((s) => ({ recurring: s.recurring.map((r) => (r.id === id ? { ...r, ...patch } : r)) })),
+  updateRecurring: (id, patch) => {
+    const before = get().recurring.find((r) => r.id === id);
+    set((s) => ({ recurring: s.recurring.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
+    const after = get().recurring.find((r) => r.id === id);
+    if (!before || !after?.envelopeId) return;
+    // Keep the envelope that was made for this item in step with it.
+    const envelope = get().envelopes.find((e) => e.id === after.envelopeId && e.recurringId === id);
+    if (!envelope) return;
+    if (after.name.trim() && after.name !== before.name) get().updateEnvelope(envelope.id, { name: after.name.trim() });
+    if (after.amount !== before.amount || after.frequency !== before.frequency) {
+      get().setTarget(envelope.id, today().slice(0, 7), monthlyBudget(after));
+    }
+  },
 
-  deleteRecurring: (id) => set((s) => ({ recurring: s.recurring.filter((r) => r.id !== id) })),
+  // The envelope stays (it may hold money); it just stops following the deleted item.
+  deleteRecurring: (id) =>
+    set((s) => ({
+      recurring: s.recurring.filter((r) => r.id !== id),
+      envelopes: s.envelopes.map((e) => {
+        if (e.recurringId !== id) return e;
+        const { recurringId: _gone, ...rest } = e;
+        return rest;
+      }),
+    })),
 
   approveRecurring: (id, amount) => {
     const r = get().recurring.find((x) => x.id === id);
@@ -569,6 +620,21 @@ export const useStore = create<Store>()((set, get) => ({
 
   setPayeeEnvelope: (id, envelopeId) =>
     set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId } : p)) })),
+
+  normalizeGroups: () =>
+    set((s) => {
+      const changed = s.envelopes.some((e) => !e.debtAccountId && fixGroup(e.group) !== e.group);
+      const order = s.settings.groupOrder;
+      const fixedOrder = order && [...new Set(order.map((g) => (g === DEBT_GROUP ? g : fixGroup(g))))];
+      const orderChanged = !!order && JSON.stringify(order) !== JSON.stringify(fixedOrder);
+      if (!changed && !orderChanged) return s;
+      return {
+        envelopes: changed
+          ? s.envelopes.map((e) => (e.debtAccountId || fixGroup(e.group) === e.group ? e : { ...e, group: fixGroup(e.group) }))
+          : s.envelopes,
+        settings: orderChanged ? { ...s.settings, groupOrder: fixedOrder } : s.settings,
+      };
+    }),
 
   migrateMerchantMemory: () =>
     set((s) => {

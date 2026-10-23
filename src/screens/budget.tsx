@@ -35,10 +35,10 @@ const STARTERS: { name: string; group: string }[] = [
   { name: 'Utilities', group: 'Bills' },
   { name: 'Phone', group: 'Bills' },
   { name: 'Insurance', group: 'Bills' },
-  { name: 'Groceries', group: 'Everyday' },
-  { name: 'Eating Out', group: 'Everyday' },
-  { name: 'Gas', group: 'Everyday' },
-  { name: 'Fun Money', group: 'Everyday' },
+  { name: 'Groceries', group: 'Daily' },
+  { name: 'Eating Out', group: 'Daily' },
+  { name: 'Gas', group: 'Daily' },
+  { name: 'Fun Money', group: 'Daily' },
   { name: 'Emergency Fund', group: 'Savings' },
   { name: 'Car Repairs', group: 'Savings' },
   { name: 'Gifts', group: 'Savings' },
@@ -112,7 +112,7 @@ export function Budget() {
   const existing = new Set(envelopes.map((e) => e.name.toLowerCase()));
   const spendable = envelopes.filter((e) => !e.debtAccountId);
 
-  // The ring: how much of this month's spending money (Bills and Everyday) is gone.
+  // The ring: how much of this month's spending money (Bills and Daily) is gone.
   let spent = 0;
   let spendingTotal = 0;
   for (const e of envelopes) {
@@ -293,7 +293,7 @@ export function Budget() {
             </View>
             <ProgressRing
               value={ringValue}
-              color={hueFor('Everyday')}
+              color={hueFor('Daily')}
               accessibilityLabel={`${Math.round(ringValue * 100)} percent of ${formatMonth(month)}'s spending money spent`}
             />
             <View style={{ flex: 1, gap: 1, alignItems: 'flex-end' }}>
@@ -349,7 +349,7 @@ export function Budget() {
                 paddingTop: spacing.md - 2,
               }}
             >
-              Bills and Everyday are money you spend each month. Savings is money you add each month and leave alone.
+              Bills and Daily are money you spend each month. Savings is money you add each month and leave alone.
             </Text>
             <View style={{ paddingTop: spacing.xs }}>
               {STARTERS.filter((s) => !existing.has(s.name.toLowerCase())).map((s, i, list) => (

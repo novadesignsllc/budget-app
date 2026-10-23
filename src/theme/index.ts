@@ -76,7 +76,7 @@ export const chartDebt = chartColors[1];
 /** Envelope group hues: a dot on the group header and the color of its bars. */
 const groupHues: Record<string, string> = {
   Bills: '#2a78d6',
-  Everyday: '#5B4CF0',
+  Daily: '#5B4CF0',
   Savings: '#1baf7a',
   'Debt payments': '#8B97AA',
 };

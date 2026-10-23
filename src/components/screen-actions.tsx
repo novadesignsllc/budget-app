@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 import { haptic } from '@/utils/haptics';
 import { radius, spacing, useColors } from '@/theme';
 
-import { useDock } from './dock';
+import { useIsDesktop } from './dock';
 import { Icon } from './icon';
 import { Text } from './text';
 
@@ -12,7 +12,7 @@ import { Text } from './text';
  * app works one-handed (principle 5a). Render it as the last child of a screen.
  */
 export function ScreenActions({ children }: { children: React.ReactNode }) {
-  const { floatBottom } = useDock();
+  const desktop = useIsDesktop();
   return (
     <View
       pointerEvents="box-none"
@@ -20,7 +20,8 @@ export function ScreenActions({ children }: { children: React.ReactNode }) {
         position: 'absolute',
         right: spacing.md,
         left: spacing.md + 40,
-        bottom: floatBottom,
+        // Screens end above the dock, so this sits just over quick-add.
+        bottom: desktop ? spacing.xl : spacing.md,
         flexDirection: 'row',
         justifyContent: 'flex-end',
         alignItems: 'center',

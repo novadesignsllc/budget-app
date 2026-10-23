@@ -24,7 +24,7 @@ Light only for now. `useColors()` stays a hook so dark can come back later.
 | separator / hairline | rgba(20,40,80,.08) / .06 | under a card header / between rows |
 | text / textSecondary / textTertiary | #0B1220 / #5D6B82 / #8B97AA | copy |
 | ink / onInk | #0B1220 / #FFF | primary and add buttons |
-| accent | #2F6FEB | links, selection, Reconcile |
+| accent | #5B4CF0 | buttons, links, selection, the active tab |
 | orange | #C2560F | due, flags, needs attention |
 | positive | #13803F | inflow, saved, synced |
 | negative / negativeStrong | #B42318 / #D92D20 | slips, overspent, urgent |
@@ -70,7 +70,8 @@ Screens build only from these (`src/components/`):
 - `ScreenTitle` (centered title plus context line), `Screen`, `SheetScreen`
 - `ScreenActions` and `ActionButton` (bottom right, above quick-add)
 - `LineChart`, `ChartLegend`, `ProgressRing`, `MiniCard`
-- The dock (quick-add bar plus scrolling tab strip with the Settings gear pinned right) and the sync pill are global.
+- The dock (quick-add bar above a classic tab bar: Home, Transactions, Budget, Debt, Recurring, Settings) and the sync pill are global. Pushed screens use our own flat header (`TabStack`), never the native glass back button.
+- `InlineAmount` for any amount you edit in place, `DateRow` / `DateField` (date-picker.tsx) for every date, `AnimatedNumber` for totals that change.
 
 ## Rules for this app
 
@@ -79,5 +80,8 @@ Screens build only from these (`src/components/`):
 - Charts: Home cash vs debt, Budget ring, Debt payoff lines. Nothing on Transactions or Recurring.
 - Swipe actions are flat, square, full height, like Mail. Swipe right fills, swipe left edits.
 - Progress bars are 3px in the group's hue, red when overspent.
+- The budget is whole dollars: Ready to assign and Left round down, Spent rounds up, assigned amounts have no cents. Columns are Assigned · Spent · Left, equal width; names truncate first.
+- Tap Assigned to edit it in place. The row stays above the keyboard; the rest dims.
+- Motion is short (150 to 250ms, 700 for a chart drawing in) and off with Reduce Motion: tab fade, menu grow, numbers counting, calendar expand.
 - Card slips are red everywhere: quick-add, rows, recurring, debt.
 - Copy: no em dashes, no marketing words, no emoji. Button labels say what happens.

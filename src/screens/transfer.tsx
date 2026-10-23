@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
-import { DateField } from '@/components/date-field';
+import { DateField } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
@@ -14,7 +13,6 @@ import { isCashAccount, type Account } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
@@ -80,9 +78,7 @@ export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?:
         }
       />
 
-      <Card style={{ paddingHorizontal: spacing.md, paddingVertical: 6 }}>
-        <DateField label="Date" value={date} onChange={setDate} />
-      </Card>
+      <DateField label="Date" value={date} onChange={setDate} max={today()} />
 
       <View style={{ paddingHorizontal: 2 }}>
         <Text variant="footnote" tone="textSecondary">

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import Animated, { runOnJS, useReducedMotion } from 'react-native-reanimated';
 import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 
 import { fontFamily, radius, spacing, useColors } from '@/theme';
@@ -56,6 +56,9 @@ export function LineChart({
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const [active, setActive] = useState<number | null>(null);
+  // Lines draw in left to right the first time the chart appears.
+  const reduceMotion = useReducedMotion();
+  const [revealed, setRevealed] = useState(false);
 
   const count = Math.max(...series.map((s) => s.values.length), 2);
   const max = niceMax(Math.max(1, ...series.flatMap((s) => s.values.map((v) => v ?? 0))));
@@ -135,8 +138,11 @@ export function LineChart({
         <View
           accessibilityRole="image"
           accessibilityLabel={accessibilityLabel}
-          onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-          style={{ height }}
+          onLayout={(e) => {
+            setWidth(e.nativeEvent.layout.width);
+            if (!revealed) requestAnimationFrame(() => setRevealed(true));
+          }}
+          style={{ height, overflow: 'hidden' }}
         >
           {width > 0 && (
             <Svg width={width} height={height}>
@@ -180,6 +186,23 @@ export function LineChart({
                 </SvgText>
               ))}
             </Svg>
+          )}
+          {!reduceMotion && width > 0 && (
+            <Animated.View
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 0,
+                width,
+                backgroundColor: colors.surface,
+                transform: [{ translateX: revealed ? width : 0 }],
+                transitionProperty: 'transform',
+                transitionDuration: 700,
+                transitionTimingFunction: 'ease-out',
+              }}
+            />
           )}
           {active !== null && width > 0 && (
             <View

@@ -1,18 +1,17 @@
-import { DateTimePicker } from '@expo/ui/community/datetime-picker';
 import { useMemo, useState } from 'react';
 import { Switch, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
+import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { Icon } from '@/components/icon';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { addDays, formatShortDate, fromISODate, toISODate, today } from '@/domain/dates';
-import { formatMoney, parseMoney } from '@/domain/money';
-import { formatMonth, monthOf } from '@/domain/months';
-import { isCashAccount, type ISODate } from '@/domain/types';
+import { today } from '@/domain/dates';
+import { formatDollars, formatMoney, parseMoney } from '@/domain/money';
+import { isCashAccount } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
 import { DEBT_GROUP, isLocked, useStore } from '@/store';
@@ -20,7 +19,6 @@ import { groupColor, radius, spacing, type as typeScale, useColors } from '@/the
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
-const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short' });
 const GROUP_ORDER = ['Bills', 'Everyday', 'Savings'];
 const groupRank = (g: string) => (g === DEBT_GROUP ? 99 : GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : 50);
 
@@ -51,43 +49,6 @@ function CardRow({ label, children, last }: { label: string; children: React.Rea
 function Divided({ children }: { children: React.ReactNode }) {
   const colors = useColors();
   return <View style={{ borderBottomWidth: 1, borderBottomColor: colors.hairline }}>{children}</View>;
-}
-
-/** The native date picker on iOS and Android; on web (no picker there) the last 60 days. */
-function DateRow({ value, onChange }: { value: ISODate; onChange: (d: ISODate) => void }) {
-  const options = useMemo(() => {
-    const now = today();
-    const days: ISODate[] = [];
-    for (let i = 0; i <= 60; i++) days.push(addDays(now, -i));
-    if (!days.includes(value)) days.push(value);
-    return days
-      .sort()
-      .reverse()
-      .map((d): DropdownOption<ISODate> => ({
-        value: d,
-        label: d === now ? 'Today' : d === addDays(now, -1) ? 'Yesterday' : formatShortDate(d),
-        detail: weekday.format(fromISODate(d)),
-        section: formatMonth(monthOf(d)),
-      }));
-  }, [value]);
-
-  if (process.env.EXPO_OS === 'web') {
-    return (
-      <Divided>
-        <Dropdown variant="row" label="Date" value={value} options={options} onChange={onChange} />
-      </Divided>
-    );
-  }
-  return (
-    <CardRow label="Date">
-      <DateTimePicker
-        value={fromISODate(value)}
-        mode="date"
-        display="compact"
-        onValueChange={(_e, date) => onChange(toISODate(date))}
-      />
-    </CardRow>
-  );
 }
 
 const TITLES = {
@@ -131,7 +92,7 @@ export function EditTransaction({ id }: { id: string }) {
             label: e.name,
             section: e.group,
             dot: groupColor(e.group),
-            detail: available < 0 ? formatMoney(available) : `${formatMoney(available)} left`,
+            detail: available < 0 ? formatDollars(available) : `${formatDollars(available)} left`,
             tone: available < 0 ? 'negative' : undefined,
           };
         }),
@@ -291,7 +252,7 @@ export function EditTransaction({ id }: { id: string }) {
             </Text>
           </CardRow>
         )}
-        <DateRow value={date} onChange={setDate} />
+        <DateRow label="Date" value={date} onChange={setDate} max={today()} />
         <CardRow label="Note">
           <TextInput
             value={memo}

@@ -32,8 +32,9 @@ const light = {
   hairline: 'rgba(20, 40, 80, 0.06)',
   ink: '#0B1220',
   onInk: '#FFFFFF',
-  accent: '#2F6FEB',
-  accentSoft: '#EAF1FE',
+  /** Purple: actions, selection, links, the active tab. */
+  accent: '#5B4CF0',
+  accentSoft: '#F0EEFE',
   blue: '#2F6FEB',
   blueSoft: '#E8EFFD',
   /** Due, flags, needs attention. */

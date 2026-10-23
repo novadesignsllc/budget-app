@@ -9,7 +9,7 @@ Every UI change gets checked against these principles. When we decide something 
 3. **Pills are only for sorts and filters** (1M / 3M / YTD, All / Not cleared). Anything you choose (account, envelope, type, group, month, date) is a dropdown: a labeled field with a ⇅ chevron that opens a clean menu.
 4. **Small, quiet text, dense screens.** 13px body, 11px secondary, 10px uppercase column labels, SF Pro. Numbers are the only big type.
 5. **Flat.** Cards have a hairline border, never a drop shadow. No liquid glass, blur, or frosted bars. Solid colors.
-5a. **One-handed.** Search, add, and selectors (month, strategy) sit in the bottom right, just above quick-add. Screen titles are centered and carry no buttons.
+5a. **One-handed.** Search, add, and selectors (month, strategy) sit in the bottom right, just above quick-add. Screen titles are centered; a pushed screen gets a plain "‹ Back" link on the left and nothing else.
 5b. **A chart only where it says something.** Home: cash vs debt over time. Budget: spent-of-assigned ring. Debt: each debt's projected balance to its payoff date. Transactions and Recurring have no summary.
 6. **Color carries meaning.** One blue accent for actions and selection. Group hues for envelopes. Red only for money problems (overspent, slips, debt warnings). Green only for money in and money synced.
 7. **Rectangular buttons.** Radius 8, filled for the main action, outlined for the rest. Round icon buttons only for icon-only actions.
@@ -37,3 +37,10 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Urgent alert when cash is less than what's assigned; slips alone never trigger it | Budget must stay real |
 | 2026-10-23 | Can't move past the current month; targets are per month and never change earlier months | User rule |
 | 2026-10-23 | Payee list in Settings with default envelopes, replacing learned merchant memory | User request |
+| 2026-10-23 | Classic bottom tab bar with icons and labels, Settings included; quick-add sits above it | The scrolling strip cut off tabs; user prefers the classic bar |
+| 2026-10-23 | Purple accent (#5B4CF0) instead of blue | User request: less blue |
+| 2026-10-23 | Own flat header with a text back link | iOS 26 wraps native back buttons in liquid glass |
+| 2026-10-23 | Budget in whole dollars: to assign and left round down, spent rounds up | Rounding down keeps a little money aside, and the screen drops the .00s |
+| 2026-10-23 | Budget columns Assigned · Spent · Left, equal width; names truncate first | Columns must always line up |
+| 2026-10-23 | Tap Assigned to edit in place; no Assign / Take back form | Too many taps |
+| 2026-10-23 | Custom calendar for every date instead of the iOS date pill | The native pill looked out of place |

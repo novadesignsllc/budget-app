@@ -2,11 +2,11 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { Field } from '@/components/field';
-import { Money } from '@/components/money';
+import { InlineAmount } from '@/components/inline-amount';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -15,7 +15,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { TransactionRow, TXN_COLUMNS } from '@/components/transaction-row';
 import { today } from '@/domain/dates';
-import { formatMoney, parseMoney } from '@/domain/money';
+import { ceilDollars, floorDollars, formatDollars } from '@/domain/money';
 import { addMonthKey, assignDateFor, formatMonth, monthOf, type MonthKey } from '@/domain/months';
 import type { Transaction } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -38,7 +38,8 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const moveMoney = useStore((s) => s.moveMoney);
   const showToast = useToast((s) => s.show);
   const { all: openAccounts } = useAccounts();
-  const [amountText, setAmountText] = useState('');
+  // The Assigned amount as it's typed, for the live preview.
+  const [draft, setDraft] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [donorId, setDonorId] = useState<string>();
 
@@ -87,7 +88,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   );
   const rta = budget.readyToAssign;
   const date = assignDateFor(month, today());
-  const amount = parseMoney(amountText);
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
   const cutoff = addMonthKey(currentMonth(), -11);
   const visibleMonths = showAll ? months : months.filter(([k]) => k >= cutoff);
@@ -96,86 +96,61 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
     .filter((e) => e.id !== id && !e.hidden && (budget.envelopes.get(e.id)?.available ?? 0) > 0)
     .sort((a, b) => (budget.envelopes.get(b.id)?.available ?? 0) - (budget.envelopes.get(a.id)?.available ?? 0));
   const donor = donors.find((d) => d.id === donorId) ?? donors[0];
-  const take = donor ? Math.min(budget.envelopes.get(donor.id)?.available ?? 0, -row.available) : 0;
-
-  function apply(cents: number, label: string) {
-    assign(id, cents, date);
-    haptic('success');
-    setAmountText('');
-    showToast({ message: label });
-  }
+  const take = donor ? Math.min(floorDollars(budget.envelopes.get(donor.id)?.available ?? 0), ceilDollars(-row.available)) : 0;
 
   return (
     <>
       <Screen>
         <ScreenTitle title={envelope.name} context={formatMonth(month)} />
 
-        <Card padded>
-          <View style={{ gap: 2 }}>
-            <Text variant="footnote" tone="textSecondary">
-              Available
-            </Text>
-            <Money cents={row.available} variant="number" tone="auto" />
-            <Text variant="footnote" tone={status.tone}>
-              {status.subtitle}
-            </Text>
+        <Card>
+          <View style={{ padding: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm }}>
+            <View style={{ gap: 2 }}>
+              <Text variant="footnote" tone="textSecondary">
+                Available
+              </Text>
+              <AnimatedNumber
+                variant="number"
+                tone={row.available < 0 ? 'negative' : 'text'}
+                value={row.available}
+                format={formatDollars}
+              />
+              <Text variant="footnote" tone={status.tone}>
+                {status.subtitle}
+              </Text>
+            </View>
+            <ProgressBar
+              value={status.progress}
+              color={status.overspent ? colors.negativeStrong : groupColor(envelope.group)}
+              height={3}
+            />
           </View>
-          <ProgressBar
-            value={status.progress}
-            color={status.overspent ? colors.negativeStrong : groupColor(envelope.group)}
-            height={3}
-          />
-          <View style={{ flexDirection: 'row' }}>
-            <Stat label="Carried in" cents={row.carriedIn} />
-            <Stat label="Assigned" cents={row.assigned} />
-            <Stat label="Spent" cents={row.spent} />
+          <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.separator }}>
+            <Stat label="Carried in">{formatDollars(row.carriedIn)}</Stat>
+            <Stat label="Assigned" accent>
+              <InlineAmount
+                cents={row.assigned}
+                align="left"
+                variant="callout"
+                width={100}
+                accessibilityLabel={`Assigned to ${envelope.name} in ${formatMonth(month)}`}
+                status={`Ready to assign ${formatDollars(rta - (draft ?? row.assigned) + row.assigned)}`}
+                onDraft={setDraft}
+                onEditingChange={(on) => setDraft(on ? row.assigned : null)}
+                onCommit={(cents) => assign(id, cents - row.assigned, date)}
+              />
+            </Stat>
+            <Stat label="Spent">{formatDollars(row.spent, 'up')}</Stat>
           </View>
         </Card>
 
-        <Card padded>
-          <Field
-            label={`Assign in ${formatMonth(month)}`}
-            note={`${formatMoney(rta)} ready`}
-            value={amountText}
-            onChangeText={setAmountText}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-          />
-          {rta > 0 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {status.need > 0 && (
-                <Button
-                  title={`${status.fillLabel} ${formatMoney(Math.min(status.need, rta))}`}
-                  variant="secondary"
-                  size="sm"
-                  onPress={() => apply(Math.min(status.need, rta), status.fillLabel === 'Cover' ? 'Covered' : 'Filled')}
-                />
-              )}
-              <Button
-                title={`All of it ${formatMoney(rta)}`}
-                variant="secondary"
-                size="sm"
-                onPress={() => apply(rta, 'Assigned')}
-              />
-            </View>
-          )}
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-            <Button
-              title="Assign"
-              style={{ flex: 1 }}
-              disabled={!amount || amount <= 0}
-              onPress={() => amount && apply(amount, `Assigned ${formatMoney(amount)}`)}
-            />
-            <Button
-              title="Take back"
-              variant="secondary"
-              style={{ flex: 1 }}
-              disabled={!amount || amount <= 0}
-              onPress={() => amount && apply(-amount, `Took back ${formatMoney(amount)}`)}
-            />
-          </View>
-        </Card>
+        {draft !== null && draft !== row.assigned && (
+          <Text variant="footnote" tone="textSecondary" align="center">
+            {draft > row.assigned
+              ? `+${formatDollars(draft - row.assigned)} from Ready to assign`
+              : `${formatDollars(row.assigned - draft)} back to Ready to assign`}
+          </Text>
+        )}
 
         {row.available < 0 && donor && (
           <Card padded>
@@ -189,16 +164,16 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 label: d.name,
                 dot: groupColor(d.group),
                 section: d.group,
-                detail: formatMoney(budget.envelopes.get(d.id)?.available ?? 0),
+                detail: formatDollars(budget.envelopes.get(d.id)?.available ?? 0),
               }))}
             />
             <Button
-              title={`Move ${formatMoney(take)}`}
+              title={`Move ${formatDollars(take)}`}
               onPress={() => {
                 moveMoney(donor.id, id, take, date);
                 haptic('success');
                 showToast({
-                  message: `Moved ${formatMoney(take)} from ${donor.name}`,
+                  message: `Moved ${formatDollars(take)} from ${donor.name}`,
                 });
               }}
             />
@@ -214,7 +189,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
           const out = list.reduce((a, t) => a + (t.amount < 0 ? -t.amount : 0), 0);
           return (
             <Card key={k}>
-              <CardHeader title={formatMonth(k)} detail={`${formatMoney(out)} spent`} />
+              <CardHeader title={formatMonth(k)} detail={`${formatDollars(out, 'up')} spent`} />
               <TableHeader
                 columns={[
                   { label: 'Date', width: TXN_COLUMNS.date },
@@ -255,13 +230,31 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   );
 }
 
-function Stat({ label, cents }: { label: string; cents: number }) {
+function Stat({ label, accent, children }: { label: string; accent?: boolean; children: React.ReactNode }) {
+  const colors = useColors();
   return (
-    <View style={{ flex: 1, gap: 1 }}>
-      <Text variant="caption" tone="textSecondary">
+    <View
+      style={{
+        flex: 1,
+        gap: 2,
+        paddingHorizontal: spacing.lg,
+        paddingVertical: spacing.md - 2,
+        backgroundColor: accent ? '#FAF9FF' : undefined,
+        borderLeftWidth: accent ? 1 : 0,
+        borderRightWidth: accent ? 1 : 0,
+        borderColor: colors.separator,
+      }}
+    >
+      <Text variant="label" caps tone={accent ? 'accent' : 'textTertiary'}>
         {label}
       </Text>
-      <Money cents={cents} variant="callout" weight="600" />
+      {typeof children === 'string' ? (
+        <Text variant="callout" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+          {children}
+        </Text>
+      ) : (
+        children
+      )}
     </View>
   );
 }

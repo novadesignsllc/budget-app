@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { inDemo } from '@/backend';
+import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader } from '@/components/card';
 import { ChartLegend, LineChart } from '@/components/line-chart';
@@ -14,7 +15,7 @@ import { useToast } from '@/components/toast';
 import { daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetHealth } from '@/domain/health';
 import { balanceHistory } from '@/domain/history';
-import { formatMoney } from '@/domain/money';
+import { formatDollars, formatMoney } from '@/domain/money';
 import { dueForApproval } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
@@ -131,7 +132,7 @@ export function Home() {
               <Text variant="footnote" tone="textSecondary">
                 Where you stand
               </Text>
-              <Money cents={standing} variant="number" />
+              <AnimatedNumber variant="number" value={standing} format={(v) => formatMoney(v)} />
               {change !== 0 && (
                 <Text variant="footnote" tone={change > 0 ? 'positive' : 'negative'}>
                   {change > 0 ? 'Up' : 'Down'} {formatMoney(Math.abs(change), { whole: true })} since{' '}
@@ -177,7 +178,13 @@ export function Home() {
             <Text variant="footnote" tone="textSecondary">
               Ready to assign
             </Text>
-            <Money cents={ledger.readyToAssign} variant="title" weight="600" tone="auto" />
+            <AnimatedNumber
+              variant="title"
+              weight="600"
+              tone={ledger.readyToAssign < 0 ? 'negative' : 'text'}
+              value={ledger.readyToAssign}
+              format={formatDollars}
+            />
           </View>
           <Text variant="callout" weight="600" tone="accent">
             Assign ›

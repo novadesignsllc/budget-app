@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 
+import { AnimatedNumber } from '@/components/animated-number';
 import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { Money } from '@/components/money';
+import { InlineAmount } from '@/components/inline-amount';
 import { ProgressRing } from '@/components/progress-ring';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -13,10 +15,11 @@ import { SwipeRow, useSwipeGuard } from '@/components/swipe-row';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
-import { formatMoney } from '@/domain/money';
+import { floorDollars, formatDollars } from '@/domain/money';
 import { assignDateFor, formatMonth, monthEnd, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
+import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { DEBT_GROUP, useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
@@ -38,8 +41,8 @@ const STARTERS: { name: string; group: string }[] = [
 ];
 
 const GROUP_ORDER = ['Bills', 'Everyday', 'Savings'];
-/** Column widths shared by the label strip and every envelope row. */
-const COL = { spent: 64, left: 78 } as const;
+/** Assigned, Spent and Left share one width, so the columns always line up. Names get "…" first. */
+const COL = 70;
 const EMPTY: EnvelopeMonth = {
   assigned: 0,
   activity: 0,
@@ -57,8 +60,6 @@ const asDate = (m: MonthKey) => {
   const [y, mo] = m.split('-').map(Number);
   return new Date(y, mo - 1, 1);
 };
-const whole = (c: number) => formatMoney(c, { whole: true });
-const short = (c: number) => formatMoney(c, { whole: c % 100 === 0 });
 
 export function Budget() {
   const colors = useColors();
@@ -69,9 +70,13 @@ export function Budget() {
   const envelopes = useStore((s) => s.envelopes);
   const accounts = useStore((s) => s.accounts);
   const addEnvelope = useStore((s) => s.addEnvelope);
+  const assign = useStore((s) => s.assign);
   const assignMany = useStore((s) => s.assignMany);
   const removeAllocations = useStore((s) => s.removeAllocations);
   const showToast = useToast((s) => s.show);
+  const { scrollRef, onScroll, watch: revealAboveKeyboard } = useKeyboardReveal();
+  // The row being edited and the amount typed so far, for the live "to assign" preview.
+  const [editing, setEditing] = useState<{ id: string; draft: number } | null>(null);
   // Years are section labels in the menu, so each option only needs the month name.
   const monthOptions = useMonthOptions().map((o) => ({
     ...o,
@@ -108,7 +113,8 @@ export function Budget() {
   const ringValue = spendingTotal > 0 ? spent / spendingTotal : 0;
 
   function fill(entries: { envelopeId: string; amount: number }[], message: string) {
-    let left = rta;
+    // Whole dollars only: the cents in Ready to assign stay put.
+    let left = floorDollars(rta);
     const capped = entries
       .map((e) => {
         const amount = Math.min(e.amount, Math.max(left, 0));
@@ -145,7 +151,7 @@ export function Budget() {
 
   return (
     <>
-      <Screen>
+      <Screen ref={scrollRef} onScroll={onScroll}>
         <ScreenTitle title="Budget" context={monthYear.format(asDate(month))} />
 
         <Card padded>
@@ -157,7 +163,7 @@ export function Budget() {
             }}
           >
             <View style={{ flex: 1, gap: 1 }}>
-              <Money cents={rta} variant="number" whole={rta % 100 === 0} tone="auto" />
+              <AnimatedNumber variant="number" tone={rta < 0 ? 'negative' : 'text'} value={rta} format={formatDollars} />
               <Text variant="footnote" tone="textSecondary">
                 to assign
               </Text>
@@ -168,9 +174,9 @@ export function Budget() {
               accessibilityLabel={`${Math.round(ringValue * 100)} percent of ${formatMonth(month)}'s spending money spent`}
             />
             <View style={{ flex: 1, gap: 1, alignItems: 'flex-end' }}>
-              <Money cents={spent} variant="number" whole />
+              <AnimatedNumber variant="number" value={spent} format={(v) => formatDollars(v, 'up')} />
               <Text variant="footnote" tone="textSecondary">
-                spent of {whole(spendingTotal)}
+                spent of {formatDollars(spendingTotal)}
               </Text>
             </View>
           </View>
@@ -194,7 +200,7 @@ export function Budget() {
                     ? 'Every target is funded'
                     : 'No envelopes yet'}
             </Text>
-            {rta > 0 && gaps.length > 0 && (
+            {rta >= 100 && gaps.length > 0 && (
               <Pressable accessibilityRole="button" hitSlop={8} onPress={fillTargets}>
                 <Text variant="footnote" weight="600" tone="accent">
                   Fill targets ›
@@ -276,12 +282,11 @@ export function Budget() {
             <Text variant="label" tone="textTertiary" style={{ flex: 1 }}>
               ENVELOPE
             </Text>
-            <Text variant="label" tone="textTertiary" align="right" style={{ width: COL.spent }}>
-              SPENT
-            </Text>
-            <Text variant="label" tone="textTertiary" align="right" style={{ width: COL.left }}>
-              LEFT
-            </Text>
+            {['ASSIGNED', 'SPENT', 'LEFT'].map((l) => (
+              <Text key={l} variant="label" tone="textTertiary" align="right" style={{ width: COL }}>
+                {l}
+              </Text>
+            ))}
           </View>
         )}
 
@@ -294,14 +299,16 @@ export function Budget() {
               {g.items.map((e, i) => {
                 const row = budget.envelopes.get(e.id) ?? EMPTY;
                 const status = envelopeStatus(e, row, month, debtFor(e));
-                const canFill = status.need > 0 && rta > 0;
+                const canFill = status.need > 0 && rta >= 100;
+                const isEditing = editing?.id === e.id;
+                const change = isEditing ? editing.draft - row.assigned : 0;
                 return (
                   <SwipeRow
                     key={e.id}
                     left={
                       canFill
                         ? {
-                            label: `${status.fillLabel} ${whole(Math.min(status.need, rta))}`,
+                            label: `${status.fillLabel} ${formatDollars(Math.min(status.need, rta))}`,
                             sf: 'plus',
                             md: 'add',
                             color: colors.positive,
@@ -331,8 +338,24 @@ export function Budget() {
                       color={hue}
                       progress={status.progress}
                       overspent={status.overspent}
-                      need={status.need}
                       last={i === g.items.length - 1}
+                      dimmed={!!editing && !isEditing}
+                      hint={
+                        isEditing
+                          ? change > 0
+                            ? `+${formatDollars(change)} from Ready to assign`
+                            : change < 0
+                              ? `${formatDollars(-change)} back to Ready to assign`
+                              : status.subtitle
+                          : undefined
+                      }
+                      status={`Ready to assign ${formatDollars(rta - change)}`}
+                      onDraft={(draft) => setEditing({ id: e.id, draft })}
+                      onEditingChange={(on, view) => {
+                        setEditing(on ? { id: e.id, draft: row.assigned } : null);
+                        revealAboveKeyboard(on ? view : null);
+                      }}
+                      onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
                       onPress={() =>
                         router.push({
                           pathname: '/budget/[id]',
@@ -349,7 +372,7 @@ export function Budget() {
 
         {spendable.length > 0 && (
           <Text variant="footnote" tone="textTertiary" align="center">
-            Swipe right on an envelope to fill it, left to edit it.
+            Tap an amount to change it. Swipe right to fill, left to edit.
           </Text>
         )}
       </Screen>
@@ -368,8 +391,9 @@ export function Budget() {
 }
 
 /**
- * One envelope: name, spent, left, and a 3px bar in the group color (red and full when
- * overspent). Savings rows show what went in this month instead of a bar.
+ * One envelope: name, then Assigned (tap to edit), Spent and Left in equal columns, and
+ * a 3px bar in the group color (red and full when overspent). While another row is being
+ * edited this one dims.
  */
 function EnvelopeRow({
   envelope,
@@ -377,8 +401,13 @@ function EnvelopeRow({
   color,
   progress,
   overspent,
-  need,
   last,
+  dimmed,
+  hint,
+  status,
+  onDraft,
+  onEditingChange,
+  onAssign,
   onPress,
 }: {
   envelope: Envelope;
@@ -386,73 +415,104 @@ function EnvelopeRow({
   color: string;
   progress: number;
   overspent: boolean;
-  need: number;
   last: boolean;
+  dimmed: boolean;
+  hint?: string;
+  status: string;
+  onDraft: (cents: number) => void;
+  onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
+  onAssign: (cents: number) => void;
   onPress: () => void;
 }) {
   const colors = useColors();
   const swiping = useSwipeGuard();
   const savings = envelope.group === 'Savings' && !envelope.debtAccountId;
-  const leftTone = overspent ? 'negative' : row.available === 0 ? 'textTertiary' : 'text';
+  const leftTone = overspent ? 'negative' : row.available < 100 ? 'textTertiary' : 'text';
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${envelope.name}, ${formatMoney(row.available)} left`}
-      onPress={() => !swiping() && onPress()}
-      style={({ pressed }) => ({
-        gap: 6,
+    // The row stays opaque (the swipe actions sit behind it); only its content dims.
+    <View
+      style={{
         paddingHorizontal: spacing.md + 2,
-        paddingVertical: savings ? 10 : 9,
+        paddingVertical: 9,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
-        backgroundColor: pressed ? colors.control : colors.surface,
-      })}
+        backgroundColor: hint ? '#FAF9FF' : colors.surface,
+      }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text variant="body" weight="500" tone={overspent ? 'negative' : 'text'} numberOfLines={1} style={{ flex: 1 }}>
-          {envelope.name}
-        </Text>
-        {savings ? (
-          row.assigned > 0 ? (
-            <Text variant="footnote" tone="positive" style={{ marginRight: 10 }}>
-              +{short(row.assigned)} this month
+      <Animated.View
+        style={{
+          gap: 6,
+          opacity: dimmed ? 0.35 : 1,
+          transitionProperty: 'opacity',
+          transitionDuration: 180,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${envelope.name}, ${formatDollars(row.available)} left. Open`}
+            onPress={() => !swiping() && onPress()}
+            hitSlop={{ top: 9, bottom: 9 }}
+            style={({ pressed }) => ({
+              flex: 1,
+              minWidth: 0,
+              opacity: pressed ? 0.5 : 1,
+            })}
+          >
+            <Text variant="body" weight={hint ? '600' : '500'} tone={overspent ? 'negative' : 'text'} numberOfLines={1}>
+              {envelope.name}
             </Text>
-          ) : need > 0 ? (
-            <Text variant="footnote" tone="accent" style={{ marginRight: 10 }}>
-              Needs {short(need)}
-            </Text>
-          ) : null
-        ) : (
-          <Money
-            cents={row.spent}
-            variant="row"
-            tone="textSecondary"
-            whole={row.spent === 0}
-            style={{ width: COL.spent, textAlign: 'right' }}
+          </Pressable>
+          <InlineAmount
+            cents={row.assigned}
+            width={COL}
+            accessibilityLabel={`Assigned to ${envelope.name}`}
+            status={status}
+            onDraft={onDraft}
+            onEditingChange={onEditingChange}
+            onCommit={onAssign}
           />
-        )}
-        <Money cents={row.available} weight="600" tone={leftTone} style={{ width: COL.left, textAlign: 'right' }} />
-      </View>
-      {!savings && (
-        <View
-          style={{
-            height: 3,
-            borderRadius: 2,
-            backgroundColor: overspent ? colors.negativeStrong : colors.fill,
-          }}
-        >
-          {!overspent && progress > 0 && (
-            <View
-              style={{
-                width: `${Math.min(1, progress) * 100}%`,
-                height: 3,
-                borderRadius: 2,
-                backgroundColor: color,
-              }}
-            />
-          )}
+          <Text variant="row" tone="textSecondary" align="right" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
+            {formatDollars(row.spent, 'up')}
+          </Text>
+          <Text
+            variant="row"
+            weight="600"
+            tone={leftTone}
+            align="right"
+            style={{ width: COL, fontVariant: ['tabular-nums'] }}
+          >
+            {formatDollars(row.available)}
+          </Text>
         </View>
-      )}
-    </Pressable>
+        {!savings && (
+          <View
+            style={{
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: overspent ? colors.negativeStrong : colors.fill,
+            }}
+          >
+            {!overspent && progress > 0 && (
+              <Animated.View
+                style={{
+                  width: `${Math.min(1, progress) * 100}%`,
+                  height: 3,
+                  borderRadius: 2,
+                  backgroundColor: color,
+                  transitionProperty: 'width',
+                  transitionDuration: 300,
+                }}
+              />
+            )}
+          </View>
+        )}
+        {hint ? (
+          <Text variant="footnote" tone="textSecondary">
+            {hint}
+          </Text>
+        ) : null}
+      </Animated.View>
+    </View>
   );
 }

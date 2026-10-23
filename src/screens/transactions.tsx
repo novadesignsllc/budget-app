@@ -84,7 +84,7 @@ const SPLIT_COLUMNS: Column[] = [
 /** The Transactions tab: one month at a time in a dense table, or a search across every month. */
 export function TransactionList() {
   const colors = useColors();
-  const { height: dockHeight } = useDock();
+  const { contentBottom } = useDock();
   const transactions = useStore((s) => s.transactions);
   const envelopes = useStore((s) => s.envelopes);
   const { all: accounts } = useAccounts();
@@ -152,7 +152,7 @@ export function TransactionList() {
         contentContainerStyle={{
           paddingHorizontal: gutter,
           paddingTop: spacing.xs,
-          paddingBottom: dockHeight + 64,
+          paddingBottom: contentBottom,
           width: '100%',
           maxWidth: maxContentWidth,
           alignSelf: 'center',

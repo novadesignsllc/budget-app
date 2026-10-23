@@ -45,7 +45,7 @@ const SINGLE_COLUMNS = [
  */
 export function AccountDetail({ id }: { id: string }) {
   const colors = useColors();
-  const { height: dockHeight } = useDock();
+  const { contentBottom } = useDock();
   const ledger = useLedger();
   const account = useStore((s) => s.accounts.find((a) => a.id === id));
   const transactions = useStore((s) => s.transactions);
@@ -229,7 +229,7 @@ export function AccountDetail({ id }: { id: string }) {
         contentContainerStyle={{
           paddingHorizontal: gutter,
           paddingTop: spacing.xs,
-          paddingBottom: dockHeight + 64,
+          paddingBottom: contentBottom,
           width: '100%',
           maxWidth: maxContentWidth,
           alignSelf: 'center',

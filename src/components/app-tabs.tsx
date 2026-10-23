@@ -1,7 +1,8 @@
-import { Link, router, usePathname } from 'expo-router';
+import { Link, router, useSegments } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
-import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { formatMoney } from '@/domain/money';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
@@ -13,125 +14,82 @@ import { QuickAddBar } from './quick-add-bar';
 import { Text } from './text';
 
 const TABS = [
-  { name: 'home', href: '/', label: 'Home', sf: 'house', md: 'home' },
-  { name: 'transactions', href: '/transactions', label: 'Transactions', sf: 'list.bullet', md: 'receipt_long' },
-  { name: 'budget', href: '/budget', label: 'Budget', sf: 'tray.2', md: 'inbox' },
-  { name: 'debt', href: '/debt', label: 'Debt', sf: 'chart.line.downtrend.xyaxis', md: 'trending_down' },
-  { name: 'recurring', href: '/recurring', label: 'Recurring', sf: 'arrow.triangle.2.circlepath', md: 'autorenew' },
+  { name: 'home', href: '/', label: 'Home', sf: 'house', sfOn: 'house.fill', md: 'home' },
+  { name: 'transactions', href: '/transactions', label: 'Transactions', sf: 'list.bullet.rectangle', sfOn: 'list.bullet.rectangle.fill', md: 'receipt_long' },
+  { name: 'budget', href: '/budget', label: 'Budget', sf: 'envelope', sfOn: 'envelope.fill', md: 'mail' },
+  { name: 'debt', href: '/debt', label: 'Debt', sf: 'creditcard', sfOn: 'creditcard.fill', md: 'credit_card' },
+  { name: 'recurring', href: '/recurring', label: 'Recurring', sf: 'arrow.triangle.2.circlepath', sfOn: 'arrow.triangle.2.circlepath', md: 'autorenew' },
+  { name: 'settings', href: '/settings', label: 'Settings', sf: 'gearshape', sfOn: 'gearshape.fill', md: 'settings' },
 ] as const;
-const SETTINGS = { name: 'settings', href: '/settings', label: 'Settings', sf: 'gearshape', md: 'settings' } as const;
 
-type TabProps = Omit<TabTriggerSlotProps, 'ref'> & { label: string; ref?: React.Ref<React.ComponentRef<typeof View>> };
+type Tab = (typeof TABS)[number];
+type TabProps = Omit<TabTriggerSlotProps, 'ref'> & { ref?: React.Ref<React.ComponentRef<typeof View>> };
 
-/** A text tab in the strip. The selected one gets a white outlined pill (Copilot style). */
-function StripTab({ label, isFocused, ref, ...props }: TabProps) {
+/** One item in the bottom tab bar: icon over a small label, purple when selected. */
+function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
   const colors = useColors();
+  const color = isFocused ? colors.accent : colors.textTertiary;
   return (
     <Pressable
       ref={ref}
       {...props}
       accessibilityRole="tab"
+      accessibilityLabel={tab.label}
       accessibilityState={{ selected: !!isFocused }}
-      style={{
-        height: 30,
-        paddingHorizontal: isFocused ? 12 : 10,
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: isFocused ? colors.borderStrong : 'transparent',
-        backgroundColor: isFocused ? colors.surface : 'transparent',
-        justifyContent: 'center',
-      }}
+      style={{ flex: 1, alignItems: 'center', gap: 3, paddingTop: 7 }}
     >
-      <Text variant="body" weight="600" tone={isFocused ? 'accent' : 'textSecondary'}>
-        {label}
-      </Text>
+      {({ pressed }) => (
+        <Animated.View
+          style={{
+            alignItems: 'center',
+            gap: 3,
+            transform: [{ scale: pressed ? 0.92 : 1 }],
+            transitionProperty: 'transform',
+            transitionDuration: 120,
+          }}
+        >
+          <Icon sf={isFocused ? tab.sfOn : tab.sf} md={tab.md} size={21} color={color} weight={isFocused ? 'semibold' : 'regular'} />
+          <Text variant="caption" weight={isFocused ? '600' : '500'} color={color} numberOfLines={1}>
+            {tab.label}
+          </Text>
+        </Animated.View>
+      )}
     </Pressable>
   );
 }
 
-function GearTab({ isFocused, ref, ...props }: Omit<TabProps, 'label'>) {
-  const colors = useColors();
-  return (
-    <Pressable
-      ref={ref}
-      {...props}
-      accessibilityRole="tab"
-      accessibilityLabel="Settings"
-      accessibilityState={{ selected: !!isFocused }}
-      style={{
-        width: 30,
-        height: 30,
-        borderRadius: 15,
-        borderWidth: 1,
-        borderColor: isFocused ? colors.borderStrong : 'transparent',
-        backgroundColor: isFocused ? colors.surface : 'transparent',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <Icon sf="gearshape" md="settings" size={16} color={isFocused ? colors.accent : colors.textSecondary} />
-    </Pressable>
-  );
-}
-
-/** Quick-add above a scrolling text tab strip, with Settings pinned at the far right. Solid, no glass. */
+/** Quick-add above a classic tab bar with every tab, Settings included. Solid, no glass. */
 function Dock() {
   const colors = useColors();
   const { paddingBottom } = useDock();
-  const pathname = usePathname();
-  const strip = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const offsets = useRef<Record<string, number>>({});
-
-  const active = TABS.find((t) => (t.href === '/' ? pathname === '/' : pathname.startsWith(t.href)));
-
-  // Keep the selected tab in view when it's off the edge of the strip. Runs again once
-  // the tab is measured, for when the app opens straight onto a later tab.
-  const reveal = (animated: boolean) => {
-    const x = active ? offsets.current[active.name] : undefined;
-    if (x !== undefined) strip.current?.scrollTo({ x: Math.max(0, x - 40), animated });
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => reveal(true), [active?.name]);
-
   return (
-    <View
-      style={{
-        backgroundColor: colors.background,
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: colors.separator,
-        paddingTop: spacing.sm,
-        paddingHorizontal: spacing.md,
-        paddingBottom,
-        gap: 6,
-      }}
-    >
-      <QuickAddBar />
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <ScrollView
-          ref={strip}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ gap: 2 }}
-        >
-          {TABS.map((t) => (
-            <View
-              key={t.name}
-              onLayout={(e) => {
-                offsets.current[t.name] = e.nativeEvent.layout.x;
-                if (t.name === active?.name) reveal(false);
-              }}
-            >
-              <TabTrigger name={t.name} href={t.href} asChild>
-                <StripTab label={t.label} />
-              </TabTrigger>
-            </View>
-          ))}
-        </ScrollView>
-        <View style={{ width: StyleSheet.hairlineWidth, height: 18, backgroundColor: colors.borderStrong, marginHorizontal: 6 }} />
-        <TabTrigger name={SETTINGS.name} href={SETTINGS.href} asChild>
-          <GearTab />
-        </TabTrigger>
+    <View>
+      <View
+        style={{
+          backgroundColor: colors.background,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.separator,
+          paddingVertical: spacing.sm,
+          paddingHorizontal: spacing.md,
+        }}
+      >
+        <QuickAddBar />
+      </View>
+      <View
+        style={{
+          flexDirection: 'row',
+          backgroundColor: colors.surface,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: colors.border,
+          paddingHorizontal: spacing.xs,
+          paddingBottom: paddingBottom + 4,
+        }}
+      >
+        {TABS.map((t) => (
+          <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
+            <BarTab tab={t} />
+          </TabTrigger>
+        ))}
       </View>
     </View>
   );
@@ -168,7 +126,7 @@ function Sidebar() {
           </Text>
         </Pressable>
         <View style={{ gap: 2 }}>
-          {[...TABS, SETTINGS].map((t) => (
+          {TABS.map((t) => (
             <TabTrigger key={t.name} name={t.name} href={t.href} asChild>
               <SideItem label={t.label} />
             </TabTrigger>
@@ -208,7 +166,7 @@ function Sidebar() {
   );
 }
 
-function SideItem({ label, isFocused, ref, ...props }: TabProps) {
+function SideItem({ label, isFocused, ref, ...props }: TabProps & { label: string }) {
   const colors = useColors();
   return (
     <Pressable
@@ -231,18 +189,35 @@ function SideItem({ label, isFocused, ref, ...props }: TabProps) {
   );
 }
 
+/** A short fade and lift when you switch tabs, so the change reads as one motion. */
+function useTabFade() {
+  const tab = useSegments()[1];
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(1);
+  useEffect(() => {
+    if (reduceMotion) return;
+    progress.value = 0;
+    progress.value = withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) });
+  }, [tab, reduceMotion, progress]);
+  return useAnimatedStyle(() => ({
+    opacity: 0.35 + progress.value * 0.65,
+    transform: [{ translateY: (1 - progress.value) * 6 }],
+  }));
+}
+
 export function AppTabs() {
   const colors = useColors();
   const desktop = useIsDesktop();
+  const fade = useTabFade();
   return (
     <Tabs style={{ flex: 1, flexDirection: desktop ? 'row' : 'column', backgroundColor: colors.background }}>
       {desktop ? <Sidebar /> : null}
-      <View style={{ flex: 1 }}>
+      <Animated.View style={[{ flex: 1 }, fade]}>
         <TabSlot style={{ flex: 1 }} />
-      </View>
+      </Animated.View>
       {/* Registers every tab; the visible controls are the dock or sidebar. */}
       <TabList style={{ display: 'none' }}>
-        {[...TABS, SETTINGS].map((t) => (
+        {TABS.map((t) => (
           <TabTrigger key={t.name} name={t.name} href={t.href} />
         ))}
       </TabList>

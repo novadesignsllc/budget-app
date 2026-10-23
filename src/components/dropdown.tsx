@@ -1,6 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
+import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
 import { haptic } from '@/utils/haptics';
 import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/theme';
@@ -42,7 +43,17 @@ function Leading<T extends string>({ o }: { o: DropdownOption<T> }) {
       />
     );
   }
-  if (o.swatch) return <View style={{ width: 20, height: 13, borderRadius: 3, backgroundColor: o.swatch }} />;
+  if (o.swatch)
+    return (
+      <View
+        style={{
+          width: 20,
+          height: 13,
+          borderRadius: 3,
+          backgroundColor: o.swatch,
+        }}
+      />
+    );
   if (o.dot) return <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: o.dot }} />;
   return null;
 }
@@ -50,6 +61,13 @@ function Leading<T extends string>({ o }: { o: DropdownOption<T> }) {
 function Chevrons({ color, size = 10 }: { color: string; size?: number }) {
   return <Icon sf="chevron.up.chevron.down" md="unfold_more" size={size} color={color} weight="semibold" />;
 }
+
+/** The menu grows out of its field: a quick fade with a small scale and slide. */
+const menuIn = (fromY: number) =>
+  new Keyframe({
+    0: { opacity: 0, transform: [{ translateY: fromY }, { scale: 0.97 }] },
+    100: { opacity: 1, transform: [{ translateY: 0 }, { scale: 1 }] },
+  }).duration(170);
 
 /**
  * Every selector in the app (principle 3). A labeled field with ⇅ that opens a menu
@@ -79,6 +97,7 @@ export function Dropdown<T extends string>({
   accessibilityLabel?: string;
 }) {
   const colors = useColors();
+  const reduceMotion = useReducedMotion();
   const window = useWindowDimensions();
   const triggerRef = useRef<React.ComponentRef<typeof View>>(null);
   const [open, setOpen] = useState(false);
@@ -250,127 +269,143 @@ export function Dropdown<T extends string>({
   return (
     <>
       {trigger}
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
         <Pressable
           accessibilityLabel="Close menu"
           onPress={() => setOpen(false)}
           style={{ flex: 1, backgroundColor: 'rgba(11,18,32,0.06)' }}
         >
-          <Pressable
-            onPress={() => {}}
-            accessibilityRole="menu"
+          <Animated.View
+            entering={reduceMotion ? undefined : menuIn('top' in position ? -6 : 6)}
             style={{
               position: 'absolute',
               left,
               width: menuWidth,
               maxHeight: 360,
               ...position,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: 'rgba(20,40,80,0.14)',
-              borderRadius: radius.menu,
-              borderCurve: 'continuous',
-              padding: 5,
-              overflow: 'hidden',
             }}
           >
-            {searchable && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 7,
-                  height: 34,
-                  margin: 2,
-                  marginBottom: 5,
-                  paddingHorizontal: 9,
-                  borderRadius: radius.button,
-                  backgroundColor: colors.control,
-                }}
-              >
-                <Icon sf="magnifyingglass" md="search" size={12} color={colors.textTertiary} />
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search"
-                  placeholderTextColor={colors.placeholder}
-                  autoFocus={process.env.EXPO_OS === 'web'}
-                  accessibilityLabel="Search options"
-                  style={[typeScale.callout, { flex: 1, color: colors.text, height: 34 }]}
-                />
-              </View>
-            )}
-            <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
-              {visible.length === 0 && (
-                <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md }}>
-                  Nothing matches.
-                </Text>
+            <Pressable
+              onPress={() => {}}
+              accessibilityRole="menu"
+              style={{
+                maxHeight: 360,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: 'rgba(20,40,80,0.14)',
+                borderRadius: radius.menu,
+                borderCurve: 'continuous',
+                padding: 5,
+                overflow: 'hidden',
+              }}
+            >
+              {searchable && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 7,
+                    height: 34,
+                    margin: 2,
+                    marginBottom: 5,
+                    paddingHorizontal: 9,
+                    borderRadius: radius.button,
+                    backgroundColor: colors.control,
+                  }}
+                >
+                  <Icon sf="magnifyingglass" md="search" size={12} color={colors.textTertiary} />
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="Search"
+                    placeholderTextColor={colors.placeholder}
+                    autoFocus={process.env.EXPO_OS === 'web'}
+                    accessibilityLabel="Search options"
+                    style={[typeScale.callout, { flex: 1, color: colors.text, height: 34 }]}
+                  />
+                </View>
               )}
-              {visible.map((o, i) => {
-                const header = o.section && o.section !== visible[i - 1]?.section ? o.section : null;
-                const isSelected = o.value === value;
-                return (
-                  <View key={o.value}>
-                    {header && (
-                      <Text
-                        variant="label"
-                        tone="textTertiary"
-                        caps
-                        style={{ paddingHorizontal: 9, paddingTop: 7, paddingBottom: 3 }}
-                      >
-                        {header}
-                      </Text>
-                    )}
-                    <Pressable
-                      accessibilityRole="menuitem"
-                      accessibilityState={{ selected: isSelected, disabled: o.disabled }}
-                      disabled={o.disabled}
-                      onPress={() => pick(o)}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 9,
-                        minHeight: o.description ? 48 : 36,
-                        paddingHorizontal: 9,
-                        borderRadius: radius.button,
-                        backgroundColor: isSelected ? colors.accentSoft : pressed ? colors.control : 'transparent',
-                        opacity: o.disabled ? 0.45 : 1,
-                      })}
-                    >
-                      <Leading o={o} />
-                      <View style={{ flex: 1, gap: 1 }}>
+              <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
+                {visible.length === 0 && (
+                  <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md }}>
+                    Nothing matches.
+                  </Text>
+                )}
+                {visible.map((o, i) => {
+                  const header = o.section && o.section !== visible[i - 1]?.section ? o.section : null;
+                  const isSelected = o.value === value;
+                  return (
+                    <View key={o.value}>
+                      {header && (
                         <Text
-                          variant="body"
-                          weight={isSelected ? '500' : '400'}
-                          tone={o.tone === 'negative' ? 'negative' : 'text'}
-                          numberOfLines={1}
+                          variant="label"
+                          tone="textTertiary"
+                          caps
+                          style={{
+                            paddingHorizontal: 9,
+                            paddingTop: 7,
+                            paddingBottom: 3,
+                          }}
                         >
-                          {o.label}
-                        </Text>
-                        {o.description && (
-                          <Text variant="footnote" tone="textSecondary" numberOfLines={1}>
-                            {o.description}
-                          </Text>
-                        )}
-                      </View>
-                      {o.detail && (
-                        <Text
-                          variant="footnote"
-                          tone={o.tone === 'negative' ? 'negative' : 'textSecondary'}
-                          style={{ fontVariant: ['tabular-nums'] }}
-                        >
-                          {o.detail}
+                          {header}
                         </Text>
                       )}
-                      <View style={{ width: 13 }}>
-                        {isSelected && <Icon sf="checkmark" md="check" size={13} color={colors.accent} weight="bold" />}
-                      </View>
-                    </Pressable>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </Pressable>
+                      <Pressable
+                        accessibilityRole="menuitem"
+                        accessibilityState={{
+                          selected: isSelected,
+                          disabled: o.disabled,
+                        }}
+                        disabled={o.disabled}
+                        onPress={() => pick(o)}
+                        style={({ pressed }) => ({
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 9,
+                          minHeight: o.description ? 48 : 36,
+                          paddingHorizontal: 9,
+                          borderRadius: radius.button,
+                          backgroundColor: isSelected ? colors.accentSoft : pressed ? colors.control : 'transparent',
+                          opacity: o.disabled ? 0.45 : 1,
+                        })}
+                      >
+                        <Leading o={o} />
+                        <View style={{ flex: 1, gap: 1 }}>
+                          <Text
+                            variant="body"
+                            weight={isSelected ? '500' : '400'}
+                            tone={o.tone === 'negative' ? 'negative' : 'text'}
+                            numberOfLines={1}
+                          >
+                            {o.label}
+                          </Text>
+                          {o.description && (
+                            <Text variant="footnote" tone="textSecondary" numberOfLines={1}>
+                              {o.description}
+                            </Text>
+                          )}
+                        </View>
+                        {o.detail && (
+                          <Text
+                            variant="footnote"
+                            tone={o.tone === 'negative' ? 'negative' : 'textSecondary'}
+                            style={{ fontVariant: ['tabular-nums'] }}
+                          >
+                            {o.detail}
+                          </Text>
+                        )}
+                        <View style={{ width: 13 }}>
+                          {isSelected && (
+                            <Icon sf="checkmark" md="check" size={13} color={colors.accent} weight="bold" />
+                          )}
+                        </View>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </Pressable>
+          </Animated.View>
         </Pressable>
       </Modal>
     </>

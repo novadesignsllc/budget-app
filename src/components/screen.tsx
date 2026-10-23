@@ -4,18 +4,24 @@ import { gutter, maxContentWidth, spacing } from '@/theme';
 
 import { useDock } from './dock';
 
-/** The scroll container for tab screens: gutter, card rhythm, room for the dock and actions. */
-export function Screen({ children, contentContainerStyle, ...props }: ScrollViewProps) {
-  const { height } = useDock();
+/** The scroll container for tab screens: gutter, card rhythm, room for the action bar. */
+export function Screen({
+  children,
+  contentContainerStyle,
+  ...props
+}: ScrollViewProps & { ref?: React.Ref<React.ComponentRef<typeof ScrollView>> }) {
+  const { contentBottom } = useDock();
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
+      automaticallyAdjustKeyboardInsets
+      scrollEventThrottle={32}
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[
         {
           paddingHorizontal: gutter,
           paddingTop: spacing.xs,
-          paddingBottom: height + 64,
+          paddingBottom: contentBottom,
           gap: spacing.md,
           width: '100%',
           maxWidth: maxContentWidth,

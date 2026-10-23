@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { DateField } from '@/components/date-field';
+import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
@@ -170,15 +170,7 @@ export function EditRecurring({ id }: { id?: string }) {
               }))}
             />
           </View>
-          <View
-            style={{
-              minHeight: 40,
-              justifyContent: 'center',
-              paddingHorizontal: spacing.md,
-            }}
-          >
-            <DateField label="Next due" value={nextDue} onChange={setNextDue} />
-          </View>
+          <DateRow label="Next due" value={nextDue} onChange={setNextDue} last />
         </View>
         {onCard && (
           <Text variant="footnote" tone="negative" style={{ paddingHorizontal: 2 }}>

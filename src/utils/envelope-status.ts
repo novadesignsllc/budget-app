@@ -1,4 +1,4 @@
-import { formatMoney } from '@/domain/money';
+import { ceilDollars, formatDollars } from '@/domain/money';
 import type { EnvelopeMonth, MonthKey } from '@/domain/months';
 import { targetFor } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
@@ -15,7 +15,9 @@ export type EnvelopeStatus = {
   fillLabel: 'Fill' | 'Cover';
 };
 
-const m = (c: Cents) => formatMoney(c, { whole: c % 100 === 0 });
+// The budget shows whole dollars: amounts round down, spending rounds up.
+const m = (c: Cents) => formatDollars(c);
+const up = (c: Cents) => formatDollars(c, 'up');
 
 /**
  * How an envelope is doing in a month, in one line. Bills and Everyday show spending
@@ -31,17 +33,17 @@ export function envelopeStatus(
 
   if (available < 0) {
     return {
-      subtitle: `Overspent by ${m(-available)}`,
+      subtitle: `Overspent by ${up(-available)}`,
       tone: 'negative',
       progress: 1,
       overspent: true,
-      need: -available,
+      need: ceilDollars(-available),
       fillLabel: 'Cover',
     };
   }
 
   if (e.debtAccountId && debt) {
-    const need = Math.max(0, (debt.minPayment ?? 0) - assigned);
+    const need = ceilDollars(Math.max(0, (debt.minPayment ?? 0) - assigned));
     return {
       subtitle:
         debt.owed <= 0
@@ -58,7 +60,7 @@ export function envelopeStatus(
   }
 
   const target = targetFor(e, month) ?? 0;
-  const need = Math.max(0, target - assigned);
+  const need = ceilDollars(Math.max(0, target - assigned));
 
   if (e.group === 'Savings') {
     return {
@@ -75,10 +77,10 @@ export function envelopeStatus(
   let subtitle: string;
   let tone: EnvelopeStatus['tone'] = 'textSecondary';
   if (need > 0) {
-    subtitle = spent ? `${m(spent)} spent · ${m(need)} to fill` : `Needs ${m(need)} this month`;
+    subtitle = spent ? `${up(spent)} spent · ${m(need)} to fill` : `Needs ${m(need)} this month`;
     tone = 'accent';
   } else if (spent > 0) {
-    subtitle = `${m(spent)} spent of ${m(budget)}`;
+    subtitle = `${up(spent)} spent of ${m(budget)}`;
   } else if (available > 0) {
     subtitle = 'Nothing spent yet';
   } else {

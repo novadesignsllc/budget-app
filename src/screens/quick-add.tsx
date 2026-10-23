@@ -5,15 +5,15 @@ import Animated, { useAnimatedStyle, useReducedMotion, withTiming, type SharedVa
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
-import { DateField } from '@/components/date-field';
+import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
-import { addDays, formatShortDate, today } from '@/domain/dates';
-import { formatMoney } from '@/domain/money';
+import { today } from '@/domain/dates';
+import { formatDollars, formatMoney } from '@/domain/money';
 import { findPayee, payeeMemory } from '@/domain/payees';
 import { parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type ISODate } from '@/domain/types';
@@ -26,7 +26,6 @@ import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
 type Override = { envelopeId?: string; accountId?: string; date?: ISODate; income?: boolean };
-type DateChoice = '0' | '1' | '2' | 'pick';
 
 const BARS = [0.45, 0.8, 1, 0.65, 0.9, 0.5, 0.75];
 const ROW_HEIGHT = 40;
@@ -79,7 +78,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const [override, setOverride] = useState<Override>({});
   const [note, setNote] = useState('');
   const [flagged, setFlagged] = useState(false);
-  const [pickingDate, setPickingDate] = useState(false);
 
   const ledger = useLedger();
   const envelopes = useStore((s) => s.envelopes);
@@ -189,7 +187,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             label: e.name,
             dot: groupColor(e.group),
             section: e.group,
-            detail: left < 0 ? formatMoney(left) : `${formatMoney(left)} left`,
+            detail: left < 0 ? formatDollars(left) : `${formatDollars(left)} left`,
             tone: left < 0 ? 'negative' : undefined,
           };
         }),
@@ -231,14 +229,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   }
 
   const day = today();
-  const offset = (['0', '1', '2'] as const).find((o) => addDays(day, -Number(o)) === r.date);
-  const dateChoice: DateChoice = offset ?? 'pick';
-  const dateOptions: DropdownOption<DateChoice>[] = [
-    { value: '0', label: 'Today' },
-    { value: '1', label: 'Yesterday' },
-    { value: '2', label: '2 days ago' },
-    { value: 'pick', label: offset ? 'Pick a date…' : formatShortDate(r.date) },
-  ];
 
   const knownPayee = parsed.payee ? findPayee(payees, parsed.payee) : undefined;
   const hint = r.isIncome
@@ -303,24 +293,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
           onChange={(v) => setOverride((o) => ({ ...o, accountId: v }))}
         />
       </Divided>
-      <Divided>
-        <Dropdown<DateChoice>
-          variant="row"
-          label="Date"
-          value={dateChoice}
-          options={dateOptions}
-          onChange={(v) => {
-            if (v === 'pick') return setPickingDate(true);
-            setPickingDate(false);
-            setOverride((o) => ({ ...o, date: addDays(day, -Number(v)) }));
-          }}
-        />
-      </Divided>
-      {(pickingDate || dateChoice === 'pick') && (
-        <View style={{ paddingHorizontal: spacing.md, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: 'rgba(20,40,80,0.07)' }}>
-          <DateField label="Pick a date" value={r.date} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} />
-        </View>
-      )}
+      <DateRow label="Date" value={r.date} max={day} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} />
       <Divided>
         <Dropdown<'out' | 'in'>
           variant="row"

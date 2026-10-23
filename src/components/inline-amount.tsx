@@ -1,6 +1,5 @@
 import { useId, useRef, useState } from 'react';
 import { InputAccessoryView, Pressable, TextInput, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
 
 import { formatDollars } from '@/domain/money';
 import type { Cents } from '@/domain/types';
@@ -10,6 +9,8 @@ import { haptic } from '@/utils/haptics';
 import { Text } from './text';
 
 const ios = process.env.EXPO_OS === 'ios';
+/** Inner padding of the box; the box reaches this far past the column so the digits line up. */
+const PAD = 6;
 
 /**
  * A whole-dollar amount you tap to edit in place: a soft purple chip that turns into
@@ -26,6 +27,7 @@ export function InlineAmount({
   width = 76,
   align = 'right',
   variant = 'row',
+  muted,
 }: {
   cents: Cents;
   onCommit: (cents: Cents) => void;
@@ -40,6 +42,8 @@ export function InlineAmount({
   /** Right for table columns; left for a stat under a label. */
   align?: 'left' | 'right';
   variant?: 'row' | 'callout';
+  /** Grey instead of purple (a past month). */
+  muted?: boolean;
 }) {
   const colors = useColors();
   const [editing, setEditing] = useState(false);
@@ -74,10 +78,29 @@ export function InlineAmount({
     }
   }
 
+  // One fixed box in both states, so tapping changes nothing but the border and caret:
+  // no size change, nothing appears around it. The text lines up with the column edge.
+  const boxStyle = {
+    width: width + PAD,
+    height: 24,
+    ...(align === 'right' ? { marginRight: -PAD } : { marginLeft: -PAD }),
+    paddingHorizontal: PAD - 1.5,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    justifyContent: 'center',
+  } as const;
+  const textStyle = {
+    ...typeScale[variant],
+    fontWeight: variant === 'callout' ? '600' : '400',
+    fontVariant: ['tabular-nums'],
+    textAlign: align,
+    color: colors.text,
+  } as const;
+
   return (
     <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }}>
       {editing ? (
-        <Animated.View entering={FadeIn.duration(120)}>
+        <View style={[boxStyle, { borderColor: muted ? colors.textSecondary : colors.accent, backgroundColor: colors.surface }]}>
           <TextInput
             // autoFocus alone doesn't take on web when the field mounts mid-tap, so focus
             // once, a beat after it appears.
@@ -108,41 +131,22 @@ export function InlineAmount({
             selectTextOnFocus
             inputAccessoryViewID={ios ? accessoryId : undefined}
             accessibilityLabel={accessibilityLabel}
-            style={[
-              typeScale.row,
-              {
-                width: width - 2,
-                height: 28,
-                ...(align === 'right' ? { marginRight: -6 } : { marginLeft: -6 }),
-                paddingHorizontal: 6,
-                borderRadius: 7,
-                borderWidth: 1.5,
-                borderColor: colors.accent,
-                backgroundColor: colors.surface,
-                color: colors.text,
-                fontWeight: '600',
-                textAlign: align,
-                fontVariant: ['tabular-nums'],
-              },
-            ]}
+            style={[textStyle, { flex: 1, padding: 0, margin: 0, lineHeight: undefined }]}
           />
-        </Animated.View>
+        </View>
       ) : (
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${accessibilityLabel}, ${formatDollars(cents)}. Edit`}
-          hitSlop={6}
+          hitSlop={8}
           onPress={start}
-          style={({ pressed }) => ({
-            ...(align === 'right' ? { marginRight: -6 } : { marginLeft: -6 }),
-            paddingHorizontal: 6,
-            paddingVertical: 3,
-            borderRadius: 6,
-            backgroundColor: pressed ? colors.fill : colors.accentSoft,
-          })}
+          style={({ pressed }) => [
+            boxStyle,
+            { borderColor: 'transparent', backgroundColor: pressed ? colors.fill : muted ? colors.control : colors.accentSoft },
+          ]}
         >
-          <Text variant={variant} weight={variant === 'callout' ? '600' : undefined} style={{ fontVariant: ['tabular-nums'] }}>
-            {formatDollars(cents)}
+          <Text numberOfLines={1} style={textStyle}>
+            {'$' + whole.toLocaleString('en-US')}
           </Text>
         </Pressable>
       )}

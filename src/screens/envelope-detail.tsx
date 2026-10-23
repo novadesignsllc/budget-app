@@ -87,6 +87,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
       : undefined,
   );
   const rta = budget.readyToAssign;
+  const past = month < currentMonth();
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
   const cutoff = addMonthKey(currentMonth(), -11);
@@ -101,7 +102,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   return (
     <>
       <Screen>
-        <ScreenTitle title={envelope.name} context={formatMonth(month)} />
+        <ScreenTitle title={envelope.name} context={past ? `${formatMonth(month)} · past month` : formatMonth(month)} />
 
         <Card>
           <View style={{ padding: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm }}>
@@ -121,18 +122,19 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
             </View>
             <ProgressBar
               value={status.progress}
-              color={status.overspent ? colors.negativeStrong : groupColor(envelope.group)}
+              color={past ? colors.textTertiary : status.overspent ? colors.negativeStrong : groupColor(envelope.group)}
               height={3}
             />
           </View>
           <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.separator }}>
             <Stat label="Carried in">{formatDollars(row.carriedIn)}</Stat>
-            <Stat label="Assigned" accent>
+            <Stat label="Assigned" accent={!past}>
               <InlineAmount
                 cents={row.assigned}
                 align="left"
                 variant="callout"
-                width={100}
+                width={90}
+                muted={past}
                 accessibilityLabel={`Assigned to ${envelope.name} in ${formatMonth(month)}`}
                 status={`Ready to assign ${formatDollars(rta - (draft ?? row.assigned) + row.assigned)}`}
                 onDraft={setDraft}
@@ -143,14 +145,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
             <Stat label="Spent">{formatDollars(row.spent, 'up')}</Stat>
           </View>
         </Card>
-
-        {draft !== null && draft !== row.assigned && (
-          <Text variant="footnote" tone="textSecondary" align="center">
-            {draft > row.assigned
-              ? `+${formatDollars(draft - row.assigned)} from Ready to assign`
-              : `${formatDollars(row.assigned - draft)} back to Ready to assign`}
-          </Text>
-        )}
 
         {row.available < 0 && donor && (
           <Card padded>

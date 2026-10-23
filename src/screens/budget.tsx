@@ -6,6 +6,7 @@ import Animated from 'react-native-reanimated';
 import { AnimatedNumber } from '@/components/animated-number';
 import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
+import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
 import { ProgressRing } from '@/components/progress-ring';
 import { Screen } from '@/components/screen';
@@ -22,7 +23,7 @@ import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { DEBT_GROUP, useStore } from '@/store';
-import { groupColor, spacing, useColors } from '@/theme';
+import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary } from '@/utils/envelope-status';
 import { useMonthOptions } from '@/utils/month-options';
 
@@ -96,6 +97,9 @@ export function Budget() {
   }, [envelopes]);
 
   const rta = budget.readyToAssign;
+  // A past month is drawn in greys so it never passes for this month.
+  const past = month < thisMonth;
+  const hueFor = (group: string) => (past ? colors.textTertiary : groupColor(group));
   const date = assignDateFor(month, today());
   const gaps = targetGaps(envelopes, budget);
   const existing = new Set(envelopes.map((e) => e.name.toLowerCase()));
@@ -152,7 +156,50 @@ export function Budget() {
   return (
     <>
       <Screen ref={scrollRef} onScroll={onScroll}>
-        <ScreenTitle title="Budget" context={monthYear.format(asDate(month))} />
+        <ScreenTitle
+          title="Budget"
+          context={past ? `${monthYear.format(asDate(month))} · past month` : monthYear.format(asDate(month))}
+        />
+
+        {past && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.md,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
+              borderRadius: radius.card,
+              backgroundColor: colors.textSecondary,
+            }}
+          >
+            <Icon sf="clock.arrow.circlepath" md="history" size={18} color={colors.onInk} />
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text variant="body" weight="600" tone="onInk">
+                Past month: {monthOnly.format(asDate(month))}
+              </Text>
+              <Text variant="footnote" color="rgba(255,255,255,0.8)">
+                Anything you assign here is dated {monthEnd(month).slice(5).replace('-', '/')}.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setMonth(thisMonth)}
+              style={({ pressed }) => ({
+                height: 30,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.button,
+                justifyContent: 'center',
+                backgroundColor: colors.surface,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text variant="callout" weight="600">
+                Back to {monthOnly.format(asDate(thisMonth))}
+              </Text>
+            </Pressable>
+          </View>
+        )}
 
         <Card padded>
           <View
@@ -163,18 +210,28 @@ export function Budget() {
             }}
           >
             <View style={{ flex: 1, gap: 1 }}>
-              <AnimatedNumber variant="number" tone={rta < 0 ? 'negative' : 'text'} value={rta} format={formatDollars} />
+              <AnimatedNumber
+                variant="number"
+                tone={rta < 0 && !past ? 'negative' : past ? 'textSecondary' : 'text'}
+                value={rta}
+                format={formatDollars}
+              />
               <Text variant="footnote" tone="textSecondary">
                 to assign
               </Text>
             </View>
             <ProgressRing
               value={ringValue}
-              color={groupColor('Everyday')}
+              color={hueFor('Everyday')}
               accessibilityLabel={`${Math.round(ringValue * 100)} percent of ${formatMonth(month)}'s spending money spent`}
             />
             <View style={{ flex: 1, gap: 1, alignItems: 'flex-end' }}>
-              <AnimatedNumber variant="number" value={spent} format={(v) => formatDollars(v, 'up')} />
+              <AnimatedNumber
+                variant="number"
+                tone={past ? 'textSecondary' : 'text'}
+                value={spent}
+                format={(v) => formatDollars(v, 'up')}
+              />
               <Text variant="footnote" tone="textSecondary">
                 spent of {formatDollars(spendingTotal)}
               </Text>
@@ -191,7 +248,7 @@ export function Budget() {
               paddingTop: spacing.md - 2,
             }}
           >
-            <Text variant="footnote" tone={rta < 0 ? 'negative' : 'textSecondary'} style={{ flex: 1 }}>
+            <Text variant="footnote" tone={rta < 0 && !past ? 'negative' : 'textSecondary'} style={{ flex: 1 }}>
               {rta < 0
                 ? 'More is assigned than you have. Take some back.'
                 : gaps.length > 0
@@ -200,7 +257,7 @@ export function Budget() {
                     ? 'Every target is funded'
                     : 'No envelopes yet'}
             </Text>
-            {rta >= 100 && gaps.length > 0 && (
+            {rta >= 100 && gaps.length > 0 && !past && (
               <Pressable accessibilityRole="button" hitSlop={8} onPress={fillTargets}>
                 <Text variant="footnote" weight="600" tone="accent">
                   Fill targets ›
@@ -209,13 +266,6 @@ export function Budget() {
             )}
           </View>
         </Card>
-
-        {month < thisMonth && (
-          <Text variant="footnote" tone="textSecondary" align="center">
-            Looking back at {formatMonth(month)}. Anything you assign here is dated{' '}
-            {monthEnd(month).slice(5).replace('-', '/')}.
-          </Text>
-        )}
 
         {spendable.length === 0 && (
           <Card>
@@ -292,7 +342,7 @@ export function Budget() {
 
         {groups.map((g) => {
           const total = g.items.reduce((a, e) => a + (budget.envelopes.get(e.id)?.available ?? 0), 0);
-          const hue = groupColor(g.name);
+          const hue = hueFor(g.name);
           return (
             <Card key={g.name}>
               <CardHeader title={g.name} dot={hue} detail={groupSummary(g.name, total)} />
@@ -300,8 +350,7 @@ export function Budget() {
                 const row = budget.envelopes.get(e.id) ?? EMPTY;
                 const status = envelopeStatus(e, row, month, debtFor(e));
                 const canFill = status.need > 0 && rta >= 100;
-                const isEditing = editing?.id === e.id;
-                const change = isEditing ? editing.draft - row.assigned : 0;
+                const change = editing?.id === e.id ? editing.draft - row.assigned : 0;
                 return (
                   <SwipeRow
                     key={e.id}
@@ -311,7 +360,7 @@ export function Budget() {
                             label: `${status.fillLabel} ${formatDollars(Math.min(status.need, rta))}`,
                             sf: 'plus',
                             md: 'add',
-                            color: colors.positive,
+                            color: past ? colors.textSecondary : colors.positive,
                             onTrigger: () =>
                               fill(
                                 [{ envelopeId: e.id, amount: status.need }],
@@ -324,7 +373,7 @@ export function Budget() {
                       label: 'Edit',
                       sf: 'slider.horizontal.3',
                       md: 'tune',
-                      color: colors.accent,
+                      color: past ? colors.textTertiary : colors.accent,
                       onTrigger: () =>
                         router.push({
                           pathname: '/envelope/[id]',
@@ -339,16 +388,7 @@ export function Budget() {
                       progress={status.progress}
                       overspent={status.overspent}
                       last={i === g.items.length - 1}
-                      dimmed={!!editing && !isEditing}
-                      hint={
-                        isEditing
-                          ? change > 0
-                            ? `+${formatDollars(change)} from Ready to assign`
-                            : change < 0
-                              ? `${formatDollars(-change)} back to Ready to assign`
-                              : status.subtitle
-                          : undefined
-                      }
+                      past={past}
                       status={`Ready to assign ${formatDollars(rta - change)}`}
                       onDraft={(draft) => setEditing({ id: e.id, draft })}
                       onEditingChange={(on, view) => {
@@ -392,8 +432,7 @@ export function Budget() {
 
 /**
  * One envelope: name, then Assigned (tap to edit), Spent and Left in equal columns, and
- * a 3px bar in the group color (red and full when overspent). While another row is being
- * edited this one dims.
+ * a 3px bar in the group color (red and full when overspent). Greys only in a past month.
  */
 function EnvelopeRow({
   envelope,
@@ -402,8 +441,7 @@ function EnvelopeRow({
   progress,
   overspent,
   last,
-  dimmed,
-  hint,
+  past,
   status,
   onDraft,
   onEditingChange,
@@ -416,8 +454,7 @@ function EnvelopeRow({
   progress: number;
   overspent: boolean;
   last: boolean;
-  dimmed: boolean;
-  hint?: string;
+  past: boolean;
   status: string;
   onDraft: (cents: number) => void;
   onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
@@ -427,26 +464,19 @@ function EnvelopeRow({
   const colors = useColors();
   const swiping = useSwipeGuard();
   const savings = envelope.group === 'Savings' && !envelope.debtAccountId;
-  const leftTone = overspent ? 'negative' : row.available < 100 ? 'textTertiary' : 'text';
+  const red = overspent && !past;
+  const leftTone = red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text';
   return (
-    // The row stays opaque (the swipe actions sit behind it); only its content dims.
     <View
       style={{
+        gap: 6,
         paddingHorizontal: spacing.md + 2,
         paddingVertical: 9,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
-        backgroundColor: hint ? '#FAF9FF' : colors.surface,
+        backgroundColor: colors.surface,
       }}
     >
-      <Animated.View
-        style={{
-          gap: 6,
-          opacity: dimmed ? 0.35 : 1,
-          transitionProperty: 'opacity',
-          transitionDuration: 180,
-        }}
-      >
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Pressable
             accessibilityRole="button"
@@ -459,7 +489,7 @@ function EnvelopeRow({
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <Text variant="body" weight={hint ? '600' : '500'} tone={overspent ? 'negative' : 'text'} numberOfLines={1}>
+            <Text variant="body" weight="500" tone={red ? 'negative' : past ? 'textSecondary' : 'text'} numberOfLines={1}>
               {envelope.name}
             </Text>
           </Pressable>
@@ -467,6 +497,7 @@ function EnvelopeRow({
             cents={row.assigned}
             width={COL}
             accessibilityLabel={`Assigned to ${envelope.name}`}
+            muted={past}
             status={status}
             onDraft={onDraft}
             onEditingChange={onEditingChange}
@@ -490,7 +521,7 @@ function EnvelopeRow({
             style={{
               height: 3,
               borderRadius: 2,
-              backgroundColor: overspent ? colors.negativeStrong : colors.fill,
+              backgroundColor: overspent ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
             }}
           >
             {!overspent && progress > 0 && (
@@ -507,12 +538,6 @@ function EnvelopeRow({
             )}
           </View>
         )}
-        {hint ? (
-          <Text variant="footnote" tone="textSecondary">
-            {hint}
-          </Text>
-        ) : null}
-      </Animated.View>
     </View>
   );
 }

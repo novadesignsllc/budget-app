@@ -20,18 +20,30 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 ## Code map
 
 - `src/domain/`: pure TypeScript money logic with colocated tests (ledger, debt payoff, quick-add parser, recurring, dates). All money is integer cents. Dates are local `YYYY-MM-DD`.
-- `src/store/`: the Zustand store, persisted to `localStorage` (the expo-sqlite polyfill on native). `sample-data.ts` is dev-only.
+- `src/store/`: the Zustand store. It isn't persisted itself; Firestore's on-device cache is the persistence. `sample-data.ts` is dev-only.
+- `src/backend/`: Firebase behind one interface. `index.ts` is React Native Firebase (iPhone), `index.web.ts` is the JS SDK with the IndexedDB cache (desktop), and `fake.ts` is an in-memory stand-in for tests and `EXPO_PUBLIC_FAKE_BACKEND=1`.
+- `src/sync/`: `engine.ts` diffs the store against Firestore and writes only what changed, applies snapshots from other devices, and holds writes back until everything has loaded once. `status.ts` drives the bottom-left sync pill. `session.ts` follows auth.
 - `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, and Recurring. Root-level routes are form sheets.
 - `src/screens/`: screen bodies. `src/components/`: shared UI.
 - `components/app-tabs.tsx` uses native tabs with the quick-add bottom accessory. `app-tabs.web.tsx` shows bottom tabs on narrow web and a sidebar on desktop.
+
+## Sync rules
+
+- Data lives at `users/{uid}/{accounts|envelopes|transactions|allocations|recurring}/{id}`, plus `users/{uid}/meta/state` (settings, merchant memory). `firestore.rules` allows only the owner.
+- Offline writes land in Firestore's local cache right away and upload on reconnect. On iPhone the queue is on disk, so it survives the app closing.
+- Never write to Firestore directly from a screen. Change the store; the engine syncs it.
+- Firestore bills a full re-read when a listener has been gone for more than 30 minutes. When the transaction count gets into the thousands, listen to recent months only and load older ones on demand.
 
 ## Commands
 
 - `npm test`: domain tests
 - `npx tsc --noEmit` and `npx eslint src`
-- `npx expo start --web`: desktop and web preview
-- `npx expo start`: Expo Go on the phone
+- `npx expo start --web`: desktop and web preview against the real Firebase
+- `EXPO_PUBLIC_FAKE_BACKEND=1 npx expo start --web`: same, with the fake backend (any email and password signs in; `window.__fakeBackend.setOnline(false)` simulates no signal)
+- `npx expo start`: the iPhone dev build connects to this. Expo Go doesn't work: native Firebase needs a dev build.
+- `eas build -p ios --profile production --auto-submit`: build and send to TestFlight
+- `eas build -p ios --profile development`: dev build for live reloading. Register the phone first with `eas device:create`.
 
 ## Not built yet
 
-Firebase sync and auth (Apple and email), the EAS dev build and TestFlight, notifications (evening check-in, weekly reconcile, bill due), the iOS widget and Siri shortcut for quick-add, and the AI fallback for messy quick-add text.
+Notifications (evening check-in, weekly reconcile, bill due), the iOS widget and Siri shortcut for quick-add, and the AI fallback for messy quick-add text.

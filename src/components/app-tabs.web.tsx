@@ -147,13 +147,22 @@ function Sidebar() {
             debt
           />
         )}
-        <Link href="/new-account" asChild>
-          <Pressable accessibilityRole="button" style={{ paddingHorizontal: spacing.sm }}>
-            <Text variant="callout" tone="accent" weight="500">
-              Add account
-            </Text>
-          </Pressable>
-        </Link>
+        <View style={{ gap: spacing.md, paddingHorizontal: spacing.sm }}>
+          <Link href="/new-account" asChild>
+            <Pressable accessibilityRole="button">
+              <Text variant="callout" tone="accent" weight="500">
+                Add account
+              </Text>
+            </Pressable>
+          </Link>
+          <Link href="/settings" asChild>
+            <Pressable accessibilityRole="button">
+              <Text variant="callout" tone="textSecondary" weight="500">
+                Settings
+              </Text>
+            </Pressable>
+          </Link>
+        </View>
       </ScrollView>
     </View>
   );

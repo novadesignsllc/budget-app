@@ -1,7 +1,13 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import * as SplashScreen from 'expo-splash-screen';
+import { useEffect } from 'react';
 
+import { SyncIndicator } from '@/components/sync-indicator';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useSession, useSessionBootstrap } from '@/sync/session';
 import { palettes } from '@/theme';
+
+SplashScreen.preventAutoHideAsync();
 
 const sheet = {
   presentation: 'formSheet',
@@ -10,9 +16,26 @@ const sheet = {
 } as const;
 
 export default function RootLayout() {
+  useSessionBootstrap();
+  const status = useSession((s) => s.status);
+  const dataReady = useSession((s) => s.dataReady);
   const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const colors = palettes[scheme];
   const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+
+  // Keep the splash up until we know who's signed in and their data has loaded,
+  // so the app never flashes empty and nothing is edited before sync is ready.
+  const loaded = status === 'signedOut' || (status === 'signedIn' && dataReady);
+  useEffect(() => {
+    if (loaded) void SplashScreen.hideAsync();
+  }, [loaded]);
+  if (!loaded) return null;
+
+  const sheetStyle = (detents: number[]) => ({
+    ...sheet,
+    sheetAllowedDetents: detents,
+    contentStyle: { backgroundColor: colors.surface },
+  });
 
   return (
     <ThemeProvider
@@ -29,24 +52,24 @@ export default function RootLayout() {
       }}
     >
       <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen
-          name="add"
-          options={{
-            ...sheet,
-            sheetAllowedDetents: [0.62, 1],
-            contentStyle: { backgroundColor: colors.surface },
-          }}
-        />
-        <Stack.Screen name="transaction/[id]" options={{ ...sheet, sheetAllowedDetents: [0.8, 1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="new-account" options={{ ...sheet, sheetAllowedDetents: [1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="reconcile" options={{ ...sheet, sheetAllowedDetents: [0.7, 1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="envelope/[id]" options={{ ...sheet, sheetAllowedDetents: [0.75, 1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="new-envelope" options={{ ...sheet, sheetAllowedDetents: [0.6, 1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="transfer" options={{ ...sheet, sheetAllowedDetents: [0.6, 1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="statement" options={{ ...sheet, sheetAllowedDetents: [0.6, 1], contentStyle: { backgroundColor: colors.surface } }} />
-        <Stack.Screen name="edit-recurring" options={{ ...sheet, sheetAllowedDetents: [1], contentStyle: { backgroundColor: colors.surface } }} />
+        <Stack.Protected guard={status === 'signedIn'}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="add" options={sheetStyle([0.62, 1])} />
+          <Stack.Screen name="transaction/[id]" options={sheetStyle([0.8, 1])} />
+          <Stack.Screen name="new-account" options={sheetStyle([1])} />
+          <Stack.Screen name="reconcile" options={sheetStyle([0.7, 1])} />
+          <Stack.Screen name="envelope/[id]" options={sheetStyle([0.75, 1])} />
+          <Stack.Screen name="new-envelope" options={sheetStyle([0.6, 1])} />
+          <Stack.Screen name="transfer" options={sheetStyle([0.6, 1])} />
+          <Stack.Screen name="statement" options={sheetStyle([0.6, 1])} />
+          <Stack.Screen name="edit-recurring" options={sheetStyle([1])} />
+          <Stack.Screen name="settings" options={sheetStyle([0.5, 1])} />
+        </Stack.Protected>
+        <Stack.Protected guard={status !== 'signedIn'}>
+          <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+        </Stack.Protected>
       </Stack>
+      <SyncIndicator />
     </ThemeProvider>
   );
 }

@@ -11,7 +11,10 @@
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.davewilson.zerobudget",
       "usesAppleSignIn": true,
-      "googleServicesFile": "./GoogleService-Info.plist"
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -36,11 +39,33 @@
           "imageWidth": 76
         }
       ],
-      "expo-sqlite"
+      "expo-sqlite",
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "useFrameworks": "dynamic"
+          }
+        }
+      ],
+      "expo-apple-authentication"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
+      "eas": {
+        "projectId": "bf90fb8c-48ba-478b-9e47-8f83824c4b69"
+      }
+    },
+    "owner": "lldavell"
   }
 }

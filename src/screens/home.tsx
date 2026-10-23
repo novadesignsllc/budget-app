@@ -1,9 +1,10 @@
-import { Link, router } from 'expo-router';
+import { Link, router, Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { EmptyState } from '@/components/empty-state';
+import { HeaderButton } from '@/components/header-button';
 import { HeroCard } from '@/components/hero-card';
 import { Row, Section } from '@/components/list';
 import { Money } from '@/components/money';
@@ -45,9 +46,20 @@ export function Home() {
   const accountById = new Map(all.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
 
+  const header = (
+    <Stack.Screen
+      options={{
+        headerRight: () => (
+          <HeaderButton sf="gearshape" md="settings" label="Settings" onPress={() => router.push('/settings')} />
+        ),
+      }}
+    />
+  );
+
   if (all.length === 0) {
     return (
       <Screen>
+        {header}
         <EmptyState
           title="Start with your checking account"
           body="Add the account your debit card uses and type in today's balance from your bank app. Every dollar in it becomes money you can give a job."
@@ -62,6 +74,7 @@ export function Home() {
 
   return (
     <Screen>
+      {header}
       <HeroCard>
         <Text variant="callout" weight="500" tone="textSecondary">
           Ready to assign

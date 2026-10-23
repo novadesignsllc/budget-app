@@ -66,7 +66,6 @@ export function Statement({ id }: { id: string }) {
           {unusual && (
             <Text variant="callout" tone="orange">
               At {((account.apr ?? 0) / 100).toFixed(2)}% APR, a month of interest should be about {formatMoney(expected)}.
-              Check for a missing payment, slip, or fee.
             </Text>
           )}
         </View>

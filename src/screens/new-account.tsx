@@ -2,11 +2,9 @@ import { useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
-import { Text } from '@/components/text';
 import { parseMoney } from '@/domain/money';
 import type { AccountKind, CashKind, DebtKind } from '@/domain/types';
 import { SheetHeader } from '@/components/sheet-header';
@@ -18,22 +16,22 @@ import { haptic } from '@/utils/haptics';
 type Family = 'spending' | 'debt';
 
 const FAMILIES: DropdownOption<Family>[] = [
-  { value: 'spending', label: 'Spending account', description: 'Checking, savings, or cash' },
-  { value: 'debt', label: 'Debt account', description: 'A card or loan you’re paying off' },
+  { value: 'spending', label: 'Spending account' },
+  { value: 'debt', label: 'Debt account' },
 ];
 const SPENDING: DropdownOption<CashKind>[] = [
-  { value: 'checking', label: 'Checking', description: 'Where your debit card spends from' },
-  { value: 'savings', label: 'Savings', description: 'Counts toward Ready to assign' },
-  { value: 'cash', label: 'Cash', description: 'Money in your wallet' },
+  { value: 'checking', label: 'Checking' },
+  { value: 'savings', label: 'Savings' },
+  { value: 'cash', label: 'Cash' },
 ];
 const DEBT: DropdownOption<DebtKind>[] = [
-  { value: 'credit_card', label: 'Credit card', description: 'Spending on it is logged as a slip' },
-  { value: 'auto_loan', label: 'Car loan', description: 'Loan or lease on a vehicle' },
-  { value: 'student_loan', label: 'Student loan', description: 'Federal or private' },
-  { value: 'mortgage', label: 'Mortgage', description: 'Your home loan' },
-  { value: 'personal_loan', label: 'Personal loan', description: 'From a bank or lender' },
-  { value: 'medical', label: 'Medical', description: 'Hospital or doctor bills' },
-  { value: 'other_debt', label: 'Other debt', description: 'Anything else you owe' },
+  { value: 'credit_card', label: 'Credit card' },
+  { value: 'auto_loan', label: 'Car loan' },
+  { value: 'student_loan', label: 'Student loan' },
+  { value: 'mortgage', label: 'Mortgage' },
+  { value: 'personal_loan', label: 'Personal loan' },
+  { value: 'medical', label: 'Medical' },
+  { value: 'other_debt', label: 'Other debt' },
 ];
 
 export function NewAccount({ debt }: { debt?: boolean }) {
@@ -76,7 +74,6 @@ export function NewAccount({ debt }: { debt?: boolean }) {
         ref={balanceRef}
         returnKeyType="done"
         label={isCash ? 'Balance today' : 'Amount owed today'}
-        note={isCash ? 'copy it from your bank app' : 'copy it from the lender'}
         value={balance}
         onChangeText={setBalance}
         placeholder="0.00"
@@ -90,13 +87,6 @@ export function NewAccount({ debt }: { debt?: boolean }) {
         <Dropdown label="Debt account" value={debtKind} options={DEBT} onChange={setDebtKind} />
       )}
 
-      {kind === 'credit_card' && (
-        <Card tone="slip" style={{ paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md - 2 }}>
-          <Text variant="callout" tone="negative">
-            Cards are debt here, not a way to pay. Anything you put on one is logged as a slip and marked red.
-          </Text>
-        </Card>
-      )}
 
       {!isCash && (
         <>

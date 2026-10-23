@@ -9,7 +9,7 @@ import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
-import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
+import { monthOf, type MonthKey } from '@/domain/months';
 import { targetFor } from '@/domain/targets';
 import { GROUPS, type BudgetGroup } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
@@ -22,18 +22,12 @@ import { haptic } from '@/utils/haptics';
 
 import { SheetHeader } from '@/components/sheet-header';
 
-const GROUP_HINT: Record<BudgetGroup, string> = {
-  Daily: 'Day-to-day spending: groceries, eating out, dates',
-  Savings: 'A goal you add to every month and leave alone',
-};
-
 /** The groups you can pick. Bills, Subscriptions and Debt payments fill themselves. */
 export function GroupPicker({ group, onGroup }: { group: string; onGroup: (group: BudgetGroup) => void }) {
   const options: DropdownOption<BudgetGroup>[] = GROUPS.map((g) => ({
     value: g,
     label: g,
     dot: groupColor(g),
-    description: GROUP_HINT[g],
   }));
   return <Dropdown label="Group" value={fixGroup(group) as BudgetGroup} options={options} onChange={onGroup} />;
 }
@@ -132,7 +126,6 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
           ref={targetRef}
           label={targetLabel(group)}
           optional
-          note={`applies from ${formatMonth(month)} on`}
           value={target}
           onChangeText={setTarget}
           placeholder="0.00"

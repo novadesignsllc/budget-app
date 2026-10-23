@@ -126,12 +126,10 @@ export function EditRecurring({ id }: { id?: string }) {
                 {
                   value: 'bill',
                   label: 'Bill',
-                  description: 'Rent, utilities. The amount can change.',
                 },
                 {
                   value: 'subscription',
                   label: 'Subscription',
-                  description: 'Netflix, Spotify. Same price each time.',
                 },
               ]}
             />

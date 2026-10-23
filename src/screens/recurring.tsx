@@ -66,10 +66,6 @@ export function Recurring() {
           <ScreenTitle title="Recurring" />
           <Card padded>
             <Text variant="section">Add your bills and subscriptions</Text>
-            <Text variant="callout" tone="textSecondary">
-              Rent, utilities, Netflix. When one comes due it shows up on Home for a one-tap approve, so nothing comes
-              out without you seeing it.
-            </Text>
             <Button
               title="Add one"
               onPress={() => router.push('/edit-recurring')}

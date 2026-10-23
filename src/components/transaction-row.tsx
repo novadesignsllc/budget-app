@@ -21,7 +21,7 @@ const ROW_HEIGHT = 46;
 /** The table runs a size smaller than the rest of the app so the money columns breathe. */
 const cell = { fontSize: 12, lineHeight: 15 } as const;
 
-function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
+export function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
   const d = fromISODate(date);
   return (
     <View style={{ width: TXN_COLUMNS.date, alignItems: 'center' }}>

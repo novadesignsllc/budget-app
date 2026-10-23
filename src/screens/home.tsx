@@ -12,17 +12,19 @@ import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
 import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
+import { DateBlock } from '@/components/transaction-row';
 import { useToast } from '@/components/toast';
 import { daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetHealth } from '@/domain/health';
 import { balanceHistory } from '@/domain/history';
 import { formatDollars, formatMoney } from '@/domain/money';
-import { dueForApproval } from '@/domain/recurring';
+import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
 import { loadSampleData } from '@/store/sample-data';
 import { chartCash, chartDebt, spacing, useColors } from '@/theme';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 
 const RECONCILE_EVERY_DAYS = 7;
@@ -51,14 +53,17 @@ export function Home() {
   const accounts = useStore((s) => s.accounts);
   const transactions = useStore((s) => s.transactions);
   const recurring = useStore((s) => s.recurring);
+  const envelopes = useStore((s) => s.envelopes);
   const approve = useStore((s) => s.approveRecurring);
   const showToast = useToast((s) => s.show);
 
   const day = today();
-  const due = dueForApproval(recurring, day);
+  // Anything waiting for approval, then the next week of bills and subscriptions.
+  const soon = [...dueForApproval(recurring, day), ...upcoming(recurring, day, 7)];
   const health = budgetHealth(ledger);
   const history = balanceHistory({ accounts, transactions }, 12, day);
   const accountById = new Map(all.map((a) => [a.id, a]));
+  const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
   const title = todayTitle(fromISODate(day));
 
   if (all.length === 0) {
@@ -201,57 +206,85 @@ export function Home() {
         </Pressable>
       </Card>
 
-      {due.length > 0 && (
+      {soon.length > 0 && (
         <Card>
-          <CardHeader
-            title="To approve"
-            detail={`${due.length} due`}
-            icon={{ sf: 'calendar', md: 'calendar_month', color: colors.orange, bg: colors.orangeSoft }}
-          />
-          {due.map((r, i) => {
+          <CardHeader title="Upcoming" detail="Next 7 days" />
+          {soon.map((r, i) => {
             const account = accountById.get(r.accountId);
             const onCard = !!account && !isCashAccount(account);
-            const overdue = r.nextDue < day;
+            const isDue = r.nextDue <= day;
+            const days = daysBetween(day, r.nextDue);
+            const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
+            const amount =
+              r.kind === 'bill' ? `~${formatMoney(r.amount, { whole: r.amount % 100 === 0 })}` : formatMoney(r.amount);
+            const when =
+              days < 0 ? `Due ${formatDay(r.nextDue, day).toLowerCase()}` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+            const sub = onCard ? `Slip on ${account?.name ?? 'a card'}` : when;
+            const ink = onCard ? 'negative' : 'text';
             return (
               <View
                 key={r.id}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
-                  gap: 10,
-                  paddingRight: spacing.lg,
-                  borderBottomWidth: i < due.length - 1 ? 1 : 0,
+                  paddingRight: isDue ? spacing.md : spacing.lg,
+                  borderBottomWidth: i < soon.length - 1 ? 1 : 0,
                   borderBottomColor: colors.hairline,
+                  backgroundColor: onCard ? colors.negativeSoft : colors.surface,
                 }}
               >
                 <Pressable
                   accessibilityRole="button"
+                  accessibilityLabel={`${r.name}, ${amount}, ${when}`}
                   onPress={() => router.push({ pathname: '/edit-recurring', params: { id: r.id } })}
                   style={({ pressed }) => ({
                     flex: 1,
-                    gap: 1,
-                    paddingLeft: spacing.lg,
-                    paddingVertical: 9,
-                    backgroundColor: pressed ? colors.control : colors.surface,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 10,
+                    paddingLeft: spacing.sm,
+                    paddingRight: spacing.sm,
+                    paddingVertical: 8,
+                    opacity: pressed ? 0.6 : 1,
                   })}
                 >
-                  <Text variant="body" weight="500" tone={onCard ? 'negative' : 'text'}>
-                    {r.name}
-                  </Text>
-                  <Text
-                    variant="footnote"
-                    tone={onCard ? 'negative' : overdue ? 'orange' : 'textSecondary'}
-                    numberOfLines={1}
-                  >
-                    {[formatDay(r.nextDue), formatMoney(r.amount), account?.name, onCard ? 'slip' : null]
-                      .filter(Boolean)
-                      .join(' \u00b7 ')}
+                  <DateBlock date={r.nextDue} tone={onCard ? 'negative' : undefined} />
+                  <Text style={{ fontSize: 17, lineHeight: 22 }}>{envelopeEmoji(envelope ?? { name: r.name })}</Text>
+                  <View style={{ flex: 1, gap: 1 }}>
+                    <Text variant="row" weight="600" tone={ink} numberOfLines={1}>
+                      {r.name}
+                    </Text>
+                    <Text
+                      variant="footnote"
+                      tone={onCard ? 'negative' : isDue ? 'orange' : 'textSecondary'}
+                      numberOfLines={1}
+                    >
+                      {sub}
+                    </Text>
+                  </View>
+                  <Text variant="row" tone={ink} style={{ fontVariant: ['tabular-nums'] }}>
+                    {amount}
                   </Text>
                 </Pressable>
-                <Button title="Approve" variant="secondary" size="sm" onPress={() => approveItem(r)} />
+                {isDue && <Button title="Approve" variant="secondary" size="sm" onPress={() => approveItem(r)} />}
               </View>
             );
           })}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/recurring')}
+            style={({ pressed }) => ({
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md - 2,
+              borderTopWidth: 1,
+              borderTopColor: colors.separator,
+              backgroundColor: pressed ? colors.control : colors.surface,
+            })}
+          >
+            <Text variant="callout" weight="600" tone="accent">
+              All recurring ›
+            </Text>
+          </Pressable>
         </Card>
       )}
 
@@ -343,9 +376,6 @@ export function Home() {
           </View>
           <View style={{ flex: 1, gap: 1 }}>
             <Text variant="section">Settings</Text>
-            <Text variant="footnote" tone="textSecondary">
-              Payees, demo, sign out
-            </Text>
           </View>
           <Icon sf="chevron.right" md="chevron_right" size={12} color={colors.textTertiary} weight="semibold" />
         </Pressable>

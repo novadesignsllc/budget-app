@@ -150,7 +150,7 @@ export function AccountDetail({ id }: { id: string }) {
         >
           <Icon sf="lock.fill" md="lock" size={11} color={colors.textTertiary} />
           <Text variant="footnote" tone="textSecondary" style={{ flex: 1 }}>
-            {locked.length} reconciled through {formatShortDate(lastLockedDate!)}. Locked; editing one asks first.
+            {locked.length} reconciled through {formatShortDate(lastLockedDate!)}
           </Text>
           <Pressable accessibilityRole="button" hitSlop={8} onPress={() => setShowLocked((v) => !v)}>
             <Text variant="footnote" weight="600" tone="accent">
@@ -170,11 +170,8 @@ export function AccountDetail({ id }: { id: string }) {
           }}
           style={{ paddingHorizontal: 6 }}
         >
-          <Text variant="footnote" tone="textSecondary">
-            Bank shows something else?{' '}
-            <Text variant="footnote" weight="600" tone="accent">
-              Add an adjustment
-            </Text>
+          <Text variant="footnote" weight="600" tone="accent">
+            Add an adjustment
           </Text>
         </Pressable>
       )}

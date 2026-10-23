@@ -14,7 +14,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
 import { formatDollars, formatMoney } from '@/domain/money';
-import { findPayee, payeeMemory } from '@/domain/payees';
+import { payeeMemory } from '@/domain/payees';
 import { parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type ISODate } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
@@ -250,16 +250,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
 
   const day = today();
 
-  const knownPayee = parsed.payee ? findPayee(payees, parsed.payee) : undefined;
-  const hint = r.isIncome
-    ? 'Income goes to Ready to assign.'
-    : override.envelopeId
-      ? null
-      : knownPayee?.envelopeId && r.envelope
-        ? `${knownPayee.name} is set to ${r.envelope.name} in your payee list.`
-        : parsed.envelopeSource === 'guessed' && r.envelope
-          ? 'Guessed from the name. Change it and next time it’ll remember.'
-          : null;
 
   const saveLabel = !parsed.amount
     ? 'Type an amount'
@@ -320,8 +310,8 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
           label="Outflow or inflow"
           value={r.isIncome ? 'in' : 'out'}
           options={[
-            { value: 'out', label: 'Outflow', description: 'Spending, out of an envelope' },
-            { value: 'in', label: 'Inflow', description: 'Income, into Ready to assign' },
+            { value: 'out', label: 'Outflow' },
+            { value: 'in', label: 'Inflow' },
           ]}
           onChange={(v) => setOverride((o) => ({ ...o, income: v === 'in' }))}
         />
@@ -358,10 +348,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     <Card tone="slip" style={{ paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md - 1, gap: 2 }}>
       <Text variant="headline" tone="negative">
         This goes on {r.account!.name}
-      </Text>
-      <Text variant="callout" tone="negative">
-        Card spending is a slip. It still comes out of the envelope, and the cash gets set aside to pay the card back.
-        It’ll be marked red.
       </Text>
     </Card>
   );
@@ -477,12 +463,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
       {summary}
       {details}
       {slipWarning}
-
-      {hint && (
-        <Text variant="footnote" tone="textSecondary" align="center">
-          {hint}
-        </Text>
-      )}
 
       <Button
         title={saveLabel}

@@ -6,7 +6,7 @@ import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
-import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
+import { monthOf, type MonthKey } from '@/domain/months';
 import { useStore } from '@/store';
 import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
@@ -54,7 +54,6 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
         ref={targetRef}
         label={targetLabel(group)}
         optional
-        note={`applies from ${formatMonth(month)} on`}
         value={target}
         onChangeText={setTarget}
         placeholder="0.00"

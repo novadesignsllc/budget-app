@@ -143,7 +143,7 @@ export function PayeesCard({
       )}
       {sorted.length === 0 ? (
         <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md + 2 }}>
-          Payees show up here as you add transactions.
+          No payees yet.
         </Text>
       ) : (
         <>

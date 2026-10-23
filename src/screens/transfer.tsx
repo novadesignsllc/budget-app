@@ -1,12 +1,10 @@
 import { useState } from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { DateField } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
-import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
 import { isCashAccount, type Account } from '@/domain/types';
@@ -80,15 +78,6 @@ export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?:
 
       <DateField label="Date" value={date} onChange={setDate} max={today()} />
 
-      <View style={{ paddingHorizontal: 2 }}>
-        <Text variant="footnote" tone="textSecondary">
-          {isPayment
-            ? envelope
-              ? `Comes out of the ${to!.name} payment envelope, which has ${formatMoney(ready)}.`
-              : `${to!.name} has no payment envelope yet, so this comes out of Ready to assign.`
-            : 'Moving money between your own accounts doesn’t change your budget.'}
-        </Text>
-      </View>
 
       <Button
         title={isPayment ? `Pay ${amount ? formatMoney(amount) : ''}`.trim() : amount ? `Move ${formatMoney(amount)}` : 'Transfer'}

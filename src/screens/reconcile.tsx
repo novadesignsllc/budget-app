@@ -90,10 +90,6 @@ export function Reconcile({ id, ids }: { id: string; ids: string[] }) {
   return (
     <SheetScreen>
       <SheetHeader title="Bank shows something else" />
-      <Text variant="callout" tone="textSecondary" align="center">
-        Look for a missing or mistyped transaction first. If you can’t find it, post the difference so {account.name}{' '}
-        matches your bank.
-      </Text>
 
       <Field
         label="Balance in your bank app"

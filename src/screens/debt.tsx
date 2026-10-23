@@ -100,13 +100,11 @@ export function Debt() {
             {
               value: 'snowball',
               label: 'Snowball',
-              description: 'Smallest balance first. Quick wins.',
               detail: payoffLabel(plans.snowball.plan.months),
             },
             {
               value: 'avalanche',
               label: 'Avalanche',
-              description: 'Highest rate first. Least interest.',
               detail: payoffLabel(plans.avalanche.plan.months),
             },
           ]}

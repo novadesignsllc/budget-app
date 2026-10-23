@@ -41,22 +41,10 @@ function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
       accessibilityState={{ selected: !!isFocused }}
       style={{ flex: 1, alignItems: 'center', gap: 3, paddingTop: 7 }}
     >
-      {({ pressed }) => (
-        <Animated.View
-          style={{
-            alignItems: 'center',
-            gap: 3,
-            transform: [{ scale: pressed ? 0.92 : 1 }],
-            transitionProperty: 'transform',
-            transitionDuration: 120,
-          }}
-        >
-          <Icon sf={isFocused ? tab.sfOn : tab.sf} md={tab.md} size={21} color={color} weight={isFocused ? 'semibold' : 'regular'} />
-          <Text variant="caption" weight={isFocused ? '600' : '500'} color={color} numberOfLines={1}>
-            {tab.label}
-          </Text>
-        </Animated.View>
-      )}
+      <Icon sf={isFocused ? tab.sfOn : tab.sf} md={tab.md} size={21} color={color} weight={isFocused ? 'semibold' : 'regular'} />
+      <Text variant="caption" weight={isFocused ? '600' : '500'} color={color} numberOfLines={1}>
+        {tab.label}
+      </Text>
     </Pressable>
   );
 }

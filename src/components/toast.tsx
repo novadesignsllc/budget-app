@@ -54,7 +54,7 @@ export function ToastHost() {
             minHeight: 40,
             paddingLeft: spacing.lg,
             paddingRight: toast?.actionLabel ? spacing.xs : spacing.lg,
-            borderRadius: radius.full,
+            borderRadius: radius.control,
             backgroundColor: colors.ink,
           }}
         >

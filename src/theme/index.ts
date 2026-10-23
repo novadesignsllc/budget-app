@@ -1,123 +1,111 @@
 import { Platform, type TextStyle } from 'react-native';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
 /**
- * The one source of truth for visual values. See DESIGN.md for the reasoning.
+ * The one source of truth for visual values. Approved mockup:
+ * https://claude.ai/artifact/P2wZyZDtBkgBFBV1LarLyU (light, SF Pro).
+ * Principles and decisions: docs/design-principles.md.
  * Screens import components; components import tokens from here.
  */
 
 const light = {
-  background: '#F4F4F6',
+  /** Page behind everything. */
+  background: '#F3F5F9',
+  /** Cards. */
   surface: '#FFFFFF',
-  fill: '#EDEDF1',
-  fillPressed: '#E1E1E7',
-  text: '#0B0B0F',
-  textSecondary: '#5C5C66',
-  textTertiary: '#8C8C96',
-  placeholder: '#A3A3AD',
-  separator: 'rgba(60, 60, 67, 0.14)',
-  hairline: 'rgba(60, 60, 67, 0.12)',
-  ink: '#0B0B0F',
+  /** Table header strip inside a card. */
+  tableHeader: '#FAFBFD',
+  /** Inputs, dropdown fields, outlined buttons. */
+  control: '#F1F4F9',
+  fill: '#E6EBF3',
+  fillPressed: '#E3E8F0',
+  text: '#0B1220',
+  textSecondary: '#5D6B82',
+  textTertiary: '#8B97AA',
+  placeholder: '#8B97AA',
+  /** Card outline. */
+  border: 'rgba(20, 40, 80, 0.09)',
+  /** Control outline. */
+  borderStrong: 'rgba(20, 40, 80, 0.12)',
+  /** Line between a card's header row and its rows. */
+  separator: 'rgba(20, 40, 80, 0.08)',
+  /** Line between rows. */
+  hairline: 'rgba(20, 40, 80, 0.06)',
+  ink: '#0B1220',
   onInk: '#FFFFFF',
-  accent: '#6248F0',
-  accentSoft: '#EEEAFF',
-  blue: '#2F6BEA',
-  blueSoft: '#E6EEFF',
+  accent: '#2F6FEB',
+  accentSoft: '#EAF1FE',
+  blue: '#2F6FEB',
+  blueSoft: '#E8EFFD',
+  /** Due, flags, needs attention. */
+  orange: '#C2560F',
+  orangeSoft: '#FFF0E6',
   positive: '#13803F',
-  positiveSoft: '#E5F5EB',
-  negative: '#D42B1E',
-  negativeSoft: '#FDECEA',
-  warning: '#A85A00',
-  warningSoft: '#FFF2DC',
+  positiveSoft: '#E2F3E8',
+  /** Slips, overspent, urgent. */
+  negative: '#B42318',
+  negativeStrong: '#D92D20',
+  negativeSoft: '#FDEEEC',
+  negativeTint: '#FFF6F5',
+  warning: '#C2560F',
+  warningSoft: '#FFF0E6',
+  /** Sheets dim the page behind them. */
+  scrim: '#C9CFD9',
+  floating: '#FFFFFF',
   heroFrom: '#E6E0FF',
   heroTo: '#FCE6F0',
-  floating: 'rgba(255, 255, 255, 0.94)',
-};
-
-const dark: typeof light = {
-  background: '#000000',
-  surface: '#141416',
-  fill: '#232327',
-  fillPressed: '#2E2E33',
-  text: '#F5F5F7',
-  textSecondary: '#A1A1AB',
-  textTertiary: '#6E6E78',
-  placeholder: '#5E5E68',
-  separator: 'rgba(255, 255, 255, 0.10)',
-  hairline: 'rgba(255, 255, 255, 0.10)',
-  ink: '#F5F5F7',
-  onInk: '#0B0B0F',
-  accent: '#A796FF',
-  accentSoft: '#241E3D',
-  blue: '#6EA8FF',
-  blueSoft: '#152340',
-  positive: '#3DD68C',
-  positiveSoft: '#11291D',
-  negative: '#FF6B61',
-  negativeSoft: '#3A1714',
-  warning: '#F5B83D',
-  warningSoft: '#33260E',
-  heroFrom: '#2A2148',
-  heroTo: '#1D2A52',
-  floating: 'rgba(36, 36, 40, 0.94)',
 };
 
 export type Palette = typeof light;
-export const palettes = { light, dark };
+export const palettes = { light, dark: light };
 
+/** Light only for now (decided 2026-10-23). Kept as a hook so dark can come back later. */
 export function useColors(): Palette {
-  return useColorScheme() === 'dark' ? dark : light;
+  return light;
 }
 
 /**
- * Each envelope group gets a hue so a glance tells bills from spending from savings.
- * Red is never used here: red only ever means overspent.
+ * Chart series, in fixed order, never cycled. Checked with the data-viz validator for
+ * colorblind separation on the light surface. Slots 3 and 4 are low contrast, so every
+ * chart labels its lines directly as well as with a legend.
  */
-const groupHues = {
-  light: {
-    Bills: { fg: '#2F6BEA', soft: '#E6EEFF' },
-    Everyday: { fg: '#6248F0', soft: '#EEEAFF' },
-    Savings: { fg: '#13803F', soft: '#E5F5EB' },
-    'Debt payments': { fg: '#3F3D56', soft: '#ECECF1' },
-    other: [
-      { fg: '#0E7490', soft: '#E0F4F8' },
-      { fg: '#B4237A', soft: '#FBE7F2' },
-      { fg: '#B45309', soft: '#FDF0DC' },
-    ],
-  },
-  dark: {
-    Bills: { fg: '#6EA8FF', soft: '#152340' },
-    Everyday: { fg: '#A796FF', soft: '#241E3D' },
-    Savings: { fg: '#3DD68C', soft: '#11291D' },
-    'Debt payments': { fg: '#C9C7DB', soft: '#232327' },
-    other: [
-      { fg: '#5ED3EA', soft: '#0F2A31' },
-      { fg: '#F48FC8', soft: '#33172A' },
-      { fg: '#F5B86A', soft: '#33240F' },
-    ],
-  },
+export const chartColors = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#4a3aa7', '#e34948'];
+export const chartCash = chartColors[0];
+export const chartDebt = chartColors[1];
+
+/** Envelope group hues: a dot on the group header and the color of its bars. */
+const groupHues: Record<string, string> = {
+  Bills: '#2a78d6',
+  Everyday: '#5B4CF0',
+  Savings: '#1baf7a',
+  'Debt payments': '#8B97AA',
 };
+const otherHues = ['#0E7490', '#B4237A', '#B45309'];
 
 export type Hue = { fg: string; soft: string };
 
-export function useGroupHue(group: string): Hue {
-  const scheme = useColorScheme();
-  return groupHue(group, scheme);
-}
-
-export function groupHue(group: string, scheme: 'light' | 'dark'): Hue {
-  const set = groupHues[scheme];
-  if (group in set && group !== 'other') return set[group as keyof Omit<typeof set, 'other'>] as Hue;
+export function groupColor(group: string): string {
+  if (groupHues[group]) return groupHues[group];
   let h = 0;
   for (const ch of group) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return set.other[h % set.other.length];
+  return otherHues[h % otherHues.length];
 }
 
-/**
- * Card faces for accounts and debts, kept within one hue family each (no rainbow
- * washes). `ink` is the text color on that face.
- */
+/** Soft tint of a hue for icon tiles. */
+export function softOf(hex: string, alpha = 0.12): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+export function groupHue(group: string, _scheme?: unknown): Hue {
+  const fg = groupColor(group);
+  return { fg, soft: softOf(fg) };
+}
+
+export function useGroupHue(group: string): Hue {
+  return groupHue(group);
+}
+
+/** Card faces for accounts in lists (mini cards). */
 export const cardFaces = [
   { from: '#3730A3', to: '#6D5DF5', ink: '#FFFFFF' },
   { from: '#1D4ED8', to: '#4F8DF7', ink: '#FFFFFF' },
@@ -139,16 +127,24 @@ export const spacing = {
 } as const;
 
 export const radius = {
+  /** Buttons. */
+  button: 8,
+  /** Inputs and dropdown fields. */
+  control: 10,
+  /** Dropdown menus and sheets' grouped rows. */
+  menu: 14,
+  /** Cards. */
+  card: 16,
   sm: 8,
-  md: 12,
+  md: 10,
   lg: 16,
   xl: 22,
   full: 9999,
 } as const;
 
-/** One shadow, only for things that float over content. Everything else is flat. */
+/** No shadows anywhere (principle 5). Kept so old imports still compile. */
 export const shadows = {
-  float: '0 2px 10px rgba(0, 0, 0, 0.08)',
+  float: 'none',
 } as const;
 
 export const motion = {
@@ -156,8 +152,8 @@ export const motion = {
   base: 250,
 } as const;
 
-/** SF Pro. On iOS it's the system font; on web we ask for it by name. */
-const fontFamily = Platform.select({
+/** SF Pro: the system font on iOS; requested by name on web. */
+export const fontFamily = Platform.select({
   web: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif',
   default: undefined,
 });
@@ -165,19 +161,28 @@ const fontFamily = Platform.select({
 const numeric: TextStyle = { fontVariant: ['tabular-nums'] };
 
 export const type = {
-  display: { fontFamily, fontSize: 36, lineHeight: 42, fontWeight: '700', letterSpacing: -1, ...numeric },
-  largeTitle: { fontFamily, fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.6 },
-  title: { fontFamily, fontSize: 20, lineHeight: 25, fontWeight: '600', letterSpacing: -0.3 },
-  headline: { fontFamily, fontSize: 15, lineHeight: 20, fontWeight: '600', letterSpacing: -0.1 },
-  body: { fontFamily, fontSize: 15, lineHeight: 20, fontWeight: '400', letterSpacing: -0.1 },
-  callout: { fontFamily, fontSize: 13, lineHeight: 18, fontWeight: '400' },
-  footnote: { fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '400' },
-  caption: { fontFamily, fontSize: 11, lineHeight: 13, fontWeight: '500' },
+  /** The one big number on a card. */
+  number: { fontFamily, fontSize: 22, lineHeight: 27, fontWeight: '600', letterSpacing: -0.4, ...numeric },
+  display: { fontFamily, fontSize: 22, lineHeight: 27, fontWeight: '600', letterSpacing: -0.4, ...numeric },
+  /** Screen title, centered. */
+  title: { fontFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  largeTitle: { fontFamily, fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  /** Card and section headings. */
+  section: { fontFamily, fontSize: 14, lineHeight: 18, fontWeight: '600' },
+  headline: { fontFamily, fontSize: 13, lineHeight: 17, fontWeight: '600' },
+  body: { fontFamily, fontSize: 13, lineHeight: 17, fontWeight: '400' },
+  /** Dense table text. */
+  row: { fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  callout: { fontFamily, fontSize: 12, lineHeight: 16, fontWeight: '400' },
+  footnote: { fontFamily, fontSize: 11, lineHeight: 14, fontWeight: '400' },
+  caption: { fontFamily, fontSize: 10, lineHeight: 13, fontWeight: '400' },
+  /** Uppercase column labels. */
+  label: { fontFamily, fontSize: 10, lineHeight: 13, fontWeight: '600', letterSpacing: 0.7 },
 } as const satisfies Record<string, TextStyle>;
 
 export type TypeVariant = keyof typeof type;
 
 /** Screen edge padding. */
-export const gutter = 20;
+export const gutter = 16;
 /** Readable width on tablets and desktop. */
 export const maxContentWidth = 720;

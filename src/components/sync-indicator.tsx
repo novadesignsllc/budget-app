@@ -41,12 +41,12 @@ export function SyncIndicator() {
 
   const visible = signedIn && phase !== 'idle';
   // Same row as the screen's add button, above the tab bar and quick-add bar.
-  const bottom = floatingBottom + 3;
+  const bottom = floatingBottom + 5;
   const green = colors.positive;
   const busy = phase === 'syncing' || phase === 'waiting';
 
   const pill = (
-    <View pointerEvents="none" style={{ position: 'absolute', left: spacing.lg, bottom }}>
+    <View pointerEvents="none" style={{ position: 'absolute', left: spacing.md, bottom }}>
       <Animated.View
         accessibilityLiveRegion="polite"
         accessibilityLabel={LABEL[phase]}
@@ -57,9 +57,9 @@ export function SyncIndicator() {
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.sm,
-          height: 28,
+          height: 24,
           paddingHorizontal: phase === 'synced' ? 0 : spacing.md,
-          width: phase === 'synced' ? 28 : undefined,
+          width: phase === 'synced' ? 24 : undefined,
           justifyContent: 'center',
           borderRadius: radius.full,
           backgroundColor: phase === 'synced' ? green : colors.floating,

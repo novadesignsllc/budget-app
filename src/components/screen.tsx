@@ -1,25 +1,22 @@
-import { ScrollView, useWindowDimensions, type ScrollViewProps } from 'react-native';
+import { ScrollView, type ScrollViewProps } from 'react-native';
 
 import { gutter, maxContentWidth, spacing } from '@/theme';
 
-/** Bottom room for the floating quick-add bar on phone-width web. */
-function useWebBottomRoom() {
-  const { width } = useWindowDimensions();
-  return process.env.EXPO_OS === 'web' && width < 900 ? 96 : 0;
-}
+import { useDock } from './dock';
 
-/** The scroll container every tab screen uses: gutter, section rhythm, readable width. */
+/** The scroll container for tab screens: gutter, card rhythm, room for the dock and actions. */
 export function Screen({ children, contentContainerStyle, ...props }: ScrollViewProps) {
-  const webRoom = useWebBottomRoom();
+  const { height } = useDock();
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[
         {
-          padding: gutter,
-          paddingBottom: spacing.xxxl + webRoom,
-          gap: spacing.xl,
+          paddingHorizontal: gutter,
+          paddingTop: spacing.xs,
+          paddingBottom: height + 64,
+          gap: spacing.md,
           width: '100%',
           maxWidth: maxContentWidth,
           alignSelf: 'center',
@@ -33,13 +30,13 @@ export function Screen({ children, contentContainerStyle, ...props }: ScrollView
   );
 }
 
-/** Content for a form sheet: tighter top, same gutter. */
+/** Content for a form sheet. */
 export function SheetScreen({ children, contentContainerStyle, ...props }: ScrollViewProps) {
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
       contentContainerStyle={[
-        { padding: gutter, paddingTop: spacing.xl, gap: spacing.xl, paddingBottom: spacing.xxxl },
+        { padding: gutter, paddingTop: spacing.lg, gap: spacing.md + 2, paddingBottom: spacing.xxxl },
         contentContainerStyle,
       ]}
       {...props}

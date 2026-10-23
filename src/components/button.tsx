@@ -5,11 +5,12 @@ import { radius, spacing, useColors } from '@/theme';
 
 import { Text } from './text';
 
-type Variant = 'primary' | 'secondary' | 'tinted' | 'destructive' | 'ghost';
+type Variant = 'primary' | 'ink' | 'secondary' | 'destructive' | 'ghost' | 'tinted';
 type Size = 'sm' | 'md' | 'lg';
 
-const heights: Record<Size, number> = { sm: 32, md: 40, lg: 48 };
+const heights: Record<Size, number> = { sm: 28, md: 34, lg: 44 };
 
+/** Rectangular buttons (principle 7). Filled for the one main action, outlined for the rest. */
 export function Button({
   title,
   onPress,
@@ -32,20 +33,15 @@ export function Button({
   accessibilityLabel?: string;
 }) {
   const colors = useColors();
-  const bg: Record<Variant, string> = {
-    primary: colors.ink,
-    secondary: colors.fill,
-    tinted: colors.accentSoft,
-    destructive: colors.negativeSoft,
-    ghost: 'transparent',
+  const look: Record<Variant, { bg: string; fg: string; border: string }> = {
+    primary: { bg: colors.accent, fg: colors.onInk, border: colors.accent },
+    ink: { bg: colors.ink, fg: colors.onInk, border: colors.ink },
+    secondary: { bg: colors.surface, fg: colors.text, border: colors.borderStrong },
+    destructive: { bg: colors.negativeSoft, fg: colors.negative, border: 'rgba(217,45,32,0.3)' },
+    ghost: { bg: 'transparent', fg: colors.accent, border: 'transparent' },
+    tinted: { bg: colors.accentSoft, fg: colors.accent, border: colors.accentSoft },
   };
-  const fg = {
-    primary: 'onInk',
-    secondary: 'text',
-    tinted: 'accent',
-    destructive: 'negative',
-    ghost: 'accent',
-  } as const;
+  const l = look[variant];
   const inactive = disabled || loading;
 
   return (
@@ -61,24 +57,26 @@ export function Button({
       style={({ pressed }) => [
         {
           height: heights[size],
-          paddingHorizontal: size === 'sm' ? spacing.md : spacing.lg,
-          borderRadius: radius.full,
-          backgroundColor: bg[variant],
+          paddingHorizontal: size === 'sm' ? spacing.md - 1 : spacing.md + 2,
+          borderRadius: radius.button,
+          borderWidth: 1,
+          borderColor: l.border,
+          backgroundColor: l.bg,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'center',
           gap: spacing.xs + 2,
-          opacity: disabled ? 0.4 : pressed ? 0.7 : 1,
+          opacity: disabled ? 0.4 : pressed ? 0.75 : 1,
         },
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={colors[fg[variant]]} />
+        <ActivityIndicator color={l.fg} />
       ) : (
         <>
           {leading}
-          <Text variant={size === 'sm' ? 'callout' : 'headline'} weight="600" tone={fg[variant]}>
+          <Text variant={size === 'lg' ? 'body' : 'callout'} weight="600" color={l.fg}>
             {title}
           </Text>
         </>

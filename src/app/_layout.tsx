@@ -1,15 +1,16 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { SyncIndicator } from '@/components/sync-indicator';
 import { ToastHost } from '@/components/toast';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { useSession, useSessionBootstrap } from '@/sync/session';
-import { palettes } from '@/theme';
+import { useColors } from '@/theme';
+import { pinLightAppearance } from '@/theme/preference';
 
 SplashScreen.preventAutoHideAsync();
+pinLightAppearance();
 
 const sheet = {
   presentation: 'formSheet',
@@ -21,9 +22,8 @@ export default function RootLayout() {
   useSessionBootstrap();
   const status = useSession((s) => s.status);
   const dataReady = useSession((s) => s.dataReady);
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  const colors = palettes[scheme];
-  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
+  const colors = useColors();
+  const base = DefaultTheme;
 
   // Keep the splash up until we know who's signed in and their data has loaded,
   // so the app never flashes empty and nothing is edited before sync is ready.
@@ -36,7 +36,7 @@ export default function RootLayout() {
   const sheetStyle = (detents: number[]) => ({
     ...sheet,
     sheetAllowedDetents: detents,
-    contentStyle: { backgroundColor: colors.surface },
+    contentStyle: { backgroundColor: colors.background },
   });
 
   return (
@@ -66,7 +66,7 @@ export default function RootLayout() {
             <Stack.Screen name="transfer" options={sheetStyle([0.6, 1])} />
             <Stack.Screen name="statement" options={sheetStyle([0.6, 1])} />
             <Stack.Screen name="edit-recurring" options={sheetStyle([1])} />
-            <Stack.Screen name="settings" options={sheetStyle([0.5, 1])} />
+            <Stack.Screen name="debt-plan" options={sheetStyle([0.5, 1])} />
           </Stack.Protected>
           <Stack.Protected guard={status !== 'signedIn'}>
             <Stack.Screen name="sign-in" options={{ headerShown: false }} />

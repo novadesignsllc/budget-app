@@ -10,6 +10,7 @@ export type TextTone = keyof Pick<
   | 'placeholder'
   | 'accent'
   | 'blue'
+  | 'orange'
   | 'positive'
   | 'negative'
   | 'warning'
@@ -22,15 +23,18 @@ export function Text({
   color,
   weight,
   align,
+  caps,
   style,
   ...props
 }: TextProps & {
   variant?: TypeVariant;
   tone?: TextTone;
-  /** A raw color, for text on a colored surface (a card face, a group hue). */
+  /** A raw color, for text on a colored surface. */
   color?: string;
   weight?: '400' | '500' | '600' | '700';
   align?: 'left' | 'center' | 'right';
+  /** Uppercase, for column labels. */
+  caps?: boolean;
 }) {
   const colors = useColors();
   return (
@@ -40,6 +44,7 @@ export function Text({
         { color: color ?? colors[tone] },
         weight && { fontWeight: weight },
         align && { textAlign: align },
+        caps && { textTransform: 'uppercase' },
         style,
       ]}
       {...props}

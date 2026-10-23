@@ -1,49 +1,45 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { inDemo } from '@/backend';
 import { Button } from '@/components/button';
-import { CardCarousel } from '@/components/card-carousel';
-import { CardFace } from '@/components/card-face';
-import { EmptyState } from '@/components/empty-state';
-import { HeaderButton } from '@/components/header-button';
-import { HeroCard } from '@/components/hero-card';
-import { Icon } from '@/components/icon';
-import { ICON_INSET, Row, RowIcon, Section } from '@/components/list';
+import { Card, CardHeader } from '@/components/card';
+import { ChartLegend, LineChart } from '@/components/line-chart';
+import { MiniCard } from '@/components/mini-card';
 import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
+import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
-import { TransactionRow } from '@/components/transaction-row';
-import { daysBetween, formatDay, today } from '@/domain/dates';
+import { daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetHealth } from '@/domain/health';
+import { balanceHistory } from '@/domain/history';
 import { formatMoney } from '@/domain/money';
-import { dueForApproval, upcoming } from '@/domain/recurring';
+import { dueForApproval } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
-import { useColorScheme } from '@/hooks/use-color-scheme';
-import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
-import { payoffLabel } from '@/screens/debt';
+import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
 import { loadSampleData } from '@/store/sample-data';
-import { groupHue, gutter, radius, spacing, useColors } from '@/theme';
-import { envelopeIcon } from '@/utils/envelope-icon';
+import { chartCash, chartDebt, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
 const RECONCILE_EVERY_DAYS = 7;
+const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
+const monthLong = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+const k = (cents: number) => `$${Math.round(cents / 100000)}k`;
 
-function greeting(): string {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+function monthDate(key: string) {
+  const [y, m] = key.split('-').map(Number);
+  return new Date(y, m - 1, 1);
 }
 
 export function Home() {
   const colors = useColors();
-  const scheme = useColorScheme();
   const ledger = useLedger();
-  const { cash, debts, all } = useAccounts();
-  const { comparison } = useDebtPlan();
-  const envelopes = useStore((s) => s.envelopes);
+  const { cash, all } = useAccounts();
+  const accounts = useStore((s) => s.accounts);
   const transactions = useStore((s) => s.transactions);
   const recurring = useStore((s) => s.recurring);
   const approve = useStore((s) => s.approveRecurring);
@@ -51,46 +47,33 @@ export function Home() {
 
   const day = today();
   const due = dueForApproval(recurring, day);
-  const soon = [...due, ...upcoming(recurring, day, 7)];
-  const recent = useMemo(
-    () =>
-      [...transactions]
-        .filter((t) => !(t.kind === 'transfer' && t.amount > 0))
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
-        .slice(0, 5),
-    [transactions],
-  );
-  const overspent = envelopes.filter((e) => (ledger.available.get(e.id) ?? 0) < 0 && !e.debtAccountId);
+  const health = budgetHealth(ledger);
+  const history = useMemo(() => balanceHistory({ accounts, transactions }, 12, day), [accounts, transactions, day]);
   const accountById = new Map(all.map((a) => [a.id, a]));
-  const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
-
-  const header = (
-    <Stack.Screen
-      options={{
-        title: greeting(),
-        headerRight: () => (
-          <HeaderButton sf="gearshape" md="settings" label="Settings" onPress={() => router.push('/settings')} />
-        ),
-      }}
-    />
-  );
+  const context = weekday.format(fromISODate(day));
 
   if (all.length === 0) {
     return (
       <Screen>
-        {header}
-        <EmptyState
-          title="Start with your checking account"
-          body="Add the account your debit card uses and type in today’s balance from your bank app. Every dollar in it becomes money you can give a job."
-          action={<Button title="Add account" onPress={() => router.push('/new-account')} />}
-        />
+        <ScreenTitle title="Home" context={context} />
+        <Card padded>
+          <Text variant="section">Start with your checking account</Text>
+          <Text variant="callout" tone="textSecondary">
+            Add the account your debit card uses and type in today’s balance from your bank app. Every dollar in it
+            becomes money you can give a job.
+          </Text>
+          <Button title="Add account" onPress={() => router.push('/new-account')} style={{ alignSelf: 'flex-start' }} />
+        </Card>
         {__DEV__ && !inDemo && <Button title="Load sample data" variant="ghost" onPress={loadSampleData} />}
       </Screen>
     );
   }
 
-  const rta = ledger.readyToAssign;
-  const health = budgetHealth(ledger);
+  const first = history[0];
+  const latest = history[history.length - 1];
+  const standing = latest ? latest.cash - latest.debt : ledger.cashTotal - ledger.debtTotal;
+  const change = first && latest ? standing - (first.cash - first.debt) : 0;
+  const ticks = history.length > 1 ? [0, 0.25, 0.5, 0.75, 1].map((f) => history[Math.round(f * (history.length - 1))]) : [];
 
   function approveItem(r: Recurring) {
     approve(r.id);
@@ -100,278 +83,219 @@ export function Home() {
 
   return (
     <Screen>
-      {header}
-      {health.short > 0 && (
-        <Section inset={spacing.lg - 2}>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.navigate('/budget')}
-            style={{ flexDirection: 'row', gap: spacing.md, padding: spacing.lg - 2, alignItems: 'flex-start' }}
-          >
-            <RowIcon sf="exclamationmark.triangle.fill" md="warning" fg={colors.negative} bg={colors.negativeSoft} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text variant="body" weight="600" tone="negative">
-                Your envelopes hold more than your accounts
-              </Text>
-              <Text variant="callout" tone="negative">
-                Your accounts have {formatMoney(health.short)} less than your envelopes. Take money back from envelopes
-                until they match.
-              </Text>
-            </View>
-          </Pressable>
-        </Section>
-      )}
+      <ScreenTitle title="Home" context={context} />
 
-      <HeroCard>
-        <View style={{ gap: 2 }}>
-          <Text variant="footnote" weight="500" tone="textSecondary">
-            Ready to assign
-          </Text>
-          <Money cents={rta} variant="display" tone={rta < 0 ? 'negative' : 'text'} />
-          <Text variant="callout" tone={rta < 0 ? 'negative' : 'textSecondary'}>
-            {rta > 0
-              ? 'Give it a job before you spend it.'
-              : rta === 0
-                ? `All ${formatMoney(ledger.cashTotal)} has a job.`
-                : `${formatMoney(-rta)} more is assigned than you have.`}
-          </Text>
-        </View>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {due.length > 0 && (
+      {health.short > 0 && (
+        <Card tone="urgent">
+          <View style={{ flexDirection: 'row', gap: 10, padding: spacing.md + 2, backgroundColor: colors.negativeSoft }}>
             <View
               style={{
-                height: 32,
-                paddingHorizontal: spacing.md,
-                borderRadius: radius.full,
-                borderWidth: 1,
-                borderColor: colors.separator,
+                width: 24,
+                height: 24,
+                borderRadius: 12,
+                backgroundColor: colors.negativeStrong,
+                alignItems: 'center',
                 justifyContent: 'center',
               }}
             >
-              <Text variant="callout" weight="500">
-                {due.length} {due.length === 1 ? 'bill' : 'bills'} to approve
+              <Text variant="body" weight="700" tone="onInk">
+                !
               </Text>
             </View>
-          )}
-          {rta !== 0 && (
-            <Button
-              title={rta > 0 ? 'Assign money' : 'Fix in Budget'}
-              size="sm"
-              onPress={() => router.navigate('/budget')}
-            />
-          )}
-        </View>
-      </HeroCard>
-
-      {soon.length > 0 && (
-        <View style={{ gap: spacing.sm }}>
-          <SectionHeader title="Due soon" action="See all" onAction={() => router.navigate('/recurring')} />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginHorizontal: -gutter }}
-            contentContainerStyle={{ paddingHorizontal: gutter, gap: spacing.sm + 2 }}
+            <View style={{ flex: 1, gap: 3 }}>
+              <Text variant="body" weight="600" tone="negative">
+                Your accounts are {formatMoney(health.short)} short
+              </Text>
+              <Text variant="callout" color="#7A271A">
+                Checking and savings hold less than your envelopes. Take money back from envelopes until they match.
+              </Text>
+            </View>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/budget')}
+            style={{ paddingVertical: spacing.md - 2, paddingHorizontal: spacing.md + 2 }}
           >
-            {soon.map((r) => {
-              const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
-              const account = accountById.get(r.accountId);
-              const onCard = !!account && !isCashAccount(account);
-              const hue = envelope ? groupHue(envelope.group, scheme) : { fg: colors.textSecondary, soft: colors.fill };
-              const icon = envelopeIcon(envelope?.name ?? r.name);
-              const isDue = r.nextDue <= day;
-              return (
-                <View
-                  key={r.id}
-                  style={{
-                    width: 224,
-                    borderRadius: radius.lg,
-                    borderCurve: 'continuous',
-                    backgroundColor: colors.surface,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    overflow: 'hidden',
-                  }}
-                >
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`${r.name}, ${formatMoney(r.amount)}, ${formatDay(r.nextDue)}`}
-                    onPress={() => router.push({ pathname: '/edit-recurring', params: { id: r.id } })}
-                    style={({ pressed }) => ({
-                      flex: 1,
-                      padding: spacing.md,
-                      paddingRight: isDue ? spacing.xs : spacing.md,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: spacing.md,
-                      backgroundColor: pressed ? colors.fill : 'transparent',
-                    })}
-                  >
-                    <RowIcon
-                      sf={icon.sf}
-                      md={icon.md}
-                      fg={onCard ? colors.negative : hue.fg}
-                      bg={onCard ? colors.negativeSoft : hue.soft}
-                    />
-                    <View style={{ flex: 1, gap: 1 }}>
-                      <Text variant="body" weight="600" numberOfLines={1} tone={onCard ? 'negative' : 'text'}>
-                        {r.name}
-                      </Text>
-                      <Text variant="footnote" tone="textSecondary" numberOfLines={1}>
-                        {formatDay(r.nextDue)} · {formatMoney(r.amount)}
-                      </Text>
-                    </View>
-                  </Pressable>
-                  {isDue && (
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={`Approve ${r.name}`}
-                      hitSlop={6}
-                      onPress={() => approveItem(r)}
-                      style={({ pressed }) => ({
-                        width: 32,
-                        height: 32,
-                        marginRight: spacing.md,
-                        borderRadius: radius.full,
-                        borderWidth: 1.5,
-                        borderColor: colors.separator,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: pressed ? colors.positiveSoft : 'transparent',
-                      })}
-                    >
-                      <Icon sf="checkmark" md="check" size={13} weight="bold" />
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </ScrollView>
-        </View>
+            <Text variant="callout" weight="600" tone="negative">
+              Fix in Budget ›
+            </Text>
+          </Pressable>
+        </Card>
       )}
 
-      {overspent.length > 0 && (
-        <Section title="Overspent" inset={spacing.lg - 2}>
-          {overspent.map((e) => (
-            <Row
-              key={e.id}
-              onPress={() => router.navigate({ pathname: '/budget/[id]', params: { id: e.id } })}
-              title={e.name}
-              subtitle="Cover it from another envelope"
-              subtitleTone="negative"
-              titleTone="negative"
-              trailing={<Money cents={ledger.available.get(e.id) ?? 0} tone="negative" weight="600" />}
-              chevron
+      {history.length > 1 && (
+        <Card padded>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ gap: 2 }}>
+              <Text variant="footnote" tone="textSecondary">
+                Where you stand
+              </Text>
+              <Money cents={standing} variant="number" />
+              {change !== 0 && (
+                <Text variant="footnote" tone={change > 0 ? 'positive' : 'negative'}>
+                  {change > 0 ? 'Up' : 'Down'} {formatMoney(Math.abs(change), { whole: true })} since{' '}
+                  {monthShort.format(monthDate(first.month))}
+                </Text>
+              )}
+            </View>
+            <ChartLegend
+              items={[
+                { label: 'Cash', color: chartCash, value: formatMoney(latest.cash, { whole: true }) },
+                { label: 'Debt', color: chartDebt, value: formatMoney(latest.debt, { whole: true }) },
+              ]}
             />
-          ))}
-        </Section>
+          </View>
+          <LineChart
+            series={[
+              { id: 'debt', label: 'Debt', color: chartDebt, values: history.map((h) => h.debt) },
+              { id: 'cash', label: 'Cash', color: chartCash, values: history.map((h) => h.cash) },
+            ]}
+            directLabels={false}
+            xTicks={ticks.map((t) => monthShort.format(monthDate(t.month)))}
+            pointLabel={(i) => monthLong.format(monthDate(history[i].month))}
+            formatValue={(v) => formatMoney(v, { whole: true })}
+            formatAxis={k}
+            accessibilityLabel={`Cash went from ${formatMoney(first.cash, { whole: true })} to ${formatMoney(latest.cash, { whole: true })} and debt from ${formatMoney(first.debt, { whole: true })} to ${formatMoney(latest.debt, { whole: true })} over the last ${history.length} months.`}
+          />
+        </Card>
       )}
 
-      <View style={{ gap: spacing.sm }}>
-        <SectionHeader
-          title="Accounts"
-          detail={`${formatMoney(ledger.cashTotal)} cash`}
-          action="Add"
-          onAction={() => router.push('/new-account')}
-        />
-        <CardCarousel
-          items={cash}
-          keyOf={(a) => a.id}
-          renderCard={(a, width) => {
-            const since = a.lastReconciledOn ? daysBetween(a.lastReconciledOn, day) : null;
-            const stale = since === null || since >= RECONCILE_EVERY_DAYS;
-            return (
-              <CardFace
-                face={a.order}
-                width={width}
-                title={a.name}
-                caption={a.order === 0 ? 'Quick-add default' : undefined}
-                amount={formatMoney(ledger.balance.get(a.id) ?? 0)}
-                footnote={
-                  stale
-                    ? 'Time to check against the bank'
-                    : since === 0
-                      ? 'Checked against the bank today'
-                      : `Checked ${since} ${since === 1 ? 'day' : 'days'} ago`
-                }
-                footnoteTone={stale ? 'bad' : 'good'}
-                onPress={() => router.push(`/account/${a.id}`)}
-                accessibilityLabel={`${a.name}, ${formatMoney(ledger.balance.get(a.id) ?? 0)}`}
-              />
-            );
-          }}
-        />
-        {debts.length > 0 && (
-          <Section inset={spacing.lg - 2}>
-            <Row
-              onPress={() => router.navigate('/debt')}
-              leading={<RowIcon sf="chart.line.downtrend.xyaxis" md="trending_down" fg={colors.accent} bg={colors.accentSoft} />}
-              title="Debt"
-              subtitle={
-                comparison?.plan.months != null
-                  ? `Debt-free by ${payoffLabel(comparison.plan.months)}`
-                  : `${debts.length} ${debts.length === 1 ? 'account' : 'accounts'}`
-              }
-              trailing={<Money cents={ledger.debtTotal} weight="600" />}
-              chevron
-            />
-          </Section>
-        )}
-      </View>
-
-      {recent.length > 0 && (
-        <Section
-          title="Recent"
-          inset={ICON_INSET}
-          action={<HeaderLink label="See all" onPress={() => router.navigate('/transactions')} />}
+      <Card>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.navigate('/budget')}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md,
+            backgroundColor: pressed ? colors.control : colors.surface,
+          })}
         >
-          {recent.map((t) => (
-            <TransactionRow
-              key={t.id}
-              t={t}
-              account={accountById.get(t.accountId)}
-              envelope={t.envelopeId ? envelopeById.get(t.envelopeId) : undefined}
-            />
-          ))}
-        </Section>
-      )}
-    </Screen>
-  );
-}
-
-function SectionHeader({
-  title,
-  detail,
-  action,
-  onAction,
-}: {
-  title: string;
-  detail?: string;
-  action?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingHorizontal: spacing.xs }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.sm }}>
-        <Text variant="headline" accessibilityRole="header">
-          {title}
-        </Text>
-        {detail && (
-          <Text variant="footnote" tone="textSecondary">
-            {detail}
+          <View style={{ flex: 1 }}>
+            <Text variant="footnote" tone="textSecondary">
+              Ready to assign
+            </Text>
+            <Money cents={ledger.readyToAssign} variant="title" weight="600" tone="auto" />
+          </View>
+          <Text variant="callout" weight="600" tone="accent">
+            Assign ›
           </Text>
-        )}
-      </View>
-      {action && onAction && <HeaderLink label={action} onPress={onAction} />}
-    </View>
-  );
-}
+        </Pressable>
+      </Card>
 
-function HeaderLink({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="button" hitSlop={8} onPress={onPress}>
-      <Text variant="callout" weight="500" tone="accent">
-        {label}
-      </Text>
-    </Pressable>
+      {due.length > 0 && (
+        <Card>
+          <CardHeader
+            title="To approve"
+            detail={`${due.length} due`}
+            icon={{ sf: 'calendar', md: 'calendar_month', color: colors.orange, bg: colors.orangeSoft }}
+          />
+          {due.map((r, i) => {
+            const account = accountById.get(r.accountId);
+            const onCard = !!account && !isCashAccount(account);
+            const overdue = r.nextDue < day;
+            return (
+              <View
+                key={r.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10,
+                  paddingRight: spacing.lg,
+                  borderBottomWidth: i < due.length - 1 ? 1 : 0,
+                  borderBottomColor: colors.hairline,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => router.push({ pathname: '/edit-recurring', params: { id: r.id } })}
+                  style={({ pressed }) => ({
+                    flex: 1,
+                    gap: 1,
+                    paddingLeft: spacing.lg,
+                    paddingVertical: 9,
+                    backgroundColor: pressed ? colors.control : colors.surface,
+                  })}
+                >
+                  <Text variant="body" weight="500" tone={onCard ? 'negative' : 'text'}>
+                    {r.name}
+                  </Text>
+                  <Text
+                    variant="footnote"
+                    tone={onCard ? 'negative' : overdue ? 'orange' : 'textSecondary'}
+                    numberOfLines={1}
+                  >
+                    {[formatDay(r.nextDue), formatMoney(r.amount), account?.name, onCard ? 'slip' : null]
+                      .filter(Boolean)
+                      .join(' \u00b7 ')}
+                  </Text>
+                </Pressable>
+                <Button title="Approve" variant="secondary" size="sm" onPress={() => approveItem(r)} />
+              </View>
+            );
+          })}
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader title="Accounts" detail="Tap one to reconcile" />
+        {cash.map((a, i) => {
+          const since = a.lastReconciledOn ? daysBetween(a.lastReconciledOn, day) : null;
+          const stale = since === null || since >= RECONCILE_EVERY_DAYS;
+          const balance = ledger.balance.get(a.id) ?? 0;
+          return (
+            <Pressable
+              key={a.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${a.name}, ${formatMoney(balance)}`}
+              onPress={() => router.push(`/account/${a.id}`)}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingHorizontal: spacing.lg,
+                paddingVertical: 9,
+                borderBottomWidth: i < cash.length - 1 ? 1 : 0,
+                borderBottomColor: colors.hairline,
+                backgroundColor: pressed ? colors.control : colors.surface,
+              })}
+            >
+              <MiniCard face={a.order} />
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text variant="body" weight="500" numberOfLines={1}>
+                  {a.name}
+                </Text>
+                <Text variant="footnote" tone={stale ? 'orange' : 'textSecondary'}>
+                  {since === null
+                    ? 'Never reconciled'
+                    : stale
+                      ? `Not reconciled in ${since} days`
+                      : since === 0
+                        ? 'Reconciled today'
+                        : `Reconciled ${since} ${since === 1 ? 'day' : 'days'} ago`}
+                </Text>
+              </View>
+              <Money cents={balance} weight="600" tone="auto" />
+            </Pressable>
+          );
+        })}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/new-account')}
+          style={({ pressed }) => ({
+            paddingHorizontal: spacing.lg,
+            paddingVertical: spacing.md - 2,
+            borderTopWidth: 1,
+            borderTopColor: colors.separator,
+            backgroundColor: pressed ? colors.control : colors.surface,
+          })}
+        >
+          <Text variant="callout" weight="600" tone="accent">
+            Add account
+          </Text>
+        </Pressable>
+      </Card>
+    </Screen>
   );
 }

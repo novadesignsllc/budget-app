@@ -7,8 +7,10 @@ Every UI change gets checked against these principles. When we decide something 
 1. **One system, every screen.** Cards, rows, buttons, dropdowns, and headers come from one component set with the same radius, border, padding, and type. No screen gets its own one-off style. If a screen needs something new, it becomes a shared component first.
 2. **Every main screen opens the same way.** First the screen title, then a summary card (two numbers and a visual in the middle), then sections. You always know where you are and where to look.
 3. **Pills are only for sorts and filters** (1M / 3M / YTD, All / Not cleared). Anything you choose (account, envelope, type, group, month, date) is a dropdown: a labeled field with a ⇅ chevron that opens a clean menu.
-4. **Small, quiet text.** 14px body, 12px secondary, 11px uppercase column labels. Numbers are the only big type.
+4. **Small, quiet text, dense screens.** 13px body, 11px secondary, 10px uppercase column labels, SF Pro. Numbers are the only big type.
 5. **Flat.** Cards have a hairline border, never a drop shadow. No liquid glass, blur, or frosted bars. Solid colors.
+5a. **One-handed.** Search, add, and selectors (month, strategy) sit in the bottom right, just above quick-add. Screen titles are centered and carry no buttons.
+5b. **A chart only where it says something.** Home: cash vs debt over time. Budget: spent-of-assigned ring. Debt: each debt's projected balance to its payoff date. Transactions and Recurring have no summary.
 6. **Color carries meaning.** One blue accent for actions and selection. Group hues for envelopes. Red only for money problems (overspent, slips, debt warnings). Green only for money in and money synced.
 7. **Rectangular buttons.** Radius 10, filled for the main action, outlined for the rest. Round icon buttons only for icon-only actions.
 8. **Follow `.claude/agents/product-designer.md`.** No em dashes, no marketing words, no emoji in the interface, real states for empty and loading.
@@ -26,3 +28,12 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | No liquid glass. The iOS tab bar is replaced by a Copilot-style scrolling text tab strip at the bottom | User finds glass gimmicky |
 | 2026-10-23 | Smaller type across the app; free to experiment with fonts and colors | User request |
 | 2026-10-23 | A demo account full of realistic data, for trying features and verifying them | User request |
+| 2026-10-23 | Light mode only for now; SF Pro instead of Figtree | User prefers it |
+| 2026-10-23 | Settings becomes a tab, pinned at the far right of the tab strip | User request |
+| 2026-10-23 | Centered titles; actions move to the bottom right above quick-add | One-handed use |
+| 2026-10-23 | Charts per tab: Home cash vs debt, Debt payoff projection per debt; no summary on Transactions or Recurring | Same ring on every tab didn't mean anything |
+| 2026-10-23 | Transactions show date, payee, envelope, note, outflow/inflow and flags on one dense row | See everything without opening it |
+| 2026-10-23 | Reconcile inside an account: select posted transactions, tap Reconcile, they lock; editing a locked one warns first; flagged ones can't be reconciled | User workflow |
+| 2026-10-23 | Urgent alert when cash is less than what's assigned; slips alone never trigger it | Budget must stay real |
+| 2026-10-23 | Can't move past the current month; targets are per month and never change earlier months | User rule |
+| 2026-10-23 | Payee list in Settings with default envelopes, replacing learned merchant memory | User request |

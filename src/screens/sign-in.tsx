@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 
 import { backend } from '@/backend';
+import { setDemoMode } from '@/backend/mode';
 import { authErrorMessage } from '@/backend/types';
 import { AppleSignInButton } from '@/components/apple-sign-in-button';
 import { Button } from '@/components/button';
@@ -140,6 +141,13 @@ export function SignIn() {
               }}
             />
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            style={{ paddingHorizontal: spacing.xs }}
+            title="Explore the demo"
+            onPress={() => void setDemoMode(true)}
+          />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

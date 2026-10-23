@@ -1,6 +1,7 @@
 import { View } from 'react-native';
 
-import { backend } from '@/backend';
+import { backend, inDemo } from '@/backend';
+import { setDemoMode } from '@/backend/mode';
 import { Button } from '@/components/button';
 import { FieldLabel } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
@@ -36,25 +37,36 @@ export function Settings() {
         />
       </View>
 
-      <View style={{ gap: spacing.xs }}>
-        <FieldLabel label="Signed in as" />
-        <Text variant="body" selectable style={{ paddingHorizontal: spacing.xs }}>
-          {user?.email ?? 'Apple ID (email hidden)'}
-        </Text>
-        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          Your data syncs through Firebase to any device signed in to this account.
-        </Text>
-      </View>
+      {inDemo ? (
+        <View style={{ gap: spacing.md }}>
+          <Text variant="body" style={{ paddingHorizontal: spacing.xs }}>
+            You’re in the demo. Nothing here touches your real account.
+          </Text>
+          <Button title="Exit demo" variant="secondary" onPress={() => void setDemoMode(false)} />
+        </View>
+      ) : (
+        <>
+          <View style={{ gap: spacing.xs }}>
+            <FieldLabel label="Signed in as" />
+            <Text variant="body" selectable style={{ paddingHorizontal: spacing.xs }}>
+              {user?.email ?? 'Apple ID (email hidden)'}
+            </Text>
+            <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
+              Your data syncs through Firebase to any device signed in to this account.
+            </Text>
+          </View>
 
-      <Button
-        title="Sign out"
-        variant="destructive"
-        onPress={() => {
-          closeSheet();
-          void backend.signOut();
-        }}
-      />
-      {__DEV__ && empty && (
+          <Button
+            title="Sign out"
+            variant="destructive"
+            onPress={() => {
+              closeSheet();
+              void backend.signOut();
+            }}
+          />
+        </>
+      )}
+      {__DEV__ && empty && !inDemo && (
         <Button
           title="Load sample data"
           variant="ghost"

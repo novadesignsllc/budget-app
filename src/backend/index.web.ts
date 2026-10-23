@@ -18,8 +18,10 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 
+import { createDemoBackend } from './demo';
 import { fakeBackend } from './fake';
 import { chunks, clean } from './firestore-shared';
+import { isDemoMode } from './mode';
 import type { Backend } from './types';
 
 function createWebBackend(): Backend {
@@ -77,4 +79,13 @@ function createWebBackend(): Backend {
   };
 }
 
-export const backend: Backend = process.env.EXPO_PUBLIC_FAKE_BACKEND === '1' ? fakeBackend : createWebBackend();
+/** True when this device is running the demo account (local data only). */
+export const inDemo = isDemoMode();
+
+// The demo wins over everything, then the dev fake, then real Firebase. Firebase is only
+// set up in the last case, so the demo never makes a network call.
+export const backend: Backend = inDemo
+  ? createDemoBackend()
+  : process.env.EXPO_PUBLIC_FAKE_BACKEND === '1'
+    ? fakeBackend
+    : createWebBackend();

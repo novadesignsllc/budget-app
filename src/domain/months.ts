@@ -68,7 +68,7 @@ export type BudgetMonth = {
 /**
  * The budget as it stood for one month. Envelopes carry over, so `available` at the
  * end of a month is everything assigned and spent up to then. The core rule still
- * holds: readyToAssign + sum(available) + assigned-in-later-months = cash.
+ * holds: readyToAssign + sum(available) + assigned-ahead-for-later-months = cash.
  */
 export function computeMonth(
   input: { accounts: Account[]; envelopes: Envelope[]; transactions: Transaction[]; allocations: Allocation[] },
@@ -90,10 +90,15 @@ export function computeMonth(
     return r;
   };
 
+  // Money assigned to a later month only counts against this one if it had already been
+  // assigned by the time this month ended (budgeting ahead). Assignments made later, from
+  // later paychecks, didn't exist yet.
+  const [ey, em] = month.split('-').map(Number);
+  const endTime = new Date(ey, em, 0, 23, 59, 59, 999).getTime();
   let assignedLater = 0;
   for (const al of input.allocations) {
     if (al.date > end) {
-      assignedLater += al.amount;
+      if (al.createdAt <= endTime) assignedLater += al.amount;
       continue;
     }
     const r = row(al.envelopeId);

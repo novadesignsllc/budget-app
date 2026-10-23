@@ -2,6 +2,7 @@ import { router, Stack } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 
+import { inDemo } from '@/backend';
 import { Button } from '@/components/button';
 import { CardCarousel } from '@/components/card-carousel';
 import { CardFace } from '@/components/card-face';
@@ -82,7 +83,7 @@ export function Home() {
           body="Add the account your debit card uses and type in today’s balance from your bank app. Every dollar in it becomes money you can give a job."
           action={<Button title="Add account" onPress={() => router.push('/new-account')} />}
         />
-        {__DEV__ && <Button title="Load sample data" variant="ghost" onPress={loadSampleData} />}
+        {__DEV__ && !inDemo && <Button title="Load sample data" variant="ghost" onPress={loadSampleData} />}
       </Screen>
     );
   }

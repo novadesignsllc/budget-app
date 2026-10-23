@@ -12,27 +12,32 @@ type Queued = { uid: string; ops: WriteOp[]; resolve: () => void };
 
 const key = (uid: string, collection: string) => `${uid}/${collection}`;
 
-export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean } = {}) {
+export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean; namespace?: string } = {}) {
   const latency = opts.latencyMs ?? 600;
   const storage = opts.persist && typeof localStorage !== 'undefined' ? localStorage : null;
+  // Separate namespaces keep the demo's data apart from the dev fake's.
+  const ns = opts.namespace ?? '';
+  const SERVER = `${ns}fake-server`;
+  const QUEUE = `${ns}fake-queue`;
+  const USER = `${ns}fake-user`;
 
   const server = new Map<string, Map<string, DocData>>(
-    storage ? JSON.parse(storage.getItem('fake-server') ?? '[]').map(([k, v]: [string, [string, DocData][]]) => [k, new Map(v)]) : [],
+    storage ? JSON.parse(storage.getItem(SERVER) ?? '[]').map(([k, v]: [string, [string, DocData][]]) => [k, new Map(v)]) : [],
   );
-  let user: SessionUser | null = storage ? JSON.parse(storage.getItem('fake-user') ?? 'null') : null;
+  let user: SessionUser | null = storage ? JSON.parse(storage.getItem(USER) ?? 'null') : null;
   let online = true;
   let flushing = false;
   // Pending writes survive a reload, like Firestore's on-device queue.
   const queue: Queued[] = storage
-    ? (JSON.parse(storage.getItem('fake-queue') ?? '[]') as Omit<Queued, 'resolve'>[]).map((q) => ({ ...q, resolve: () => {} }))
+    ? (JSON.parse(storage.getItem(QUEUE) ?? '[]') as Omit<Queued, 'resolve'>[]).map((q) => ({ ...q, resolve: () => {} }))
     : [];
   const listeners = new Set<Listener>();
   const authListeners = new Set<(u: SessionUser | null) => void>();
   const drainWaiters: (() => void)[] = [];
 
   function save() {
-    storage?.setItem('fake-server', JSON.stringify([...server].map(([k, v]) => [k, [...v]])));
-    storage?.setItem('fake-queue', JSON.stringify(queue.map(({ uid, ops }) => ({ uid, ops }))));
+    storage?.setItem(SERVER, JSON.stringify([...server].map(([k, v]) => [k, [...v]])));
+    storage?.setItem(QUEUE, JSON.stringify(queue.map(({ uid, ops }) => ({ uid, ops }))));
   }
 
   /** The local view: server data with every queued write applied on top. */
@@ -85,6 +90,10 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean 
     setOnline(value: boolean): void;
     isOnline(): boolean;
     serverDocs(uid: string, collection: string): DocData[];
+    /** True when anything is stored for this user. */
+    hasData(uid: string): boolean;
+    /** Writes docs straight to the "server", as if another device had synced them. */
+    seed(uid: string, docs: Record<string, DocData[]>): void;
   } = {
     onAuth(cb) {
       authListeners.add(cb);
@@ -94,7 +103,7 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean 
     async signInWithEmail(email, password) {
       if (!password) throw Object.assign(new Error('bad'), { code: 'auth/invalid-credential' });
       user = { uid: 'fake-user', email };
-      storage?.setItem('fake-user', JSON.stringify(user));
+      storage?.setItem(USER, JSON.stringify(user));
       authListeners.forEach((cb) => cb(user));
     },
     async createAccount(email, password) {
@@ -106,7 +115,7 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean 
     async signInWithApple() {},
     async signOut() {
       user = null;
-      storage?.removeItem('fake-user');
+      storage?.removeItem(USER);
       authListeners.forEach((cb) => cb(null));
     },
 
@@ -136,6 +145,13 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean 
     },
     isOnline: () => online,
     serverDocs: (uid, collection) => [...(server.get(key(uid, collection))?.values() ?? [])],
+    hasData: (uid) => [...server.entries()].some(([k, v]) => k.startsWith(`${uid}/`) && v.size > 0),
+    seed(uid, docs) {
+      for (const [collection, list] of Object.entries(docs)) {
+        server.set(key(uid, collection), new Map(list.map((d) => [d.id, d])));
+      }
+      save();
+    },
   };
   if (queue.length) setTimeout(() => void flush(), 0);
   return api;

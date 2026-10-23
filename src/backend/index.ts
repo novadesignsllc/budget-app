@@ -19,8 +19,10 @@ import {
 import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 
+import { createDemoBackend } from './demo';
 import { fakeBackend } from './fake';
 import { chunks, clean } from './firestore-shared';
+import { isDemoMode } from './mode';
 import type { Backend } from './types';
 
 function createNativeBackend(): Backend {
@@ -78,4 +80,13 @@ function createNativeBackend(): Backend {
   };
 }
 
-export const backend: Backend = process.env.EXPO_PUBLIC_FAKE_BACKEND === '1' ? fakeBackend : createNativeBackend();
+/** True when this device is running the demo account (local data only). */
+export const inDemo = isDemoMode();
+
+// The demo wins over everything, then the dev fake, then real Firebase. Firebase is only
+// set up in the last case, so the demo never makes a network call.
+export const backend: Backend = inDemo
+  ? createDemoBackend()
+  : process.env.EXPO_PUBLIC_FAKE_BACKEND === '1'
+    ? fakeBackend
+    : createNativeBackend();

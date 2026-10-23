@@ -72,6 +72,15 @@ describe('computeMonth', () => {
   });
 });
 
+describe('looking back', () => {
+  it('ignores assignments that were made after the month ended', () => {
+    const later = al('groc', 40000, '2026-11-01');
+    later.createdAt = new Date(2026, 10, 1).getTime();
+    const sep = computeMonth({ ...input, allocations: [...input.allocations, later] }, '2026-09');
+    expect(sep.readyToAssign).toBe(computeMonth(input, '2026-09').readyToAssign);
+  });
+});
+
 describe('month helpers', () => {
   it('steps across years', () => {
     expect(addMonthKey('2026-12', 1)).toBe('2027-01');

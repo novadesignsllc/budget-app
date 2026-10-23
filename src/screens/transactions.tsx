@@ -4,7 +4,6 @@ import { FlatList, TextInput, View } from 'react-native';
 import { Card, TableHeader, type Column } from '@/components/card';
 import { useDock } from '@/components/dock';
 import { Dropdown } from '@/components/dropdown';
-import { FilterPills } from '@/components/filter-pills';
 import { Icon } from '@/components/icon';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -33,8 +32,8 @@ export function newestFirst(a: Transaction, b: Transaction) {
  * A table card that a FlatList can render row by row: the top edge carries the column
  * labels, each row draws the card's sides, and the last row closes the bottom.
  */
-const monthFormat = new Intl.DateTimeFormat('en-US', { month: 'short' });
-function shortMonth(key: MonthKey) {
+const monthFormat = new Intl.DateTimeFormat('en-US', { month: 'long' });
+function longMonth(key: MonthKey) {
   const [y, m] = key.split('-').map(Number);
   return monthFormat.format(new Date(y, m - 1, 1));
 }
@@ -95,8 +94,8 @@ export function TransactionList() {
   const transactions = useStore((s) => s.transactions);
   const envelopes = useStore((s) => s.envelopes);
   const { all: accounts } = useAccounts();
-  // Short month names ("Oct") so the filters have room next to it; years are menu sections.
-  const monthOptions = useMonthOptions().map((o) => ({ ...o, label: shortMonth(o.value) }));
+  // Full month names; years are the menu's sections.
+  const monthOptions = useMonthOptions().map((o) => ({ ...o, label: longMonth(o.value) }));
   const [month, setMonth] = useState<MonthKey>(monthOf(today()));
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
@@ -226,20 +225,19 @@ export function TransactionList() {
         }}
       />
       <ScreenActions>
-        {/* Filters sit down here with the month and search, for one-handed use. */}
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <FilterPills
-            floating
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'flagged', label: flaggedCount ? `Flagged ${flaggedCount}` : 'Flagged' },
-              { value: 'open', label: 'Not reconciled' },
-              { value: 'slips', label: 'Slips' },
-            ]}
-          />
-        </View>
+        {/* Filter and month sit down here with search, for one-handed use. */}
+        <Dropdown
+          variant="compact"
+          value={filter}
+          onChange={setFilter}
+          label="Show"
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'flagged', label: flaggedCount ? `Flagged ${flaggedCount}` : 'Flagged' },
+            { value: 'open', label: 'Not reconciled' },
+            { value: 'slips', label: 'Slips' },
+          ]}
+        />
         {!searching && (
           <Dropdown variant="compact" value={month} options={monthOptions} onChange={setMonth} label="Month" />
         )}

@@ -1,4 +1,3 @@
-import { LinearGradient } from 'expo-linear-gradient';
 import { Pressable, View } from 'react-native';
 
 import { haptic } from '@/utils/haptics';
@@ -14,17 +13,10 @@ import { Text } from './text';
  */
 export function ScreenActions({ children }: { children: React.ReactNode }) {
   const desktop = useIsDesktop();
-  const colors = useColors();
   const bottom = desktop ? spacing.xl : spacing.md;
+  // Floats over the screen; nothing behind it is hidden or faded.
   return (
     <>
-      {/* The list fades out under the buttons, so nothing shows between them. */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(243,245,249,0)', colors.background, colors.background]}
-        locations={[0, 0.45, 1]}
-        style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: bottom + 34 + 22 }}
-      />
       <View
         pointerEvents="box-none"
         style={{

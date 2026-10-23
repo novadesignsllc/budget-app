@@ -54,3 +54,9 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Budget top card is one message: green "left to assign", red "assigned more than you have", grey check "All money assigned" | Every dollar needs a job; targets don't matter there |
 | 2026-10-23 | Groups are fixed: Daily, Savings, Bills, Debt payments. Recurring items get their own Bills envelope | Simpler; bills never go over |
 | 2026-10-23 | Type one point larger across the app | User request |
+| 2026-10-23 | Titles stand alone: no context line above them. Budget reads "Budget · October 2026"; Home's title is today's date | Clean; the month and day are the useful part |
+| 2026-10-23 | No helper tips on screens; empty states and real warnings (a slip, money short) stay | User wants it really clean |
+| 2026-10-23 | Bills, Subscriptions and Debt payments are app-managed groups: one envelope per bill, subscription or debt; reorder inside, never move out; deleting the item hides its envelope | Keeps bills and their money in sync |
+| 2026-10-23 | Plus buttons are black and icon-only, bottom right; quick-add has no plus | One add pattern everywhere |
+| 2026-10-23 | Motion is a fade: quick-add examples and tab switches cross-fade, nothing slides or bounces | The lift read as a bounce |
+| 2026-10-23 | Transactions table runs a size smaller (12pt cells, 46pt rows) | Money columns felt cramped |

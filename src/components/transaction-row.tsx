@@ -7,7 +7,7 @@ import { isDebtAccount, type Account, type Envelope, type Transaction } from '@/
 import { useStore } from '@/store';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
-import { spacing, useColors } from '@/theme';
+import { flagHues, spacing, useColors } from '@/theme';
 
 import { Icon } from './icon';
 import { Text } from './text';
@@ -141,7 +141,7 @@ export function TransactionRow({
           <Text variant="row" weight="600" tone={slip ? 'negative' : 'text'} numberOfLines={1} style={[cell, { flexShrink: 1 }]}>
             {t.payee || 'Untitled'}
           </Text>
-          {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={colors.orange} />}
+          {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={flagHues[t.flagColor ?? 'red']} />}
           {t.reconciled && !select && <Icon sf="lock.fill" md="lock" size={9} color={colors.textTertiary} />}
         </View>
         {note ? (

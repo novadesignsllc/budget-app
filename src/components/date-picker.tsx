@@ -18,6 +18,7 @@ import { dismissKeyboard } from '@/utils/keyboard';
 import { Button } from './button';
 import { FieldLabel } from './field';
 import { Icon } from './icon';
+import { FORM_ROW_HEIGHT } from './form';
 import { Text } from './text';
 
 const DAY = 34;
@@ -273,7 +274,7 @@ export function DateRow(props: PickerProps & { last?: boolean }) {
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
-          height: 40,
+          height: FORM_ROW_HEIGHT,
           paddingHorizontal: spacing.md,
           gap: spacing.sm,
           backgroundColor: pressed ? colors.control : colors.surface,

@@ -9,6 +9,7 @@ import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/them
 
 import { FieldLabel } from './field';
 import { Icon } from './icon';
+import { FORM_ROW_HEIGHT } from './form';
 import { Text } from './text';
 
 export type DropdownOption<T extends string> = {
@@ -156,7 +157,7 @@ export function Dropdown<T extends string>({
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
-          height: 40,
+          height: FORM_ROW_HEIGHT,
           paddingHorizontal: spacing.md,
           gap: spacing.sm,
           backgroundColor: open ? colors.accentSoft : pressed ? colors.control : colors.surface,

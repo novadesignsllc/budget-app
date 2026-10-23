@@ -10,6 +10,7 @@ import { normalizePayee } from '@/domain/quick-add';
 import { ceilDollars } from '@/domain/money';
 import { advance, monthlyCost } from '@/domain/recurring';
 import type {
+  FlagColor,
   Account,
   AccountKind,
   Allocation,
@@ -140,7 +141,8 @@ type Actions = {
     },
   ) => void;
   deleteTransaction: (id: string) => void;
-  setFlag: (id: string, flagged: boolean) => void;
+  /** Sets a flag color, or clears the flag with null. */
+  setFlag: (id: string, flag: FlagColor | null) => void;
   /**
    * Marks these transactions reconciled (and cleared), which locks them. Flagged ones are
    * skipped and returned, since a flagged transaction can't be reconciled.
@@ -417,8 +419,12 @@ export const useStore = create<Store>()((set, get) => ({
       };
     }),
 
-  setFlag: (id, flagged) =>
-    set((s) => ({ transactions: s.transactions.map((t) => (t.id === id ? { ...t, flagged } : t)) })),
+  setFlag: (id, flag) =>
+    set((s) => ({
+      transactions: s.transactions.map((t) =>
+        t.id === id ? { ...t, flagged: !!flag, flagColor: flag ?? undefined } : t,
+      ),
+    })),
 
   reconcileTransactions: (accountId, ids) => {
     const skipped: string[] = [];

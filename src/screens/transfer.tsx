@@ -1,9 +1,9 @@
 import { useState } from 'react';
 
 import { Button } from '@/components/button';
-import { DateField } from '@/components/date-picker';
+import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
-import { Field } from '@/components/field';
+import { AmountHero, FormCard } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
@@ -51,33 +51,27 @@ export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?:
     <SheetScreen>
       <SheetHeader title={isPayment ? `Pay ${to!.name}` : 'Transfer'} />
 
-      <Dropdown
-        label="From"
-        value={fromId}
-        options={cash.map(option)}
-        onChange={(v) => {
-          setFromId(v);
-          if (v === toId) setToId(undefined);
-        }}
-      />
-      <Dropdown label="To" value={toId} options={toOptions} onChange={setToId} placeholder="Choose an account" />
-
-      <Field
-        label="Amount"
+      <AmountHero
         value={amountText}
         onChangeText={setAmountText}
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        inputMode="decimal"
-        error={
-          isPayment && amount && amount > ready
-            ? `That’s ${formatMoney(amount - ready)} more than the envelope has. It’ll go negative.`
-            : undefined
-        }
+        autoFocus
+        tone={isPayment && amount && amount > ready ? 'negative' : undefined}
       />
 
-      <DateField label="Date" value={date} onChange={setDate} max={today()} />
-
+      <FormCard>
+        <Dropdown
+          variant="row"
+          label="From"
+          value={fromId}
+          options={cash.map(option)}
+          onChange={(v) => {
+            setFromId(v);
+            if (v === toId) setToId(undefined);
+          }}
+        />
+        <Dropdown variant="row" label="To" value={toId} options={toOptions} onChange={setToId} placeholder="Choose" />
+        <DateRow label="Date" value={date} onChange={setDate} max={today()} last />
+      </FormCard>
 
       <Button
         title={isPayment ? `Pay ${amount ? formatMoney(amount) : ''}`.trim() : amount ? `Move ${formatMoney(amount)}` : 'Transfer'}

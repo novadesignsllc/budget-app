@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, Switch, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
+import { AmountHero, FlagRow, FormCard, InputRow } from '@/components/form';
 import { Icon } from '@/components/icon';
-import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
@@ -16,7 +16,7 @@ import { today } from '@/domain/dates';
 import { formatDollars, formatMoney } from '@/domain/money';
 import { payeeMemory } from '@/domain/payees';
 import { parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
-import { isCashAccount, type ISODate } from '@/domain/types';
+import { isCashAccount, type FlagColor, type ISODate } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useVoiceEntry } from '@/hooks/use-voice-entry';
 import { SheetHeader } from '@/components/sheet-header';
@@ -25,12 +25,10 @@ import { groupColor, radius, spacing, type as typeScale, useColors } from '@/the
 import { closeSheet } from '@/utils/close-sheet';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
-import { dismissKeyboard } from '@/utils/keyboard';
 
 type Override = { envelopeId?: string; accountId?: string; date?: ISODate; income?: boolean };
 
 const BARS = [0.45, 0.8, 1, 0.65, 0.9, 0.5, 0.75];
-const ROW_HEIGHT = 40;
 
 function Bar({ volume, weight, color }: { volume: SharedValue<number>; weight: number; color: string }) {
   const reduceMotion = useReducedMotion();
@@ -38,37 +36,6 @@ function Bar({ volume, weight, color }: { volume: SharedValue<number>; weight: n
     height: reduceMotion ? 18 : withTiming(8 + volume.value * 30 * weight, { duration: 90 }),
   }));
   return <Animated.View style={[{ width: 4, borderRadius: 2, backgroundColor: color }, style]} />;
-}
-
-/** A plain row in the details card: label on the left, a control on the right. */
-function DetailRow({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
-  const colors = useColors();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        minHeight: ROW_HEIGHT,
-        paddingHorizontal: spacing.md,
-        gap: spacing.sm,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: 'rgba(20,40,80,0.07)',
-        backgroundColor: colors.surface,
-      }}
-    >
-      <Text variant="body" tone="textSecondary" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      {children}
-    </View>
-  );
-}
-
-/** Wraps a dropdown row with the card's row divider. */
-function Divided({ children, last }: { children: React.ReactNode; last?: boolean }) {
-  return (
-    <View style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: 'rgba(20,40,80,0.07)' }}>{children}</View>
-  );
 }
 
 export function QuickAdd({ voice = false }: { voice?: boolean }) {
@@ -79,7 +46,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const [mode, setMode] = useState<'voice' | 'type'>(voice ? 'voice' : 'type');
   const [override, setOverride] = useState<Override>({});
   const [note, setNote] = useState('');
-  const [flagged, setFlagged] = useState(false);
+  const [flag, setFlagColor] = useState<FlagColor | null>(null);
 
   const ledger = useLedger();
   const envelopes = useStore((s) => s.envelopes);
@@ -137,7 +104,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
         envelopeId: x.envelope?.id,
         memo: note.trim() || undefined,
       });
-      if (flagged) setFlag(id, true);
+      if (flag) setFlag(id, flag);
       haptic(x.isSlip ? 'warning' : 'success');
       showToast({
         message: `Added ${p.payee} · ${formatMoney(p.amount)}`,
@@ -147,7 +114,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
       closeSheet();
       return true;
     },
-    [resolve, addTransaction, deleteTransaction, setFlag, showToast, note, flagged],
+    [resolve, addTransaction, deleteTransaction, setFlag, showToast, note, flag],
   );
 
   const hints = useMemo(
@@ -178,22 +145,9 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   };
 
   // Envelopes listed in the Budget's group order.
-
   const groupOrder = useStore((s) => s.settings.groupOrder);
 
-  const listedGroups = useMemo(
-
-    () => orderGroups(
-
-      envelopes.map((e) => e.group),
-
-      groupOrder,
-
-    ),
-
-    [envelopes, groupOrder],
-
-  );
+  const listedGroups = useMemo(() => orderGroups(envelopes.map((e) => e.group), groupOrder), [envelopes, groupOrder]);
 
   const envelopeOptions = useMemo<DropdownOption<string>[]>(
     () =>
@@ -229,7 +183,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
           value: a.id,
           label: a.name,
           face: a.order,
-          section: 'Cards · logged as a slip',
+          section: 'Cards',
           tone: 'negative' as const,
         })),
     ],
@@ -250,7 +204,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
 
   const day = today();
 
-
   const saveLabel = !parsed.amount
     ? 'Type an amount'
     : !r.envelope && !r.isIncome
@@ -260,88 +213,47 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
         : `Add ${formatMoney(parsed.amount)} from ${r.envelope!.name}`;
 
   const summary = (
-    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: 2 }}>
-      <Text variant="section" numberOfLines={1} style={{ flex: 1 }} tone={parsed.payee ? (r.isSlip ? 'negative' : 'text') : 'placeholder'}>
-        {parsed.payee || 'Payee'}
-      </Text>
-      {parsed.amount ? (
-        <Money
-          cents={r.isIncome ? parsed.amount : -parsed.amount}
-          variant="number"
-          signed
-          tone={r.isIncome ? 'positive' : r.isSlip ? 'negative' : 'text'}
-        />
-      ) : (
-        <Text variant="number" tone="placeholder">
-          $0.00
-        </Text>
-      )}
-    </View>
+    <AmountHero
+      value={parsed.amount ? (parsed.amount / 100).toFixed(2) : ''}
+      caption={parsed.payee || undefined}
+      tone={r.isIncome ? 'positive' : r.isSlip ? 'negative' : undefined}
+    />
   );
 
   const details = (
-    <Card style={{ borderRadius: radius.menu }}>
+    <FormCard>
       {!r.isIncome && (
-        <Divided>
-          <Dropdown
-            variant="row"
-            label="Envelope"
-            placeholder="Choose"
-            searchable
-            value={r.envelope?.id}
-            options={envelopeOptions}
-            onChange={(v) => setOverride((o) => ({ ...o, envelopeId: v }))}
-          />
-        </Divided>
-      )}
-      <Divided>
         <Dropdown
           variant="row"
-          label="Account"
-          value={r.account?.id}
-          options={accountOptions}
-          onChange={(v) => setOverride((o) => ({ ...o, accountId: v }))}
+          label="Envelope"
+          placeholder="Choose"
+          searchable
+          value={r.envelope?.id}
+          options={envelopeOptions}
+          onChange={(v) => setOverride((o) => ({ ...o, envelopeId: v }))}
         />
-      </Divided>
-      <DateRow label="Date" value={r.date} max={day} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} />
-      <Divided>
-        <Dropdown<'out' | 'in'>
-          variant="row"
-          label="Outflow or inflow"
-          value={r.isIncome ? 'in' : 'out'}
-          options={[
-            { value: 'out', label: 'Outflow' },
-            { value: 'in', label: 'Inflow' },
-          ]}
-          onChange={(v) => setOverride((o) => ({ ...o, income: v === 'in' }))}
-        />
-      </Divided>
-      <DetailRow label="Note">
-        <TextInput
-          value={note}
-          onChangeText={setNote}
-          placeholder="Optional"
-          placeholderTextColor={colors.placeholder}
-          accessibilityLabel="Note"
-          returnKeyType="done"
-          style={[typeScale.body, { flex: 1.4, height: ROW_HEIGHT, textAlign: 'right', color: colors.text }]}
-        />
-      </DetailRow>
-      <DetailRow label="Flag for later" last>
-        <Switch
-          value={flagged}
-          onValueChange={(v) => {
-            haptic('selection');
-            dismissKeyboard();
-            setFlagged(v);
-          }}
-          trackColor={{ false: colors.fillPressed, true: colors.orange }}
-          thumbColor="#FFFFFF"
-          accessibilityLabel="Flag for later"
-          style={{ transform: [{ scale: 0.8 }] }}
-        />
-      </DetailRow>
-    </Card>
+      )}
+      <Dropdown
+        variant="row"
+        label="Account"
+        value={r.account?.id}
+        options={accountOptions}
+        onChange={(v) => setOverride((o) => ({ ...o, accountId: v }))}
+      />
+      <DateRow label="Date" value={r.date} max={day} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} last />
+      <Dropdown<'out' | 'in'>
+        variant="row"
+        label="Type"
+        value={r.isIncome ? 'in' : 'out'}
+        options={[
+          { value: 'out', label: 'Outflow' },
+          { value: 'in', label: 'Inflow' },
+        ]}
+        onChange={(v) => setOverride((o) => ({ ...o, income: v === 'in' }))}
+      />
+      <InputRow label="Note" value={note} onChangeText={setNote} placeholder="Add a note" returnKeyType="done" />
+      <FlagRow value={flag} onChange={setFlagColor} />
+    </FormCard>
   );
 
   const slipWarning = r.isSlip && (

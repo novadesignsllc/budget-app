@@ -1,19 +1,18 @@
 import { useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Field } from '@/components/field';
+import { FormCard, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 
-import { EmojiField, EmojiPreview, GroupPicker, targetLabel } from './envelope-settings';
+import { EmojiHeader, GroupPicker, targetLabel } from './envelope-settings';
 import { SheetHeader } from '@/components/sheet-header';
 
 export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
@@ -32,36 +31,33 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   return (
     <SheetScreen>
       <SheetHeader title="New envelope" />
-      <View style={{ flexDirection: 'row', alignItems: duplicate ? 'center' : 'flex-end', gap: spacing.md }}>
-        <EmojiPreview emoji={shown} />
-        <View style={{ flex: 1 }}>
-          <Field
-            label="Name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Groceries"
-            autoFocus
-            returnKeyType="next"
-            submitBehavior="submit"
-            onSubmitEditing={() => targetRef.current?.focus()}
-            error={duplicate ? 'You already have an envelope with this name.' : undefined}
-          />
-        </View>
-      </View>
-      <EmojiField value={shown} onChange={setEmoji} />
-      <GroupPicker group={group} onGroup={setGroup} />
-      <Field
-        ref={targetRef}
-        label={targetLabel(group)}
-        optional
-        value={target}
-        onChangeText={setTarget}
-        placeholder="0.00"
-        keyboardType="decimal-pad"
-        inputMode="decimal"
-      />
+      <EmojiHeader emoji={shown} onChange={setEmoji} />
+      <FormCard>
+        <InputRow
+          label="Name"
+          value={name}
+          onChangeText={setName}
+          placeholder="Groceries"
+          autoFocus
+          autoCapitalize="words"
+          returnKeyType="next"
+          submitBehavior="submit"
+          onSubmitEditing={() => targetRef.current?.focus()}
+        />
+        <GroupPicker group={group} onGroup={setGroup} />
+        <InputRow
+          ref={targetRef}
+          label={targetLabel(group)}
+          value={target}
+          onChangeText={setTarget}
+          placeholder="0.00"
+          keyboardType="decimal-pad"
+          inputMode="decimal"
+          returnKeyType="done"
+        />
+      </FormCard>
       <Button
-        title="Create envelope"
+        title={duplicate ? 'You already have this envelope' : 'Create envelope'}
         size="lg"
         disabled={!name.trim() || duplicate}
         onPress={() => {

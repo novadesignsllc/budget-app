@@ -128,6 +128,16 @@ export const spacing = {
   xxxl: 48,
 } as const;
 
+/** Flag swatches. Saturated enough to read as a small icon in a table row. */
+export const flagHues = {
+  red: '#E5484D',
+  orange: '#F76B15',
+  yellow: '#F5B700',
+  green: '#30A46C',
+  blue: '#0090FF',
+  purple: '#8E4EC6',
+} as const;
+
 export const radius = {
   /** Buttons. */
   button: 8,

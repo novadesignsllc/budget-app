@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Field } from '@/components/field';
+import { AmountHero, FormCard, FormRow } from '@/components/form';
+import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { comparePlan } from '@/domain/debt';
@@ -11,7 +11,6 @@ import { useDebtPlan } from '@/hooks/use-ledger';
 import { payoffLabel } from '@/screens/debt';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
@@ -39,40 +38,36 @@ export function DebtPlan() {
   return (
     <SheetScreen>
       <SheetHeader title="Debt payment" />
-      <Field
-        label="Each month toward debt"
+      <AmountHero
+        caption="Each month"
         value={text}
         onChangeText={setText}
-        placeholder={(minimums / 100).toFixed(2)}
-        keyboardType="decimal-pad"
-        inputMode="decimal"
+        placeholder={formatMoney(minimums)}
         selectTextOnFocus
         autoFocus
         onSubmitEditing={save}
-        error={below ? `That’s less than your minimums. They add up to ${formatMoney(minimums)}.` : undefined}
+        tone={below ? 'negative' : undefined}
       />
-      {preview && (
-        <View style={{ paddingHorizontal: 2, gap: 2 }}>
-          <Text variant="callout">
-            Debt-free by{' '}
-            <Text variant="callout" weight="600" tone={preview.plan.months == null ? 'negative' : 'text'}>
-              {payoffLabel(preview.plan.months)}
-            </Text>
+      <FormCard>
+        <FormRow label="Minimums">
+          <Money cents={minimums} weight="500" tone={below ? 'negative' : 'text'} />
+        </FormRow>
+        <FormRow label="Debt-free by">
+          <Text variant="body" weight="600" tone={!preview || preview.plan.months == null ? 'negative' : 'text'}>
+            {preview ? payoffLabel(preview.plan.months) : '—'}
           </Text>
-          {preview.interestSaved > 0 && (
-            <Text variant="footnote" tone="positive">
-              Saves {formatMoney(preview.interestSaved, { whole: true })} in interest
-              {preview.monthsSaved ? ` and ${preview.monthsSaved} months` : ''} vs paying minimums.
-            </Text>
-          )}
-        </View>
-      )}
+        </FormRow>
+        {preview && preview.interestSaved > 0 && (
+          <FormRow label="Interest saved">
+            <Money cents={preview.interestSaved} whole weight="500" tone="positive" />
+          </FormRow>
+        )}
+      </FormCard>
       <Button
         title={amount !== null && !below ? `Save ${formatMoney(amount, { whole: amount % 100 === 0 })} a month` : 'Save'}
         size="lg"
         disabled={amount === null || below}
         onPress={save}
-        style={{ marginTop: spacing.xs }}
       />
     </SheetScreen>
   );

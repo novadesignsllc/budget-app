@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
-import { Field } from '@/components/field';
+import { AmountHero, FormCard, FormRow } from '@/components/form';
 import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
@@ -12,30 +11,8 @@ import { formatMoney, parseMoney } from '@/domain/money';
 import { canReconcile, reconciledBalance } from '@/domain/reconcile';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
-
-function SummaryRow({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
-  const colors = useColors();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        height: 40,
-        paddingHorizontal: spacing.md,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.hairline,
-      }}
-    >
-      <Text variant="body" tone="textSecondary" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      {children}
-    </View>
-  );
-}
 
 /**
  * The last step of reconciling, when the bank still shows a different number after
@@ -91,31 +68,29 @@ export function Reconcile({ id, ids }: { id: string; ids: string[] }) {
     <SheetScreen>
       <SheetHeader title="Bank shows something else" />
 
-      <Field
-        label="Balance in your bank app"
+      <AmountHero
+        caption="Bank balance"
         value={bankText}
         onChangeText={setBankText}
-        placeholder={(expected / 100).toFixed(2)}
-        keyboardType="numbers-and-punctuation"
-        inputMode="decimal"
+        placeholder={formatMoney(expected)}
+        allowNegative
         autoFocus
       />
 
-      <Card>
-        <SummaryRow label={picked.length ? `Reconciled, with ${picked.length} checked off` : 'Reconciled in the app'}>
+      <FormCard>
+        <FormRow label={picked.length ? `In the app, with ${picked.length} checked` : 'In the app'}>
           <Money cents={expected} weight="500" />
-        </SummaryRow>
-        <SummaryRow label="Difference" last>
+        </FormRow>
+        <FormRow label="Difference">
           {diff === null ? (
             <Text variant="body" tone="textTertiary">
-              Enter the bank balance
+              —
             </Text>
           ) : (
             <Money cents={diff} weight="600" signed={diff !== 0} tone={diff === 0 ? 'positive' : 'auto'} />
           )}
-        </SummaryRow>
-      </Card>
-
+        </FormRow>
+      </FormCard>
 
       <Button
         title={

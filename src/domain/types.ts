@@ -87,6 +87,8 @@ export type Transaction = {
   cleared: boolean;
   /** Flagged for follow-up. A flagged transaction can never be reconciled. */
   flagged?: boolean;
+  /** The flag's color. A flag set before colors existed has none and shows red. */
+  flagColor?: FlagColor;
   /** Matched against the bank statement and locked. Editing it asks first. */
   reconciled?: boolean;
   recurringId?: string;
@@ -134,3 +136,7 @@ export function isCashAccount(account: Pick<Account, 'kind'>): boolean {
 export function isDebtAccount(account: Pick<Account, 'kind'>): boolean {
   return !isCashAccount(account);
 }
+
+/** Flag colors, in picker order. */
+export const FLAG_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'] as const;
+export type FlagColor = (typeof FLAG_COLORS)[number];

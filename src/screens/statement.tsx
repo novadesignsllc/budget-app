@@ -1,9 +1,7 @@
 import { useState } from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
-import { Field } from '@/components/field';
+import { AmountHero, FormCard, FormRow } from '@/components/form';
 import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
@@ -12,7 +10,6 @@ import { formatMoney, parseMoney } from '@/domain/money';
 import { useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
@@ -37,39 +34,33 @@ export function Statement({ id }: { id: string }) {
     <SheetScreen>
       <SheetHeader title={`${account.name} statement`} />
 
-      <Card padded style={{ gap: 2 }}>
-        <Text variant="footnote" tone="textSecondary">
-          The app has you owing
-        </Text>
-        <Money cents={tracked} variant="number" />
-      </Card>
-
-      <Field
-        label="Statement says you owe"
+      <AmountHero
+        caption="Statement balance"
         value={text}
         onChangeText={setText}
-        placeholder={(tracked / 100).toFixed(2)}
-        keyboardType="decimal-pad"
-        inputMode="decimal"
+        placeholder={formatMoney(tracked)}
         autoFocus
       />
 
-      {diff !== null && (
-        <View style={{ paddingHorizontal: 2, gap: spacing.xs }}>
-          <Text variant="callout" tone={diff > 0 ? 'negative' : 'textSecondary'}>
-            {diff === 0
-              ? 'Matches exactly. Nothing to add.'
-              : diff > 0
-                ? `${formatMoney(diff)} gets recorded as interest and fees.`
-                : `The statement is ${formatMoney(-diff)} lower. That gets recorded as a correction.`}
-          </Text>
-          {unusual && (
-            <Text variant="callout" tone="orange">
-              At {((account.apr ?? 0) / 100).toFixed(2)}% APR, a month of interest should be about {formatMoney(expected)}.
+      <FormCard>
+        <FormRow label="In the app">
+          <Money cents={tracked} weight="500" />
+        </FormRow>
+        <FormRow label={diff !== null && diff < 0 ? 'Correction' : 'Interest and fees'}>
+          {diff === null ? (
+            <Text variant="body" tone="textTertiary">
+              —
             </Text>
+          ) : (
+            <Money cents={Math.abs(diff)} weight="600" tone={diff > 0 ? 'negative' : 'text'} />
           )}
-        </View>
-      )}
+        </FormRow>
+        {unusual && (
+          <FormRow label="Usual interest" tone="negative">
+            <Money cents={expected} weight="500" tone="negative" />
+          </FormRow>
+        )}
+      </FormCard>
 
       <Button
         title={diff !== null && diff > 0 ? `Record ${formatMoney(diff)} interest` : 'Save'}

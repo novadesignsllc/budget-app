@@ -1,10 +1,10 @@
 import { useRef, useState } from 'react';
-import { Text as RNText, TextInput, View } from 'react-native';
+import { Pressable, Text as RNText, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
-import { Field, FieldLabel } from '@/components/field';
+import { ActionList, FormCard, FormRow, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
@@ -15,7 +15,7 @@ import { GROUPS, type BudgetGroup } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
 import { router } from 'expo-router';
-import { groupColor, radius, spacing, useColors } from '@/theme';
+import { groupColor, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
@@ -29,37 +29,48 @@ export function GroupPicker({ group, onGroup }: { group: string; onGroup: (group
     label: g,
     dot: groupColor(g),
   }));
-  return <Dropdown label="Group" value={fixGroup(group) as BudgetGroup} options={options} onChange={onGroup} />;
-}
-
-/** The envelope's emoji, large, beside its name. */
-export function EmojiPreview({ emoji }: { emoji: string }) {
-  const colors = useColors();
   return (
-    <View
-      accessibilityLabel={`Emoji ${emoji}`}
-      style={{
-        width: 56,
-        height: 56,
-        borderRadius: radius.menu,
-        borderWidth: 1,
-        borderColor: colors.borderStrong,
-        backgroundColor: colors.surface,
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
-      <RNText style={{ fontSize: 30, lineHeight: 38 }}>{emoji}</RNText>
-    </View>
+    <Dropdown variant="row" label="Group" value={fixGroup(group) as BudgetGroup} options={options} onChange={onGroup} />
   );
 }
 
-/** "Emoji" label over the picker. */
-export function EmojiField({ value, onChange }: { value: string; onChange: (emoji: string) => void }) {
+/** The envelope's emoji, large and centered. Tapping it opens the picker below. */
+export function EmojiHeader({ emoji, onChange }: { emoji: string; onChange: (emoji: string) => void }) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
   return (
-    <View style={{ gap: 5 }}>
-      <FieldLabel label="Emoji" />
-      <EmojiPicker value={value} onChange={onChange} />
+    <View style={{ gap: spacing.md }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Emoji ${emoji}. Change emoji`}
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen((o) => !o)}
+        style={{ alignItems: 'center', gap: spacing.sm }}
+      >
+        {({ pressed }) => (
+          <>
+            <View
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: 18,
+                borderCurve: 'continuous',
+                borderWidth: 1,
+                borderColor: open ? colors.accent : colors.borderStrong,
+                backgroundColor: pressed ? colors.control : colors.surface,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <RNText style={{ fontSize: 34, lineHeight: 42 }}>{emoji}</RNText>
+            </View>
+            <Text variant="footnote" weight="600" tone="accent">
+              {open ? 'Done' : 'Change emoji'}
+            </Text>
+          </>
+        )}
+      </Pressable>
+      {open && <EmojiPicker value={emoji} onChange={onChange} />}
     </View>
   );
 }
@@ -105,34 +116,39 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   return (
     <SheetScreen>
       <SheetHeader title="Edit envelope" />
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md }}>
-        <EmojiPreview emoji={shown} />
-        <View style={{ flex: 1 }}>
-          <Field
+      <EmojiHeader emoji={shown} onChange={setEmoji} />
+      <FormCard>
+        {fixed ? (
+          <FormRow label="Name">
+            <Text variant="body" weight="500" numberOfLines={1}>
+              {envelope.name}
+            </Text>
+          </FormRow>
+        ) : (
+          <InputRow
             label="Name"
             value={name}
             onChangeText={setName}
-            editable={!fixed}
-            returnKeyType={isDebt ? 'done' : 'next'}
+            autoCapitalize="words"
+            returnKeyType="next"
+            submitBehavior="submit"
             onSubmitEditing={() => targetRef.current?.focus()}
-            submitBehavior={isDebt ? 'blurAndSubmit' : 'submit'}
           />
-        </View>
-      </View>
-      <EmojiField value={shown} onChange={setEmoji} />
-      {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
-      {!isDebt && (
-        <Field
-          ref={targetRef}
-          label={targetLabel(group)}
-          optional
-          value={target}
-          onChangeText={setTarget}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          inputMode="decimal"
-        />
-      )}
+        )}
+        {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
+        {!isDebt && (
+          <InputRow
+            ref={targetRef}
+            label={targetLabel(group)}
+            value={target}
+            onChangeText={setTarget}
+            placeholder="0.00"
+            keyboardType="decimal-pad"
+            inputMode="decimal"
+            returnKeyType="done"
+          />
+        )}
+      </FormCard>
       <Button
         title="Save"
         size="lg"
@@ -150,33 +166,33 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
         }}
       />
       {recurringId && (
-        <Button
-          title={envelope.group === 'Subscriptions' ? 'Edit subscription' : 'Edit bill'}
-          variant="secondary"
-          onPress={() => {
-            closeSheet();
-            router.push({ pathname: '/edit-recurring', params: { id: recurringId } });
-          }}
+        <ActionList
+          actions={[
+            {
+              title: envelope.group === 'Subscriptions' ? 'Edit subscription' : 'Edit bill',
+              onPress: () => {
+                closeSheet();
+                router.push({ pathname: '/edit-recurring', params: { id: recurringId } });
+              },
+            },
+          ]}
         />
       )}
       {!fixed && (
-        <View style={{ gap: spacing.xs + 2 }}>
-          <Button
-            title={confirmHide ? 'Tap again to hide' : 'Hide envelope'}
-            variant="destructive"
-            disabled={available !== 0}
-            onPress={() => {
-              if (!confirmHide) return setConfirmHide(true);
-              updateEnvelope(id, { hidden: true });
-              closeSheet();
-            }}
-          />
-          {available !== 0 && (
-            <Text variant="footnote" tone="textSecondary" align="center">
-              Move its money out before hiding it.
-            </Text>
-          )}
-        </View>
+        <ActionList
+          actions={[
+            {
+              title: available !== 0 ? 'Empty it to hide it' : confirmHide ? 'Tap again to hide' : 'Hide envelope',
+              tone: 'negative',
+              disabled: available !== 0,
+              onPress: () => {
+                if (!confirmHide) return setConfirmHide(true);
+                updateEnvelope(id, { hidden: true });
+                closeSheet();
+              },
+            },
+          ]}
+        />
       )}
     </SheetScreen>
   );

@@ -52,13 +52,26 @@ describe('reconciling', () => {
     const s = useStore.getState();
     const a = s.addTransaction({ date: '2026-10-01', accountId: account, amount: 500, kind: 'spend', payee: 'A', envelopeId: groceries });
     const b = s.addTransaction({ date: '2026-10-02', accountId: account, amount: 700, kind: 'spend', payee: 'B', envelopeId: groceries });
-    useStore.getState().setFlag(b, true);
+    useStore.getState().setFlag(b, 'red');
     const skipped = useStore.getState().reconcileTransactions(account, [a, b]);
     expect(skipped).toEqual([b]);
     const [ta, tb] = useStore.getState().transactions;
     expect(isLocked(ta)).toBe(true);
     expect(ta.cleared).toBe(true);
     expect(isLocked(tb)).toBe(false);
+  });
+
+  it('keeps a flag color and clears it', () => {
+    const { account, groceries } = setup();
+    const id = useStore.getState().addTransaction({ date: '2026-10-01', accountId: account, amount: 500, kind: 'spend', payee: 'A', envelopeId: groceries });
+    useStore.getState().setFlag(id, 'blue');
+    let t = useStore.getState().transactions.find((x) => x.id === id)!;
+    expect(t.flagged).toBe(true);
+    expect(t.flagColor).toBe('blue');
+    useStore.getState().setFlag(id, null);
+    t = useStore.getState().transactions.find((x) => x.id === id)!;
+    expect(t.flagged).toBe(false);
+    expect(t.flagColor).toBeUndefined();
   });
 
   it('posts a reconciled adjustment for a leftover difference', () => {

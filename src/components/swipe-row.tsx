@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { createContext, useContext, useRef } from 'react';
 import { View } from 'react-native';
 import ReanimatedSwipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 
@@ -16,9 +16,18 @@ type Action = {
   onTrigger: () => void;
 };
 
-const ACTION_WIDTH = 92;
+const ACTION_WIDTH = 74;
 
-function ActionPanel({ action, align }: { action: Action; align: 'left' | 'right' }) {
+/**
+ * True while the row is being dragged. Native cancels the row's tap when a swipe starts;
+ * web doesn't, so a row inside SwipeRow checks this before acting on a press.
+ */
+const SwipeGuard = createContext<() => boolean>(() => false);
+export function useSwipeGuard() {
+  return useContext(SwipeGuard);
+}
+
+function ActionPanel({ action }: { action: Action }) {
   return (
     <View
       style={{
@@ -26,13 +35,13 @@ function ActionPanel({ action, align }: { action: Action; align: 'left' | 'right
         backgroundColor: action.color,
         alignItems: 'center',
         justifyContent: 'center',
-        gap: spacing.xxs + 1,
+        gap: 1,
         alignSelf: 'stretch',
-        ...(align === 'left' ? {} : {}),
+        paddingHorizontal: spacing.xs,
       }}
     >
-      <Icon sf={action.sf} md={action.md} size={18} color="#FFFFFF" />
-      <Text variant="caption" color="#FFFFFF" numberOfLines={1}>
+      <Icon sf={action.sf} md={action.md} size={13} color="#FFFFFF" weight="bold" />
+      <Text variant="caption" weight="600" color="#FFFFFF" numberOfLines={1}>
         {action.label}
       </Text>
     </View>
@@ -40,39 +49,37 @@ function ActionPanel({ action, align }: { action: Action; align: 'left' | 'right
 }
 
 /**
- * A row that slides to reveal a flat, full-height action, like Mail. Swipe far
+ * A row that slides to reveal a flat, square, full-height action, like Mail. Swipe far
  * enough and the action runs; the row springs back on its own.
  */
-export function SwipeRow({
-  children,
-  left,
-  right,
-}: {
-  children: React.ReactNode;
-  left?: Action;
-  right?: Action;
-}) {
+export function SwipeRow({ children, left, right }: { children: React.ReactNode; left?: Action; right?: Action }) {
   const ref = useRef<SwipeableMethods>(null);
+  const dragged = useRef(false);
   return (
-    <ReanimatedSwipeable
-      ref={ref}
-      friction={1.6}
-      overshootLeft={false}
-      overshootRight={false}
-      leftThreshold={ACTION_WIDTH * 0.7}
-      rightThreshold={ACTION_WIDTH * 0.7}
-      renderLeftActions={left ? () => <ActionPanel action={left} align="left" /> : undefined}
-      renderRightActions={right ? () => <ActionPanel action={right} align="right" /> : undefined}
-      onSwipeableOpen={(direction) => {
-        // "left" means the left actions were revealed (the row moved right).
-        const action = direction === 'left' ? left : right;
-        if (!action) return;
-        haptic('medium');
-        action.onTrigger();
-        ref.current?.close();
-      }}
-    >
-      {children}
-    </ReanimatedSwipeable>
+    <SwipeGuard.Provider value={() => dragged.current}>
+      <ReanimatedSwipeable
+        ref={ref}
+        friction={1.6}
+        overshootLeft={false}
+        overshootRight={false}
+        leftThreshold={ACTION_WIDTH * 0.7}
+        rightThreshold={ACTION_WIDTH * 0.7}
+        renderLeftActions={left ? () => <ActionPanel action={left} /> : undefined}
+        renderRightActions={right ? () => <ActionPanel action={right} /> : undefined}
+        onSwipeableOpenStartDrag={() => (dragged.current = true)}
+        onSwipeableCloseStartDrag={() => (dragged.current = true)}
+        onSwipeableClose={() => (dragged.current = false)}
+        onSwipeableOpen={(direction) => {
+          // The direction the row moved (RNGH 3): moving right reveals the left action.
+          const action = direction === 'right' ? left : right;
+          if (!action) return;
+          haptic('medium');
+          action.onTrigger();
+          ref.current?.close();
+        }}
+      >
+        {children}
+      </ReanimatedSwipeable>
+    </SwipeGuard.Provider>
   );
 }

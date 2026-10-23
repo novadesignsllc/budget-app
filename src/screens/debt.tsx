@@ -1,38 +1,71 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { CardCarousel } from '@/components/card-carousel';
-import { CardFace } from '@/components/card-face';
-import { CardSwatch } from '@/components/card-swatch';
-import { EmptyState } from '@/components/empty-state';
-import { Field } from '@/components/field';
-import { FloatingAction } from '@/components/floating-action';
-import { ICON_INSET, Row, Section } from '@/components/list';
+import { Card, TableHeader } from '@/components/card';
+import { Dropdown } from '@/components/dropdown';
+import { LineChart } from '@/components/line-chart';
+import { MiniCard } from '@/components/mini-card';
 import { Money } from '@/components/money';
-import { ProgressRing } from '@/components/progress-ring';
 import { Screen } from '@/components/screen';
-import { Segmented } from '@/components/segmented';
+import { ActionButton, ScreenActions } from '@/components/screen-actions';
+import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
-import { addMonths, formatMonthYear, today } from '@/domain/dates';
-import { comparePlan, type Strategy } from '@/domain/debt';
-import { formatMoney, parseMoney } from '@/domain/money';
+import { addMonths, fromISODate, today } from '@/domain/dates';
+import { comparePlan, type PlanComparison, type Strategy } from '@/domain/debt';
+import { formatMoney } from '@/domain/money';
 import { monthOf } from '@/domain/months';
+import type { Account } from '@/domain/types';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
-import { radius, spacing, useColors } from '@/theme';
+import { chartColors, spacing, useColors } from '@/theme';
 
+const monthYear = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
+const monthYY = new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' });
+
+/** "Feb 2027", months from now. */
 export function payoffLabel(months: number | null): string {
   if (months === null) return 'Never at this payment';
-  return formatMonthYear(addMonths(today(), months));
+  return monthYear.format(fromISODate(addMonths(today(), months)));
 }
 
-const short = (months: number | null) => {
-  if (months === null) return 'never';
-  const label = payoffLabel(months);
-  return label.replace(/^(\w{3})\w* /, '$1 ');
-};
+/** A debt's chart color: its place in the account list, so it never changes with the strategy. */
+export function debtColor(debts: Account[], id: string): string {
+  const i = Math.max(0, debts.findIndex((d) => d.id === id));
+  return chartColors[i % chartColors.length];
+}
+
+/** Axis labels in dollars: $850, $12k, $2.5k. */
+export function axisMoney(cents: number): string {
+  const dollars = cents / 100;
+  if (dollars >= 1000) return `$${+(dollars / 1000).toFixed(1)}k`;
+  return `$${Math.round(dollars)}`;
+}
+
+/**
+ * A projected balance line that stops where the debt is paid off: one point at zero,
+ * then nothing, so a finished debt doesn't run along the bottom of the chart.
+ */
+export function endAtPayoff(values: number[]): (number | null)[] {
+  const done = values.findIndex((v, i) => i > 0 && v <= 0);
+  return done < 0 ? values : values.map((v, i) => (i <= done ? v : null));
+}
+
+/**
+ * Up to five evenly spaced labels from now to the end: "Now", then years. Falls back to
+ * "Nov ’27" when years would repeat, and uses fewer labels when the line is only a few months.
+ */
+export function horizonTicks(months: number): string[] {
+  if (months < 1) return ['Now'];
+  const count = Math.min(5, months + 1);
+  const dates = Array.from({ length: count - 1 }, (_, i) =>
+    fromISODate(addMonths(today(), Math.round(((i + 1) / (count - 1)) * months))),
+  );
+  const years = dates.map((d) => String(d.getFullYear()));
+  const label = new Set(years).size === years.length ? years : dates.map((d) => monthYY.format(d).replace(' ', ' ’'));
+  return ['Now', ...label];
+}
 
 export function Debt() {
   const colors = useColors();
@@ -41,171 +74,210 @@ export function Debt() {
   const settings = useStore((s) => s.settings);
   const transactions = useStore((s) => s.transactions);
   const updateSettings = useStore((s) => s.updateSettings);
-  const { inputs, minimums, monthly, comparison } = useDebtPlan();
-  const [draft, setDraft] = useState<string | null>(null);
-  const monthlyText = draft ?? (monthly / 100).toFixed(2);
-  const commitMonthly = () => {
-    if (draft !== null) updateSettings({ monthlyDebtPayment: parseMoney(draft) ?? 0 });
-    setDraft(null);
-  };
+  const { inputs, monthly, comparison } = useDebtPlan();
 
   const plans = useMemo(() => {
-    if (!inputs.length) return null;
+    if (!inputs.length || !comparison) return null;
     const other: Strategy = settings.debtStrategy === 'snowball' ? 'avalanche' : 'snowball';
-    return { [settings.debtStrategy]: comparison!, [other]: comparePlan(inputs, monthly, other) } as Record<
+    return { [settings.debtStrategy]: comparison, [other]: comparePlan(inputs, monthly, other) } as Record<
       Strategy,
-      NonNullable<typeof comparison>
+      PlanComparison
     >;
   }, [inputs, monthly, settings.debtStrategy, comparison]);
 
-  const startedWith = debts.reduce((a, d) => a + -d.openingBalance, 0);
-  const paidDown = Math.max(0, startedWith - ledger.debtTotal);
-  const thisMonth = monthOf(today());
+  const strategyName = settings.debtStrategy === 'snowball' ? 'Snowball' : 'Avalanche';
+  const addDebt = () => router.push({ pathname: '/new-account', params: { debt: '1' } });
+
+  const actions = (
+    <ScreenActions>
+      {plans && (
+        <Dropdown<Strategy>
+          variant="compact"
+          value={settings.debtStrategy}
+          onChange={(v) => updateSettings({ debtStrategy: v })}
+          accessibilityLabel={`Strategy: ${strategyName}`}
+          options={[
+            {
+              value: 'snowball',
+              label: 'Snowball',
+              description: 'Smallest balance first. Quick wins.',
+              detail: payoffLabel(plans.snowball.plan.months),
+            },
+            {
+              value: 'avalanche',
+              label: 'Avalanche',
+              description: 'Highest rate first. Least interest.',
+              detail: payoffLabel(plans.avalanche.plan.months),
+            },
+          ]}
+        />
+      )}
+      {debts.length > 0 && (
+        <ActionButton
+          label={`${formatMoney(monthly, { whole: true })}/mo`}
+          accessibilityLabel={`Each month toward debt: ${formatMoney(monthly, { whole: true })}. Change it`}
+          onPress={() => router.push('/debt-plan')}
+          chevron
+        />
+      )}
+      <ActionButton icon={{ sf: 'plus', md: 'add' }} variant="ink" accessibilityLabel="Add a debt" onPress={addDebt} />
+    </ScreenActions>
+  );
 
   if (debts.length === 0) {
     return (
-      <Screen>
-        <EmptyState
-          title="Add what you owe"
-          body="Credit cards, car and student loans, the mortgage. Enter each balance, rate, and minimum, and you’ll see the date you’re debt-free and the interest you save by paying extra."
-          action={<Button title="Add a debt" onPress={() => router.push({ pathname: '/new-account', params: { debt: '1' } })} />}
-        />
-      </Screen>
+      <>
+        <Screen>
+          <ScreenTitle title="Debt" />
+          <Card padded>
+            <Text variant="section">Add what you owe</Text>
+            <Text variant="callout" tone="textSecondary">
+              Credit cards, car and student loans, the mortgage. Enter each balance, rate, and minimum, and you’ll see
+              the month you’re debt-free and the interest you save by paying extra.
+            </Text>
+            <Button title="Add a debt" onPress={addDebt} style={{ alignSelf: 'flex-start' }} />
+          </Card>
+        </Screen>
+        {actions}
+      </>
     );
   }
 
   const plan = comparison?.plan;
   const order = plan?.perDebt ?? [];
-  const accountById = new Map(debts.map((a) => [a.id, a]));
+  const byId = new Map(debts.map((a) => [a.id, a]));
   const ordered = [
-    ...order.map((o) => accountById.get(o.id)).filter((a): a is NonNullable<typeof a> => !!a),
+    ...order.map((o) => byId.get(o.id)).filter((a): a is Account => !!a),
     ...debts.filter((a) => !order.some((o) => o.id === a.id)),
   ];
-  const faceOf = (id: string) => debts.findIndex((d) => d.id === id) + 0;
+  const thisMonth = monthOf(today());
   const slipsThisMonth = (id: string) =>
     transactions.filter((t) => t.accountId === id && t.kind === 'slip' && monthOf(t.date) === thisMonth).length;
+
+  const series = order
+    .map((o) => {
+      const values = plan?.perDebtBalances[o.id];
+      const account = byId.get(o.id);
+      if (!values || !account) return null;
+      return { id: o.id, label: account.name, color: debtColor(debts, o.id), values: endAtPayoff(values) };
+    })
+    .filter((s): s is NonNullable<typeof s> => !!s);
+  const horizon = Math.max(0, ...series.map((s) => s.values.length - 1));
 
   return (
     <>
       <Screen>
-        <View style={{ gap: 2 }}>
-          <Text variant="footnote" weight="500" tone="textSecondary">
-            Total debt
-          </Text>
-          <Money cents={ledger.debtTotal} variant="display" />
-        </View>
+        <ScreenTitle title="Debt" context={`${strategyName} · ${formatMoney(monthly, { whole: true })} a month`} />
 
-        <CardCarousel
-          items={ordered}
-          keyOf={(a) => a.id}
-          dots
-          renderCard={(a, width) => {
-            const owed = -(ledger.balance.get(a.id) ?? 0);
-            const result = order.find((o) => o.id === a.id);
-            const slips = slipsThisMonth(a.id);
-            const first = order[0]?.id === a.id;
-            return (
-              <CardFace
-                face={faceOf(a.id)}
-                width={width}
-                title={a.name}
-                caption={[first ? 'Up next' : null, a.apr ? `${(a.apr / 100).toFixed(2)}%` : null].filter(Boolean).join(' · ')}
-                amount={formatMoney(owed)}
-                footnote={
-                  slips > 0
-                    ? `${slips} ${slips === 1 ? 'slip' : 'slips'} this month`
-                    : owed <= 0
-                      ? 'Paid off'
-                      : result?.payoffMonth
-                        ? `Paid off ${payoffLabel(result.payoffMonth)}`
-                        : undefined
-                }
-                footnoteTone={slips > 0 ? 'bad' : owed <= 0 ? 'good' : 'muted'}
-                onPress={() => router.push(`/debt/${a.id}`)}
-                accessibilityLabel={`${a.name}, ${formatMoney(owed)} owed`}
-              />
-            );
-          }}
-        />
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderRadius: radius.lg,
-            borderCurve: 'continuous',
-            padding: spacing.lg,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.lg,
-          }}
-        >
-          <ProgressRing value={startedWith > 0 ? paidDown / startedWith : 0} color={colors.accent} />
-          <View style={{ flex: 1, gap: spacing.xs }}>
-            <Text variant="headline">
-              {plan?.months == null ? 'Not on track to pay off' : `Debt-free by ${payoffLabel(plan.months)}`}
-            </Text>
-            <Text variant="callout" tone="textSecondary">
-              {comparison && comparison.interestSaved > 0
-                ? `${formatMoney(monthly, { whole: true })} a month saves ${formatMoney(comparison.interestSaved, { whole: true })} in interest${comparison.monthsSaved ? ` and ${comparison.monthsSaved} months` : ''} over minimums.`
-                : `${formatMoney(paidDown, { whole: true })} paid down since you started.`}
-            </Text>
+        <Card padded>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ gap: 2 }}>
+              <Text variant="footnote" tone="textSecondary">
+                Debt-free by
+              </Text>
+              <Text variant="number" tone={plan && plan.months == null ? 'negative' : 'text'}>
+                {plan ? (plan.months == null ? 'Never' : payoffLabel(plan.months)) : 'Now'}
+              </Text>
+            </View>
+            <View style={{ gap: 2, alignItems: 'flex-end' }}>
+              <Text variant="footnote" tone="textSecondary">
+                Owed now
+              </Text>
+              <Money cents={ledger.debtTotal} whole weight="600" style={{ fontSize: 15, lineHeight: 19 }} />
+              {comparison && comparison.interestSaved > 0 ? (
+                <Text variant="footnote" tone="positive">
+                  Saves {formatMoney(comparison.interestSaved, { whole: true })} vs minimums
+                </Text>
+              ) : plan && plan.months == null ? (
+                <Text variant="footnote" tone="negative">
+                  Payments don’t cover the interest
+                </Text>
+              ) : null}
+            </View>
           </View>
-        </View>
-
-        <View style={{ gap: spacing.md }}>
-          {plans && (
-            <Segmented
-              value={settings.debtStrategy}
-              onChange={(v) => updateSettings({ debtStrategy: v })}
-              options={[
-                { value: 'snowball', label: `Snowball · ${short(plans.snowball.plan.months)}` },
-                { value: 'avalanche', label: `Avalanche · ${short(plans.avalanche.plan.months)}` },
-              ]}
+          {series.length > 0 && horizon > 0 && (
+            <LineChart
+              height={150}
+              series={series}
+              xTicks={horizonTicks(horizon)}
+              pointLabel={(i) => (i === 0 ? 'Now' : payoffLabel(i))}
+              formatValue={(v) => formatMoney(v, { whole: true })}
+              formatAxis={axisMoney}
+              accessibilityLabel={`Projected balances: ${order
+                .map((o) => `${byId.get(o.id)?.name ?? 'Debt'} paid off ${payoffLabel(o.payoffMonth)}`)
+                .join(', ')}.`}
             />
           )}
-          <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-            {settings.debtStrategy === 'snowball'
-              ? 'Smallest balance first. Quick wins keep you going.'
-              : 'Highest interest rate first. Costs the least overall.'}
-          </Text>
-          <Field
-            label="Each month toward debt"
-            hint={`Minimums add up to ${formatMoney(minimums)}. The rest goes to the debt that’s up next.`}
-            value={monthlyText}
-            onChangeText={setDraft}
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-            onBlur={commitMonthly}
-            onSubmitEditing={commitMonthly}
-          />
-        </View>
+        </Card>
 
-        <Section title="Payoff order" inset={ICON_INSET}>
+        <Card>
+          <TableHeader
+            columns={[
+              { label: 'Payoff order' },
+              { label: 'APR', width: 50, align: 'right' },
+              { label: 'Owed', width: 70, align: 'right' },
+            ]}
+          />
           {ordered.map((a, i) => {
             const owed = -(ledger.balance.get(a.id) ?? 0);
             const result = order.find((o) => o.id === a.id);
             const slips = slipsThisMonth(a.id);
+            const when = result ? payoffLabel(result.payoffMonth) : null;
+            const subtitle =
+              owed <= 0
+                ? 'Paid off'
+                : slips > 0
+                  ? `${slips} ${slips === 1 ? 'slip' : 'slips'} this month${when ? ` · ${when}` : ''}`
+                  : i === 0 && result
+                    ? `Up next · paid off ${when}`
+                    : result?.payoffMonth
+                      ? `Paid off ${when}`
+                      : 'Not paid off at this payment';
             return (
-              <Row
+              <Pressable
                 key={a.id}
-                href={`/debt/${a.id}`}
-                leading={<CardSwatch face={faceOf(a.id)} />}
-                title={a.name}
-                subtitle={[
-                  a.apr ? `${(a.apr / 100).toFixed(2)}%` : 'No rate set',
-                  slips ? `${slips} ${slips === 1 ? 'slip' : 'slips'} this month` : result?.payoffMonth ? payoffLabel(result.payoffMonth) : owed <= 0 ? 'Paid off' : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')}
-                subtitleTone={slips ? 'negative' : 'textSecondary'}
-                trailing={<Money cents={owed} weight="600" whole={owed >= 100000} />}
-                accessibilityLabel={`${i + 1}. ${a.name}`}
-              />
+                accessibilityRole="button"
+                accessibilityLabel={`${i + 1}. ${a.name}, ${formatMoney(owed)} owed. ${subtitle}`}
+                onPress={() => router.push(`/debt/${a.id}`)}
+                style={({ pressed }) => ({
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: 9,
+                  borderBottomWidth: i < ordered.length - 1 ? 1 : 0,
+                  borderBottomColor: colors.hairline,
+                  backgroundColor: pressed ? colors.control : colors.surface,
+                })}
+              >
+                <MiniCard color={debtColor(debts, a.id)} width={30} />
+                <View style={{ flex: 1, minWidth: 0, marginLeft: 2 }}>
+                  <Text variant="body" weight="600" numberOfLines={1}>
+                    {a.name}
+                  </Text>
+                  <Text
+                    variant="footnote"
+                    tone={slips > 0 ? 'negative' : owed <= 0 ? 'positive' : 'textSecondary'}
+                    numberOfLines={1}
+                  >
+                    {subtitle}
+                  </Text>
+                </View>
+                <Text
+                  variant="row"
+                  align="right"
+                  tone={a.apr ? 'textSecondary' : 'textTertiary'}
+                  style={{ width: 50, fontVariant: ['tabular-nums'] }}
+                >
+                  {a.apr ? `${(a.apr / 100).toFixed(2)}%` : 'Not set'}
+                </Text>
+                <Money cents={owed} whole={owed >= 10000} weight="600" style={{ width: 70, textAlign: 'right' }} />
+              </Pressable>
             );
           })}
-        </Section>
+        </Card>
       </Screen>
-      <FloatingAction label="Add debt" onPress={() => router.push({ pathname: '/new-account', params: { debt: '1' } })} />
+      {actions}
     </>
   );
 }

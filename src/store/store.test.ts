@@ -84,3 +84,19 @@ describe('targets', () => {
     expect(targetFor(e, '2026-11')).toBe(20000);
   });
 });
+
+describe('editing transactions', () => {
+  it('moves spending to a card as a slip and back, keeping its id', () => {
+    const { account, groceries } = setup();
+    const s = useStore.getState();
+    const card = s.addAccount({ name: 'Visa', kind: 'credit_card', balance: -20000 });
+    const id = s.addTransaction({ date: '2026-10-01', accountId: account, amount: 500, kind: 'spend', payee: 'Kroger', envelopeId: groceries });
+    useStore.getState().reconcileTransactions(account, [id]);
+    useStore.getState().updateTransaction(id, { accountId: card });
+    let t = useStore.getState().transactions.find((x) => x.id === id)!;
+    expect(t).toMatchObject({ accountId: card, kind: 'slip', amount: -500, reconciled: false });
+    useStore.getState().updateTransaction(id, { accountId: account });
+    t = useStore.getState().transactions.find((x) => x.id === id)!;
+    expect(t).toMatchObject({ accountId: account, kind: 'spend' });
+  });
+});

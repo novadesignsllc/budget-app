@@ -23,9 +23,9 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `src/store/`: the Zustand store. It isn't persisted itself; Firestore's on-device cache is the persistence. `sample-data.ts` is dev-only.
 - `src/backend/`: Firebase behind one interface. `index.ts` is React Native Firebase (iPhone), `index.web.ts` is the JS SDK with the IndexedDB cache (desktop), and `fake.ts` is an in-memory stand-in for tests and `EXPO_PUBLIC_FAKE_BACKEND=1`.
 - `src/sync/`: `engine.ts` diffs the store against Firestore and writes only what changed, applies snapshots from other devices, and holds writes back until everything has loaded once. `status.ts` drives the bottom-left sync pill. `session.ts` follows auth.
-- `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, and Recurring. Root-level routes are form sheets.
+- `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, Recurring, and Settings. Root-level routes are form sheets.
 - `src/screens/`: screen bodies. `src/components/`: shared UI.
-- `components/app-tabs.tsx` uses native tabs with the quick-add bottom accessory. `app-tabs.web.tsx` shows bottom tabs on narrow web and a sidebar on desktop.
+- `components/app-tabs.tsx` is one headless tab layout for every platform: on phones a bottom dock (quick-add bar plus a scrolling text tab strip with the Settings gear pinned right), and on desktop web a sidebar. Screen actions (search, add, month, strategy) sit bottom right in `ScreenActions`.
 
 ## Sync rules
 
@@ -41,7 +41,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `npx expo start --web`: desktop and web preview against the real Firebase
 - `EXPO_PUBLIC_FAKE_BACKEND=1 npx expo start --web`: same, with the fake backend (any email and password signs in; `window.__fakeBackend.setOnline(false)` simulates no signal)
 - `npx expo start`: the iPhone dev build connects to this. Expo Go doesn't work: native Firebase needs a dev build.
-- `eas update --channel production -m "..."`: ship JS and design changes to the TestFlight app over the air. Adding a native module changes the runtime fingerprint, which needs a new build instead.
+- `eas update --channel production --environment production --platform ios --non-interactive -m "..."`: ship JS and design changes to the TestFlight app over the air. Adding a native module changes the runtime fingerprint, which needs a new build instead.
 - `eas build -p ios --profile production --auto-submit`: build and send to TestFlight
 - `eas build -p ios --profile development`: dev build for live reloading. Register the phone first with `eas device:create`.
 

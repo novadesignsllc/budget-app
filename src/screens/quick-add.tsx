@@ -1,32 +1,35 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { Pressable, Switch, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { Button } from '@/components/button';
-import { Chip } from '@/components/chip';
+import { Card } from '@/components/card';
 import { DateField } from '@/components/date-field';
+import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
-import { addDays, formatDay, today } from '@/domain/dates';
+import { addDays, formatShortDate, today } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import { payeeMemory } from '@/domain/payees';
+import { findPayee, payeeMemory } from '@/domain/payees';
 import { parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type ISODate } from '@/domain/types';
-import { useAccounts } from '@/hooks/use-ledger';
+import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useVoiceEntry } from '@/hooks/use-voice-entry';
+import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { radius, spacing, type as typeScale, useColors } from '@/theme';
+import { groupColor, radius, spacing, type as typeScale, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
-type Picker = 'envelope' | 'account' | 'date' | null;
 type Override = { envelopeId?: string; accountId?: string; date?: ISODate; income?: boolean };
+type DateChoice = '0' | '1' | '2' | 'pick';
 
 const BARS = [0.45, 0.8, 1, 0.65, 0.9, 0.5, 0.75];
+const ROW_HEIGHT = 40;
 
 function Bar({ volume, weight, color }: { volume: SharedValue<number>; weight: number; color: string }) {
   const reduceMotion = useReducedMotion();
@@ -36,14 +39,49 @@ function Bar({ volume, weight, color }: { volume: SharedValue<number>; weight: n
   return <Animated.View style={[{ width: 4, borderRadius: 2, backgroundColor: color }, style]} />;
 }
 
+/** A plain row in the details card: label on the left, a control on the right. */
+function DetailRow({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
+  const colors = useColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        minHeight: ROW_HEIGHT,
+        paddingHorizontal: spacing.md,
+        gap: spacing.sm,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: 'rgba(20,40,80,0.07)',
+        backgroundColor: colors.surface,
+      }}
+    >
+      <Text variant="body" tone="textSecondary" style={{ flex: 1 }}>
+        {label}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
+/** Wraps a dropdown row with the card's row divider. */
+function Divided({ children, last }: { children: React.ReactNode; last?: boolean }) {
+  return (
+    <View style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: 'rgba(20,40,80,0.07)' }}>{children}</View>
+  );
+}
+
 export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const colors = useColors();
   const inputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
   const [mode, setMode] = useState<'voice' | 'type'>(voice ? 'voice' : 'type');
-  const [picker, setPicker] = useState<Picker>(null);
   const [override, setOverride] = useState<Override>({});
+  const [note, setNote] = useState('');
+  const [flagged, setFlagged] = useState(false);
+  const [pickingDate, setPickingDate] = useState(false);
 
+  const ledger = useLedger();
   const envelopes = useStore((s) => s.envelopes);
   const payees = useStore((s) => s.payees);
   const legacyMemory = useStore((s) => s.merchantMemory);
@@ -54,6 +92,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   );
   const addTransaction = useStore((s) => s.addTransaction);
   const deleteTransaction = useStore((s) => s.deleteTransaction);
+  const setFlag = useStore((s) => s.setFlag);
   const showToast = useToast((s) => s.show);
   const { all: accounts, cash } = useAccounts();
 
@@ -88,10 +127,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const save = useCallback(
     (p: ParsedEntry, o: Override) => {
       const x = resolve(p, o);
-      if (!x.ready || !x.account || !p.amount) {
-        if (p.amount && !x.envelope && !x.isIncome) setPicker('envelope');
-        return false;
-      }
+      if (!x.ready || !x.account || !p.amount) return false;
       const id = addTransaction({
         date: x.date,
         accountId: x.account.id,
@@ -99,7 +135,9 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
         kind: x.kind,
         payee: p.payee,
         envelopeId: x.envelope?.id,
+        memo: note.trim() || undefined,
       });
+      if (flagged) setFlag(id, true);
       haptic(x.isSlip ? 'warning' : 'success');
       showToast({
         message: `Added ${p.payee} · ${formatMoney(p.amount)}`,
@@ -109,7 +147,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
       closeSheet();
       return true;
     },
-    [resolve, addTransaction, deleteTransaction, showToast],
+    [resolve, addTransaction, deleteTransaction, setFlag, showToast, note, flagged],
   );
 
   const hints = useMemo(
@@ -139,21 +177,79 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     setTimeout(() => inputRef.current?.focus(), 50);
   };
 
+  const envelopeOptions = useMemo<DropdownOption<string>[]>(
+    () =>
+      envelopes
+        .filter((e) => !e.hidden && !e.debtAccountId)
+        .sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order)
+        .map((e) => {
+          const left = ledger.available.get(e.id) ?? 0;
+          return {
+            value: e.id,
+            label: e.name,
+            dot: groupColor(e.group),
+            section: e.group,
+            detail: left < 0 ? formatMoney(left) : `${formatMoney(left)} left`,
+            tone: left < 0 ? 'negative' : undefined,
+          };
+        }),
+    [envelopes, ledger],
+  );
+
+  const accountOptions = useMemo<DropdownOption<string>[]>(
+    () => [
+      ...accounts.filter(isCashAccount).map((a) => ({
+        value: a.id,
+        label: a.name,
+        face: a.order,
+        section: 'Accounts',
+        detail: formatMoney(ledger.balance.get(a.id) ?? 0),
+      })),
+      ...accounts
+        .filter((a) => !isCashAccount(a))
+        .map((a) => ({
+          value: a.id,
+          label: a.name,
+          face: a.order,
+          section: 'Cards · logged as a slip',
+          tone: 'negative' as const,
+        })),
+    ],
+    [accounts, ledger],
+  );
+
   if (cash.length === 0) {
     return (
       <SheetScreen>
-        <Text variant="title">Add an account first</Text>
-        <Text variant="body" tone="textSecondary">
+        <SheetHeader title="Add an account first" />
+        <Text variant="body" tone="textSecondary" align="center">
           Transactions come out of a checking, savings, or cash account. Add the one your debit card uses.
         </Text>
-        <Button title="Add account" onPress={() => router.replace('/new-account')} />
+        <Button title="Add account" size="lg" onPress={() => router.replace('/new-account')} />
       </SheetScreen>
     );
   }
 
-  const spendable = envelopes
-    .filter((e) => !e.hidden && !e.debtAccountId)
-    .sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order);
+  const day = today();
+  const offset = (['0', '1', '2'] as const).find((o) => addDays(day, -Number(o)) === r.date);
+  const dateChoice: DateChoice = offset ?? 'pick';
+  const dateOptions: DropdownOption<DateChoice>[] = [
+    { value: '0', label: 'Today' },
+    { value: '1', label: 'Yesterday' },
+    { value: '2', label: '2 days ago' },
+    { value: 'pick', label: offset ? 'Pick a date…' : formatShortDate(r.date) },
+  ];
+
+  const knownPayee = parsed.payee ? findPayee(payees, parsed.payee) : undefined;
+  const hint = r.isIncome
+    ? 'Income goes to Ready to assign.'
+    : override.envelopeId
+      ? null
+      : knownPayee?.envelopeId && r.envelope
+        ? `${knownPayee.name} is set to ${r.envelope.name} in your payee list.`
+        : parsed.envelopeSource === 'guessed' && r.envelope
+          ? 'Guessed from the name. Change it and next time it’ll remember.'
+          : null;
 
   const saveLabel = !parsed.amount
     ? 'Type an amount'
@@ -163,62 +259,124 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
         ? `Add ${formatMoney(parsed.amount)} income`
         : `Add ${formatMoney(parsed.amount)} from ${r.envelope!.name}`;
 
-  const preview = (
-    <View style={{ backgroundColor: colors.fill, borderRadius: radius.lg, padding: spacing.lg - 2, gap: spacing.md }}>
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md }}>
-        <Text variant="headline" numberOfLines={1} style={{ flex: 1 }} tone={parsed.payee ? 'text' : 'placeholder'}>
-          {parsed.payee || 'Merchant'}
+  const summary = (
+    <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: spacing.md, paddingHorizontal: 2 }}>
+      <Text variant="section" numberOfLines={1} style={{ flex: 1 }} tone={parsed.payee ? (r.isSlip ? 'negative' : 'text') : 'placeholder'}>
+        {parsed.payee || 'Payee'}
+      </Text>
+      {parsed.amount ? (
+        <Money
+          cents={r.isIncome ? parsed.amount : -parsed.amount}
+          variant="number"
+          signed
+          tone={r.isIncome ? 'positive' : r.isSlip ? 'negative' : 'text'}
+        />
+      ) : (
+        <Text variant="number" tone="placeholder">
+          $0.00
         </Text>
-        {parsed.amount ? (
-          <Money
-            cents={r.isIncome ? parsed.amount : -parsed.amount}
-            variant="title"
-            weight="700"
-            signed
-            tone={r.isIncome ? 'positive' : r.isSlip ? 'negative' : 'text'}
-          />
-        ) : (
-          <Text variant="title" tone="placeholder">
-            $0.00
-          </Text>
-        )}
-      </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 }}>
-        {!r.isIncome && (
-          <Chip
-            label={r.envelope?.name ?? 'Envelope'}
-            tone={r.envelope ? 'default' : 'muted'}
-            selected={picker === 'envelope'}
-            onPress={() => setPicker(picker === 'envelope' ? null : 'envelope')}
-            accessibilityLabel={`Envelope: ${r.envelope?.name ?? 'none'}`}
-          />
-        )}
-        <Chip
-          label={r.account?.name ?? 'Account'}
-          tone={r.isSlip ? 'negative' : 'default'}
-          selected={picker === 'account'}
-          onPress={() => setPicker(picker === 'account' ? null : 'account')}
-          accessibilityLabel={`Account: ${r.account?.name ?? 'none'}`}
-        />
-        <Chip
-          label={formatDay(r.date)}
-          selected={picker === 'date'}
-          onPress={() => setPicker(picker === 'date' ? null : 'date')}
-          accessibilityLabel={`Date: ${formatDay(r.date)}`}
-        />
-        <Chip
-          label={r.isIncome ? 'Income' : 'Expense'}
-          onPress={() => setOverride((o) => ({ ...o, income: !r.isIncome }))}
-          accessibilityLabel={r.isIncome ? 'Income. Tap to make it an expense' : 'Expense. Tap to make it income'}
-        />
-      </View>
+      )}
     </View>
+  );
+
+  const details = (
+    <Card style={{ borderRadius: radius.menu }}>
+      {!r.isIncome && (
+        <Divided>
+          <Dropdown
+            variant="row"
+            label="Envelope"
+            placeholder="Choose"
+            searchable
+            value={r.envelope?.id}
+            options={envelopeOptions}
+            onChange={(v) => setOverride((o) => ({ ...o, envelopeId: v }))}
+          />
+        </Divided>
+      )}
+      <Divided>
+        <Dropdown
+          variant="row"
+          label="Account"
+          value={r.account?.id}
+          options={accountOptions}
+          onChange={(v) => setOverride((o) => ({ ...o, accountId: v }))}
+        />
+      </Divided>
+      <Divided>
+        <Dropdown<DateChoice>
+          variant="row"
+          label="Date"
+          value={dateChoice}
+          options={dateOptions}
+          onChange={(v) => {
+            if (v === 'pick') return setPickingDate(true);
+            setPickingDate(false);
+            setOverride((o) => ({ ...o, date: addDays(day, -Number(v)) }));
+          }}
+        />
+      </Divided>
+      {(pickingDate || dateChoice === 'pick') && (
+        <View style={{ paddingHorizontal: spacing.md, paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: 'rgba(20,40,80,0.07)' }}>
+          <DateField label="Pick a date" value={r.date} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} />
+        </View>
+      )}
+      <Divided>
+        <Dropdown<'out' | 'in'>
+          variant="row"
+          label="Outflow or inflow"
+          value={r.isIncome ? 'in' : 'out'}
+          options={[
+            { value: 'out', label: 'Outflow', description: 'Spending, out of an envelope' },
+            { value: 'in', label: 'Inflow', description: 'Income, into Ready to assign' },
+          ]}
+          onChange={(v) => setOverride((o) => ({ ...o, income: v === 'in' }))}
+        />
+      </Divided>
+      <DetailRow label="Note">
+        <TextInput
+          value={note}
+          onChangeText={setNote}
+          placeholder="Optional"
+          placeholderTextColor={colors.placeholder}
+          accessibilityLabel="Note"
+          returnKeyType="done"
+          style={[typeScale.body, { flex: 1.4, height: ROW_HEIGHT, textAlign: 'right', color: colors.text }]}
+        />
+      </DetailRow>
+      <DetailRow label="Flag for later" last>
+        <Switch
+          value={flagged}
+          onValueChange={(v) => {
+            haptic('selection');
+            setFlagged(v);
+          }}
+          trackColor={{ false: colors.fillPressed, true: colors.orange }}
+          thumbColor="#FFFFFF"
+          accessibilityLabel="Flag for later"
+          style={{ transform: [{ scale: 0.8 }] }}
+        />
+      </DetailRow>
+    </Card>
+  );
+
+  const slipWarning = r.isSlip && (
+    <Card tone="slip" style={{ paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md - 1, gap: 2 }}>
+      <Text variant="headline" tone="negative">
+        This goes on {r.account!.name}
+      </Text>
+      <Text variant="callout" tone="negative">
+        Card spending is a slip. It still comes out of the envelope, and the cash gets set aside to pay the card back.
+        It’ll be marked red.
+      </Text>
+    </Card>
   );
 
   if (mode === 'voice') {
     return (
-      <SheetScreen contentContainerStyle={{ gap: spacing.lg }}>
-        <View style={{ alignItems: 'center', gap: spacing.md, paddingTop: spacing.sm }}>
+      <SheetScreen contentContainerStyle={{ gap: spacing.md + 2 }}>
+        <SheetHeader title="New transaction" onClose={() => (voiceEntry.abort(), closeSheet())} />
+        <View style={{ alignItems: 'center', gap: spacing.md, paddingTop: spacing.xs }}>
           {voiceEntry.error ? (
             <Icon sf="mic.slash" md="mic_off" size={28} color={colors.textSecondary} />
           ) : (
@@ -228,7 +386,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
               style={{ flexDirection: 'row', alignItems: 'center', gap: 4, height: 40 }}
             >
               {BARS.map((w, i) => (
-                <Bar key={i} volume={voiceEntry.volume} weight={w} color={colors.positive} />
+                <Bar key={i} volume={voiceEntry.volume} weight={w} color={colors.accent} />
               ))}
             </View>
           )}
@@ -239,7 +397,13 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             {text || 'Best Buy 47.27'}
           </Text>
         </View>
-        {text ? preview : null}
+        {text ? (
+          <>
+            {summary}
+            {details}
+            {slipWarning}
+          </>
+        ) : null}
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <Button title="Type instead" variant="secondary" size="lg" style={{ flex: 1 }} onPress={typeInstead} />
           {voiceEntry.error ? (
@@ -261,13 +425,17 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   }
 
   return (
-    <SheetScreen contentContainerStyle={{ gap: spacing.md + 2 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+    <SheetScreen contentContainerStyle={{ gap: spacing.md }}>
+      <SheetHeader title="New transaction" />
+
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         <TextInput
           ref={inputRef}
           autoFocus={!voice}
           value={text}
           onChangeText={setText}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder="McDonald’s 10.99"
           placeholderTextColor={colors.placeholder}
           returnKeyType="done"
@@ -276,15 +444,19 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
           autoCorrect={false}
           accessibilityLabel="Describe the transaction"
           style={[
-            typeScale.title,
+            typeScale.body,
             {
               flex: 1,
+              fontSize: 16,
+              fontWeight: '600',
               color: colors.text,
-              backgroundColor: colors.fill,
-              borderRadius: radius.md,
+              backgroundColor: colors.surface,
+              borderWidth: 1,
+              borderColor: focused ? colors.accent : colors.borderStrong,
+              borderRadius: radius.control,
               borderCurve: 'continuous',
-              paddingHorizontal: spacing.lg - 2,
-              height: 50,
+              paddingHorizontal: spacing.md,
+              height: 46,
             },
           ]}
         />
@@ -296,110 +468,38 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             void voiceEntry.start();
           }}
           style={({ pressed }) => ({
-            width: 50,
-            height: 50,
-            borderRadius: radius.md,
-            backgroundColor: colors.fill,
+            width: 46,
+            height: 46,
+            borderRadius: radius.control,
+            borderCurve: 'continuous',
+            borderWidth: 1,
+            borderColor: colors.borderStrong,
+            backgroundColor: pressed ? colors.control : colors.surface,
             alignItems: 'center',
             justifyContent: 'center',
-            opacity: pressed ? 0.6 : 1,
           })}
         >
-          <Icon sf="mic.fill" md="mic" size={18} />
+          <Icon sf="mic" md="mic" size={17} color={colors.text} />
         </Pressable>
       </View>
 
-      {preview}
+      {summary}
+      {details}
+      {slipWarning}
 
-      {parsed.envelopeSource === 'guessed' && !override.envelopeId && r.envelope && !r.isIncome && (
-        <Text variant="footnote" tone="textSecondary">
-          Guessed from the name. Tap the envelope to change it, and next time it’ll remember.
+      {hint && (
+        <Text variant="footnote" tone="textSecondary" align="center">
+          {hint}
         </Text>
-      )}
-
-      {r.isSlip && (
-        <View style={{ backgroundColor: colors.negativeSoft, borderRadius: radius.md, padding: spacing.md + 2, gap: 2 }}>
-          <Text variant="headline" tone="negative">
-            This goes on {r.account!.name}
-          </Text>
-          <Text variant="callout" tone="negative">
-            Card spending is a slip. It still comes out of the envelope, and the cash gets set aside to pay the card
-            back. It’ll be marked red.
-          </Text>
-        </View>
       )}
 
       <Button
         title={saveLabel}
         size="lg"
         variant={r.isSlip ? 'destructive' : 'primary'}
-        disabled={!parsed.amount}
+        disabled={!r.ready}
         onPress={() => save(parsed, override)}
       />
-
-      {picker === 'envelope' && (
-        <PickerGrid>
-          {spendable.length === 0 && (
-            <Text variant="callout" tone="textSecondary">
-              No envelopes yet. Make some on the Budget tab.
-            </Text>
-          )}
-          {spendable.map((e) => (
-            <Chip
-              key={e.id}
-              label={e.name}
-              selected={e.id === r.envelope?.id}
-              onPress={() => {
-                setOverride((o) => ({ ...o, envelopeId: e.id }));
-                setPicker(null);
-              }}
-            />
-          ))}
-        </PickerGrid>
-      )}
-
-      {picker === 'account' && (
-        <PickerGrid>
-          {accounts.map((a) => (
-            <Chip
-              key={a.id}
-              label={a.name}
-              selected={a.id === r.account?.id}
-              tone={isCashAccount(a) ? 'default' : 'negative'}
-              onPress={() => {
-                setOverride((o) => ({ ...o, accountId: a.id }));
-                setPicker(null);
-              }}
-            />
-          ))}
-        </PickerGrid>
-      )}
-
-      {picker === 'date' && (
-        <View style={{ gap: spacing.md }}>
-          <PickerGrid>
-            {[0, -1, -2].map((offset) => {
-              const d = addDays(today(), offset);
-              return (
-                <Chip
-                  key={d}
-                  label={formatDay(d)}
-                  selected={d === r.date}
-                  onPress={() => {
-                    setOverride((o) => ({ ...o, date: d }));
-                    setPicker(null);
-                  }}
-                />
-              );
-            })}
-          </PickerGrid>
-          <DateField label="Other date" value={r.date} onChange={(d) => setOverride((o) => ({ ...o, date: d }))} />
-        </View>
-      )}
     </SheetScreen>
   );
-}
-
-function PickerGrid({ children }: { children: React.ReactNode }) {
-  return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 }}>{children}</View>;
 }

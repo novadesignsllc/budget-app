@@ -84,20 +84,35 @@ export function LineChart({
     [series, width, max, height],
   );
 
-  // Start labels, nudged apart so they never overlap.
+  // Labels go at the start of each line, nudged apart so they never overlap. A line that
+  // starts near the bottom and ends early (a small debt) is labeled just past its end dot
+  // instead, where it has room.
   const labels = useMemo(() => {
     if (!directLabels) return [];
-    const items = series
-      .map((s) => {
-        const first = s.values.findIndex((v) => v !== null);
-        return first < 0 ? null : { id: s.id, label: s.label, y: y(s.values[first]!) - 5 };
-      })
-      .filter((l): l is { id: string; label: string; y: number } => !!l)
-      .sort((a, b) => a.y - b.y);
-    for (let i = 1; i < items.length; i++) {
-      if (items[i].y - items[i - 1].y < 11) items[i].y = items[i - 1].y + 11;
+    type Label = { id: string; label: string; x: number; y: number; anchor: 'start' | 'end' };
+    const start: Label[] = [];
+    const end: Label[] = [];
+    series.forEach((s) => {
+      const first = s.values.findIndex((v) => v !== null);
+      if (first < 0) return;
+      let last = first;
+      s.values.forEach((v, i) => {
+        if (v !== null) last = i;
+      });
+      const startY = y(s.values[first]!);
+      if (last < count - 1 && startY > PAD_TOP + plotH * 0.7) {
+        const ex = x(last);
+        const room = ex + 7 + s.label.length * 5 < width;
+        end.push({ id: s.id, label: s.label, x: room ? ex + 7 : ex - 7, y: y(s.values[last]!) - 7, anchor: room ? 'start' : 'end' });
+      } else {
+        start.push({ id: s.id, label: s.label, x: 4, y: startY - 5, anchor: 'start' });
+      }
+    });
+    start.sort((a, b) => a.y - b.y);
+    for (let i = 1; i < start.length; i++) {
+      if (start[i].y - start[i - 1].y < 11) start[i].y = start[i - 1].y + 11;
     }
-    return items.map((l) => ({ ...l, y: Math.max(9, Math.min(height - 4, l.y)) }));
+    return [...start, ...end].map((l) => ({ ...l, y: Math.max(9, Math.min(height - 4, l.y)) }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [series, width, max, height, directLabels]);
 
@@ -160,7 +175,7 @@ export function LineChart({
                   ) : null,
                 )}
               {labels.map((l) => (
-                <SvgText key={l.id} x={4} y={l.y} fill={colors.textSecondary} fontSize={9} fontFamily={fontFamily}>
+                <SvgText key={l.id} x={l.x} y={l.y} fill={colors.textSecondary} fontSize={9} fontFamily={fontFamily} textAnchor={l.anchor}>
                   {l.label}
                 </SvgText>
               ))}

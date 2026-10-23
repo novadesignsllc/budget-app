@@ -1,35 +1,39 @@
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
+import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
-import { Select, type SelectOption } from '@/components/select';
 import { Text } from '@/components/text';
 import { parseMoney } from '@/domain/money';
 import type { AccountKind, CashKind, DebtKind } from '@/domain/types';
+import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
+import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
 type Family = 'spending' | 'debt';
 
-const FAMILIES: SelectOption<Family>[] = [
-  { value: 'spending', label: 'Spending account' },
-  { value: 'debt', label: 'Debt account' },
+const FAMILIES: DropdownOption<Family>[] = [
+  { value: 'spending', label: 'Spending account', description: 'Checking, savings, or cash' },
+  { value: 'debt', label: 'Debt account', description: 'A card or loan you’re paying off' },
 ];
-const SPENDING: SelectOption<CashKind>[] = [
-  { value: 'checking', label: 'Checking' },
-  { value: 'savings', label: 'Savings' },
-  { value: 'cash', label: 'Cash' },
+const SPENDING: DropdownOption<CashKind>[] = [
+  { value: 'checking', label: 'Checking', description: 'Where your debit card spends from' },
+  { value: 'savings', label: 'Savings', description: 'Counts toward Ready to assign' },
+  { value: 'cash', label: 'Cash', description: 'Money in your wallet' },
 ];
-const DEBT: SelectOption<DebtKind>[] = [
-  { value: 'credit_card', label: 'Credit card' },
-  { value: 'auto_loan', label: 'Car loan' },
-  { value: 'student_loan', label: 'Student loan' },
-  { value: 'mortgage', label: 'Mortgage' },
-  { value: 'personal_loan', label: 'Personal loan' },
-  { value: 'medical', label: 'Medical' },
-  { value: 'other_debt', label: 'Other debt' },
+const DEBT: DropdownOption<DebtKind>[] = [
+  { value: 'credit_card', label: 'Credit card', description: 'Spending on it is logged as a slip' },
+  { value: 'auto_loan', label: 'Car loan', description: 'Loan or lease on a vehicle' },
+  { value: 'student_loan', label: 'Student loan', description: 'Federal or private' },
+  { value: 'mortgage', label: 'Mortgage', description: 'Your home loan' },
+  { value: 'personal_loan', label: 'Personal loan', description: 'From a bank or lender' },
+  { value: 'medical', label: 'Medical', description: 'Hospital or doctor bills' },
+  { value: 'other_debt', label: 'Other debt', description: 'Anything else you owe' },
 ];
 
 export function NewAccount({ debt }: { debt?: boolean }) {
@@ -51,36 +55,38 @@ export function NewAccount({ debt }: { debt?: boolean }) {
   const valid = !!name.trim() && cents !== null && !dueInvalid && (isCash || cents >= 0);
 
   return (
-    <SheetScreen contentContainerStyle={{ gap: 18 }}>
-      <Text variant="title">{isCash ? 'New account' : 'New debt'}</Text>
+    <SheetScreen>
+      <SheetHeader title={isCash ? 'New account' : 'New debt'} />
 
       <Field
         label="Name"
         value={name}
         onChangeText={setName}
-        placeholder={isCash ? 'Main Checking' : 'Chase Visa'}
+        placeholder={isCash ? 'Main Checking' : 'Chase Freedom'}
         autoFocus
       />
       <Field
         label={isCash ? 'Balance today' : 'Amount owed today'}
-        hint={isCash ? 'Copy it from your bank app.' : 'Copy it from the lender or card app.'}
+        note={isCash ? 'copy it from your bank app' : 'copy it from the lender'}
         value={balance}
         onChangeText={setBalance}
         placeholder="0.00"
         keyboardType="decimal-pad"
         inputMode="decimal"
       />
-      <Select label="Type" value={family} options={FAMILIES} onChange={setFamily} />
+      <Dropdown label="Type" value={family} options={FAMILIES} onChange={setFamily} />
       {isCash ? (
-        <Select label="Spending account" value={spendingKind} options={SPENDING} onChange={setSpendingKind} />
+        <Dropdown label="Spending account" value={spendingKind} options={SPENDING} onChange={setSpendingKind} />
       ) : (
-        <Select label="Debt account" value={debtKind} options={DEBT} onChange={setDebtKind} />
+        <Dropdown label="Debt account" value={debtKind} options={DEBT} onChange={setDebtKind} />
       )}
 
       {kind === 'credit_card' && (
-        <Text variant="callout" tone="textSecondary">
-          Cards are debt here, not a way to pay. Anything you put on one is logged as a slip and marked red.
-        </Text>
+        <Card tone="slip" style={{ paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md - 2 }}>
+          <Text variant="callout" tone="negative">
+            Cards are debt here, not a way to pay. Anything you put on one is logged as a slip and marked red.
+          </Text>
+        </Card>
       )}
 
       {!isCash && (
@@ -93,26 +99,31 @@ export function NewAccount({ debt }: { debt?: boolean }) {
             keyboardType="decimal-pad"
             inputMode="decimal"
           />
-          <Field
-            label="Minimum payment"
-            optional
-            hint="Leave it blank and the app estimates it."
-            value={min}
-            onChangeText={setMin}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
-          />
-          <Field
-            label="Due day of the month"
-            optional
-            value={dueDay}
-            onChangeText={setDueDay}
-            placeholder="15"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            error={dueInvalid ? 'Pick a day from 1 to 31.' : undefined}
-          />
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Minimum"
+                optional
+                value={min}
+                onChangeText={setMin}
+                placeholder="Estimated"
+                keyboardType="decimal-pad"
+                inputMode="decimal"
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field
+                label="Due day"
+                optional
+                value={dueDay}
+                onChangeText={setDueDay}
+                placeholder="15"
+                keyboardType="number-pad"
+                inputMode="numeric"
+                error={dueInvalid ? 'Pick 1 to 31.' : undefined}
+              />
+            </View>
+          </View>
         </>
       )}
 
@@ -120,6 +131,7 @@ export function NewAccount({ debt }: { debt?: boolean }) {
         title={isCash ? 'Add account' : 'Add debt'}
         size="lg"
         disabled={!valid}
+        style={{ marginTop: spacing.xs }}
         onPress={() => {
           if (!valid || cents === null) return;
           addAccount({

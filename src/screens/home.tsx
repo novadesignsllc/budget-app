@@ -1,5 +1,4 @@
 import { router } from 'expo-router';
-import { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { inDemo } from '@/backend';
@@ -48,7 +47,7 @@ export function Home() {
   const day = today();
   const due = dueForApproval(recurring, day);
   const health = budgetHealth(ledger);
-  const history = useMemo(() => balanceHistory({ accounts, transactions }, 12, day), [accounts, transactions, day]);
+  const history = balanceHistory({ accounts, transactions }, 12, day);
   const accountById = new Map(all.map((a) => [a.id, a]));
   const context = weekday.format(fromISODate(day));
 
@@ -73,7 +72,9 @@ export function Home() {
   const latest = history[history.length - 1];
   const standing = latest ? latest.cash - latest.debt : ledger.cashTotal - ledger.debtTotal;
   const change = first && latest ? standing - (first.cash - first.debt) : 0;
-  const ticks = history.length > 1 ? [0, 0.25, 0.5, 0.75, 1].map((f) => history[Math.round(f * (history.length - 1))]) : [];
+  // Every month when there are few; otherwise five evenly spaced.
+  const ticks =
+    history.length <= 7 ? history : [0, 0.25, 0.5, 0.75, 1].map((f) => history[Math.round(f * (history.length - 1))]);
 
   function approveItem(r: Recurring) {
     approve(r.id);

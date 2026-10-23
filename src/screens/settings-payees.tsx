@@ -1,79 +1,228 @@
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Pressable, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Row, Section } from '@/components/list';
-import { Select } from '@/components/select';
+import { Card, CardFooterLink, CardHeader, TableHeader } from '@/components/card';
+import { Dropdown, type DropdownOption } from '@/components/dropdown';
+import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
+import { useToast } from '@/components/toast';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
+import { groupColor, radius, spacing, type as typeScale, useColors } from '@/theme';
+import { haptic } from '@/utils/haptics';
 
 const NONE = '__none__';
+const PREVIEW = 8;
+const ENVELOPE_COLUMN = 150;
 
-/** Payees and the envelope each one defaults to. Quick-add uses these first. */
-export function PayeesSection() {
+/** A one-line input row at the top of the card, for search or a new payee's name. */
+function InputRow({
+  icon,
+  value,
+  onChangeText,
+  placeholder,
+  onSubmit,
+  trailing,
+}: {
+  icon: { sf: Parameters<typeof Icon>[0]['sf']; md: Parameters<typeof Icon>[0]['md'] };
+  value: string;
+  onChangeText: (v: string) => void;
+  placeholder: string;
+  onSubmit?: () => void;
+  trailing?: React.ReactNode;
+}) {
+  const colors = useColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        paddingHorizontal: spacing.md,
+        paddingVertical: 7,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.separator,
+      }}
+    >
+      <View
+        style={{
+          flex: 1,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 7,
+          height: 32,
+          paddingHorizontal: 9,
+          borderRadius: radius.button,
+          backgroundColor: colors.control,
+        }}
+      >
+        <Icon sf={icon.sf} md={icon.md} size={12} color={colors.textTertiary} />
+        <TextInput
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.placeholder}
+          autoFocus
+          autoCorrect={false}
+          returnKeyType={onSubmit ? 'done' : 'search'}
+          onSubmitEditing={onSubmit}
+          accessibilityLabel={placeholder}
+          style={[typeScale.callout, { flex: 1, height: 32, color: colors.text }]}
+        />
+      </View>
+      {trailing}
+    </View>
+  );
+}
+
+/**
+ * Payees and the envelope each one defaults to. Quick-add uses these first.
+ * Long-press a payee to delete it.
+ */
+export function PayeesCard({
+  searching,
+  adding,
+  onDoneAdding,
+}: {
+  searching: boolean;
+  adding: boolean;
+  onDoneAdding: () => void;
+}) {
+  const colors = useColors();
   const payees = useStore((s) => s.payees);
   const envelopes = useStore((s) => s.envelopes);
   const setPayeeEnvelope = useStore((s) => s.setPayeeEnvelope);
+  const addPayee = useStore((s) => s.addPayee);
   const deletePayee = useStore((s) => s.deletePayee);
-  const [open, setOpen] = useState<string | null>(null);
+  const showToast = useToast((s) => s.show);
+  const [query, setQuery] = useState('');
+  const [name, setName] = useState('');
+  const [expanded, setExpanded] = useState(false);
   const [confirm, setConfirm] = useState<string | null>(null);
 
-  const spendable = envelopes.filter((e) => !e.hidden && !e.debtAccountId);
-  const nameOf = (id?: string) => envelopes.find((e) => e.id === id)?.name;
-  const sorted = [...payees].sort((a, b) => a.name.localeCompare(b.name));
-  const options = [{ value: NONE, label: 'No default' }, ...spendable.map((e) => ({ value: e.id, label: e.name }))];
+  const options = useMemo<DropdownOption<string>[]>(() => {
+    const spendable = envelopes
+      .filter((e) => !e.hidden && !e.debtAccountId)
+      .sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order);
+    return [
+      { value: NONE, label: 'Ask each time' },
+      ...spendable.map((e) => ({ value: e.id, label: e.name, dot: groupColor(e.group), section: e.group })),
+    ];
+  }, [envelopes]);
+
+  const sorted = useMemo(() => [...payees].sort((a, b) => a.name.localeCompare(b.name)), [payees]);
+  const q = searching ? query.trim().toLowerCase() : '';
+  const matches = q ? sorted.filter((p) => p.name.toLowerCase().includes(q)) : sorted;
+  const shown = q || expanded ? matches : matches.slice(0, PREVIEW);
+
+  const submitNew = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return onDoneAdding();
+    addPayee(trimmed);
+    haptic('success');
+    showToast({ message: `Added ${trimmed}` });
+    setName('');
+    onDoneAdding();
+  };
 
   return (
-    <Section title="Payees" footer="Quick-add puts a payee’s transactions in its default envelope.">
-      {sorted.length === 0 ? (
-        <View style={{ padding: spacing.lg }}>
-          <Text variant="callout" tone="textSecondary">
-            Payees show up here as you add transactions.
-          </Text>
-        </View>
-      ) : (
-        sorted.map((p) =>
-          open === p.id ? (
-            <View key={p.id} style={{ padding: spacing.lg - 2, gap: spacing.md }}>
-              <Text variant="body" weight="600">
-                {p.name}
-              </Text>
-              <Select
-                label="Default envelope"
-                value={p.envelopeId ?? NONE}
-                options={options}
-                onChange={(v) => setPayeeEnvelope(p.id, v === NONE ? undefined : v)}
-              />
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-                <Button title="Done" size="sm" variant="secondary" onPress={() => setOpen(null)} />
-                <Button
-                  title={confirm === p.id ? 'Tap again to delete' : 'Delete payee'}
-                  size="sm"
-                  variant="destructive"
-                  onPress={() => {
-                    if (confirm !== p.id) return setConfirm(p.id);
-                    deletePayee(p.id);
-                    setOpen(null);
-                    setConfirm(null);
-                  }}
-                />
-              </View>
-            </View>
-          ) : (
-            <Row
-              key={p.id}
-              title={p.name}
-              subtitle={nameOf(p.envelopeId) ?? 'No default envelope'}
-              onPress={() => {
-                setOpen(p.id);
-                setConfirm(null);
-              }}
-              chevron
-            />
-          ),
-        )
+    <Card>
+      <CardHeader title="Payees" detail={`${payees.length} · quick-add uses these`} />
+      {adding && (
+        <InputRow
+          icon={{ sf: 'plus', md: 'add' }}
+          value={name}
+          onChangeText={setName}
+          placeholder="New payee name"
+          onSubmit={submitNew}
+          trailing={<Button title={name.trim() ? 'Add' : 'Cancel'} size="sm" variant={name.trim() ? 'primary' : 'secondary'} onPress={submitNew} />}
+        />
       )}
-    </Section>
+      {searching && !adding && (
+        <InputRow icon={{ sf: 'magnifyingglass', md: 'search' }} value={query} onChangeText={setQuery} placeholder="Search payees" />
+      )}
+      {sorted.length === 0 ? (
+        <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md + 2 }}>
+          Payees show up here as you add transactions.
+        </Text>
+      ) : (
+        <>
+          <TableHeader columns={[{ label: 'Payee' }, { label: 'Default envelope', width: ENVELOPE_COLUMN }]} />
+          {shown.length === 0 && (
+            <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md + 2 }}>
+              No payee matches “{query.trim()}”.
+            </Text>
+          )}
+          {shown.map((p, i) => {
+            const confirming = confirm === p.id;
+            return (
+              <View
+                key={p.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
+                  paddingHorizontal: spacing.md,
+                  paddingVertical: 6,
+                  borderBottomWidth: i < shown.length - 1 ? 1 : 0,
+                  borderBottomColor: colors.hairline,
+                  backgroundColor: confirming ? colors.negativeTint : colors.surface,
+                }}
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={p.name}
+                  accessibilityHint="Long-press to delete"
+                  accessibilityActions={[{ name: 'delete', label: 'Delete payee' }]}
+                  onAccessibilityAction={(e) => e.nativeEvent.actionName === 'delete' && setConfirm(p.id)}
+                  onLongPress={() => {
+                    haptic('warning');
+                    setConfirm(p.id);
+                  }}
+                  onPress={() => setConfirm(null)}
+                  style={{ flex: 1, minHeight: 30, justifyContent: 'center' }}
+                >
+                  <Text variant="body" weight="500" numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                </Pressable>
+                {confirming ? (
+                  <View style={{ width: ENVELOPE_COLUMN, flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
+                    <Button title="Cancel" size="sm" variant="secondary" onPress={() => setConfirm(null)} />
+                    <Button
+                      title="Delete"
+                      size="sm"
+                      variant="destructive"
+                      onPress={() => {
+                        deletePayee(p.id);
+                        setConfirm(null);
+                        showToast({ message: `Deleted ${p.name}` });
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <View style={{ width: ENVELOPE_COLUMN }}>
+                    <Dropdown
+                      variant="inline"
+                      searchable
+                      value={p.envelopeId ?? NONE}
+                      options={options}
+                      onChange={(v) => setPayeeEnvelope(p.id, v === NONE ? undefined : v)}
+                      accessibilityLabel={`${p.name} default envelope: ${options.find((o) => o.value === (p.envelopeId ?? NONE))?.label ?? 'Ask each time'}`}
+                    />
+                  </View>
+                )}
+              </View>
+            );
+          })}
+          {!q && matches.length > PREVIEW && (
+            <CardFooterLink
+              label={expanded ? 'Show fewer' : `Show all ${matches.length} ›`}
+              onPress={() => setExpanded(!expanded)}
+            />
+          )}
+        </>
+      )}
+    </Card>
   );
 }

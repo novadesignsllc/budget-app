@@ -3,7 +3,8 @@ import { Pressable, View } from 'react-native';
 
 import { fromISODate } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import type { Account, Envelope, Transaction } from '@/domain/types';
+import { isDebtAccount, type Account, type Envelope, type Transaction } from '@/domain/types';
+import { useStore } from '@/store';
 import { haptic } from '@/utils/haptics';
 import { spacing, useColors } from '@/theme';
 
@@ -29,11 +30,21 @@ function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
   );
 }
 
-/** "Groceries · weekly run", "Slip on Chase Freedom · Fun Money", "Ready to assign". */
-export function transactionDetail(t: Transaction, account?: Account, envelope?: Envelope, showAccount?: boolean) {
+/** "Groceries · weekly run", "Slip on Chase Freedom · Fun Money", "Debt payment · Capital One". */
+export function transactionDetail(
+  t: Transaction,
+  account?: Account,
+  envelope?: Envelope,
+  showAccount?: boolean,
+  other?: Account,
+) {
   const parts: string[] = [];
   if (t.kind === 'slip') parts.push(`Slip on ${account?.name ?? 'a card'}`);
-  if (envelope) parts.push(envelope.name);
+  if (t.kind === 'transfer' && other) {
+    if (isDebtAccount(other)) parts.push(`Debt payment · ${other.name}`);
+    else if (account && isDebtAccount(account)) parts.push(`Payment from ${other.name}`);
+    else parts.push(t.amount < 0 ? `Transfer to ${other.name}` : `Transfer from ${other.name}`);
+  } else if (envelope) parts.push(envelope.name);
   else if (t.kind === 'income') parts.push('Ready to assign');
   else if (t.kind === 'interest') parts.push('Interest and fees');
   else if (t.kind === 'adjustment') parts.push('Balance adjustment');
@@ -66,10 +77,11 @@ export function TransactionRow({
   last?: boolean;
 }) {
   const colors = useColors();
+  const other = useStore((s) => (t.transferAccountId ? s.accounts.find((a) => a.id === t.transferAccountId) : undefined));
   const slip = t.kind === 'slip';
   const out = t.amount < 0 ? -t.amount : 0;
   const inn = t.amount > 0 ? t.amount : 0;
-  const detail = select?.disabled && t.flagged ? 'Flagged · unflag it to reconcile' : transactionDetail(t, account, envelope, showAccount);
+  const detail = select?.disabled && t.flagged ? 'Flagged · unflag it to reconcile' : transactionDetail(t, account, envelope, showAccount, other);
 
   return (
     <Pressable

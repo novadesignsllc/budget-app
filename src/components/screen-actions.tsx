@@ -40,6 +40,7 @@ export function ActionButton({
   variant = 'outline',
   accessibilityLabel,
   disabled,
+  chevron,
 }: {
   icon?: { sf: Parameters<typeof Icon>[0]['sf']; md: Parameters<typeof Icon>[0]['md'] };
   label?: string;
@@ -47,6 +48,8 @@ export function ActionButton({
   variant?: 'outline' | 'ink' | 'accent';
   accessibilityLabel?: string;
   disabled?: boolean;
+  /** Up-down chevrons, for a button that opens a picker sheet. */
+  chevron?: boolean;
 }) {
   const colors = useColors();
   const bg = variant === 'ink' ? colors.ink : variant === 'accent' ? colors.accent : colors.surface;
@@ -81,6 +84,7 @@ export function ActionButton({
           {label}
         </Text>
       )}
+      {chevron && <Icon sf="chevron.up.chevron.down" md="unfold_more" size={10} color={variant === 'outline' ? colors.textTertiary : fg} weight="semibold" />}
     </Pressable>
   );
 }

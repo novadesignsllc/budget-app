@@ -1,16 +1,27 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Pressable, ScrollView, View } from 'react-native';
 
 import { backend } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
 import { authErrorMessage } from '@/backend/types';
 import { AppleSignInButton } from '@/components/apple-sign-in-button';
 import { Button } from '@/components/button';
+import { Card } from '@/components/card';
 import { Field } from '@/components/field';
 import { Text } from '@/components/text';
 import { gutter, spacing, useColors } from '@/theme';
 
 type Mode = 'signIn' | 'create';
+
+function TextLink({ title, onPress }: { title: string; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" hitSlop={6} onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+      <Text variant="callout" weight="600" tone="accent">
+        {title}
+      </Text>
+    </Pressable>
+  );
+}
 
 export function SignIn() {
   const colors = useColors();
@@ -35,6 +46,9 @@ export function SignIn() {
   }
 
   const canSubmit = email.includes('@') && password.length > 0;
+  const submit = () =>
+    canSubmit &&
+    run(() => (mode === 'create' ? backend.createAccount(email, password) : backend.signInWithEmail(email, password)));
 
   return (
     <KeyboardAvoidingView behavior="padding" style={{ flex: 1, backgroundColor: colors.background }}>
@@ -44,29 +58,32 @@ export function SignIn() {
           flexGrow: 1,
           justifyContent: 'center',
           padding: gutter,
-          gap: spacing.xl,
+          gap: spacing.lg,
           width: '100%',
-          maxWidth: 420,
+          maxWidth: 400,
           alignSelf: 'center',
         }}
       >
-        <View style={{ gap: spacing.sm }}>
-          <Text variant="largeTitle">Zero Budget</Text>
-          <Text variant="body" tone="textSecondary">
-            Sign in to keep your budget on your phone and your computer.
+        <View style={{ gap: 4, alignItems: 'center', paddingBottom: spacing.sm }}>
+          <Text variant="number" align="center" accessibilityRole="header">
+            Zero Budget
+          </Text>
+          <Text variant="callout" tone="textSecondary" align="center">
+            {mode === 'create'
+              ? 'Make an account so your budget syncs to your phone and computer.'
+              : 'Sign in to keep your budget on your phone and your computer.'}
           </Text>
         </View>
 
-        {backend.appleSignInAvailable && (
-          <View style={{ gap: spacing.lg }}>
-            <AppleSignInButton onPress={() => run(backend.signInWithApple)} />
-            <Text variant="footnote" tone="textSecondary" align="center">
-              or use email
-            </Text>
-          </View>
-        )}
-
-        <View style={{ gap: spacing.md }}>
+        <Card padded>
+          {backend.appleSignInAvailable && (
+            <>
+              <AppleSignInButton onPress={() => run(backend.signInWithApple)} />
+              <Text variant="footnote" tone="textTertiary" align="center">
+                or use email
+              </Text>
+            </>
+          )}
           <Field
             label="Email"
             value={email}
@@ -85,12 +102,7 @@ export function SignIn() {
             autoComplete={mode === 'create' ? 'new-password' : 'current-password'}
             textContentType={mode === 'create' ? 'newPassword' : 'password'}
             hint={mode === 'create' ? 'At least 6 characters.' : undefined}
-            onSubmitEditing={() =>
-              canSubmit &&
-              run(() =>
-                mode === 'create' ? backend.createAccount(email, password) : backend.signInWithEmail(email, password),
-              )
-            }
+            onSubmitEditing={submit}
           />
           {error ? (
             <Text variant="callout" tone="negative">
@@ -107,47 +119,33 @@ export function SignIn() {
             size="lg"
             loading={busy}
             disabled={!canSubmit}
-            onPress={() =>
-              run(() =>
-                mode === 'create' ? backend.createAccount(email, password) : backend.signInWithEmail(email, password),
-              )
-            }
+            onPress={submit}
           />
-        </View>
+        </Card>
 
-        <View style={{ gap: spacing.xs, alignItems: 'flex-start' }}>
-          <Button
-            variant="ghost"
-            size="sm"
-            style={{ paddingHorizontal: spacing.xs }}
-            title={mode === 'create' ? 'I already have an account' : 'Create an account'}
-            onPress={() => {
-              setMode(mode === 'create' ? 'signIn' : 'create');
-              setError('');
-            }}
-          />
-          {mode === 'signIn' && (
-            <Button
-              variant="ghost"
-              size="sm"
-              style={{ paddingHorizontal: spacing.xs }}
-              title="Forgot password"
+        <View style={{ alignItems: 'center', gap: spacing.md, paddingTop: spacing.xs }}>
+          <View style={{ flexDirection: 'row', gap: spacing.lg, justifyContent: 'center' }}>
+            <TextLink
+              title={mode === 'create' ? 'I already have an account' : 'Create an account'}
               onPress={() => {
-                if (!email.includes('@')) return setError('Type your email first, then tap Forgot password.');
-                void run(async () => {
-                  await backend.sendPasswordReset(email);
-                  setNotice('Check your email for a link to reset it.');
-                });
+                setMode(mode === 'create' ? 'signIn' : 'create');
+                setError('');
               }}
             />
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            style={{ paddingHorizontal: spacing.xs }}
-            title="Explore the demo"
-            onPress={() => void setDemoMode(true)}
-          />
+            {mode === 'signIn' && (
+              <TextLink
+                title="Forgot password"
+                onPress={() => {
+                  if (!email.includes('@')) return setError('Type your email first, then tap Forgot password.');
+                  void run(async () => {
+                    await backend.sendPasswordReset(email);
+                    setNotice('Check your email for a link to reset it.');
+                  });
+                }}
+              />
+            )}
+          </View>
+          <TextLink title="Explore the demo" onPress={() => void setDemoMode(true)} />
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

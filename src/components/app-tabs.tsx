@@ -82,13 +82,16 @@ function Dock() {
   const strip = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const offsets = useRef<Record<string, number>>({});
 
-  // Keep the selected tab in view when it's off the edge of the strip.
-  useEffect(() => {
-    const active = TABS.find((t) => (t.href === '/' ? pathname === '/' : pathname.startsWith(t.href)));
-    if (!active) return;
-    const x = offsets.current[active.name];
-    if (x !== undefined) strip.current?.scrollTo({ x: Math.max(0, x - 40), animated: true });
-  }, [pathname]);
+  const active = TABS.find((t) => (t.href === '/' ? pathname === '/' : pathname.startsWith(t.href)));
+
+  // Keep the selected tab in view when it's off the edge of the strip. Runs again once
+  // the tab is measured, for when the app opens straight onto a later tab.
+  const reveal = (animated: boolean) => {
+    const x = active ? offsets.current[active.name] : undefined;
+    if (x !== undefined) strip.current?.scrollTo({ x: Math.max(0, x - 40), animated });
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => reveal(true), [active?.name]);
 
   return (
     <View
@@ -112,7 +115,13 @@ function Dock() {
           contentContainerStyle={{ gap: 2 }}
         >
           {TABS.map((t) => (
-            <View key={t.name} onLayout={(e) => (offsets.current[t.name] = e.nativeEvent.layout.x)}>
+            <View
+              key={t.name}
+              onLayout={(e) => {
+                offsets.current[t.name] = e.nativeEvent.layout.x;
+                if (t.name === active?.name) reveal(false);
+              }}
+            >
               <TabTrigger name={t.name} href={t.href} asChild>
                 <StripTab label={t.label} />
               </TabTrigger>

@@ -93,6 +93,8 @@ type Actions = {
     id: string,
     patch: Partial<Pick<Transaction, 'date' | 'payee' | 'envelopeId' | 'memo' | 'cleared'>> & {
       amount?: Cents;
+      /** Spending only. Moving to a card makes it a slip, moving to cash makes it spending. */
+      accountId?: string;
     },
   ) => void;
   deleteTransaction: (id: string) => void;
@@ -314,10 +316,18 @@ export const useStore = create<Store>()((set, get) => ({
         const magnitude = Math.abs(patch.amount);
         return { ...t, amount: t.amount < 0 ? -magnitude : magnitude };
       };
+      const moveTo =
+        patch.accountId && patch.accountId !== target.accountId && (target.kind === 'spend' || target.kind === 'slip')
+          ? s.accounts.find((a) => a.id === patch.accountId)
+          : undefined;
       const transactions = s.transactions.map((t) => {
         if (t.id === id) {
-          const { amount: _ignored, ...rest } = patch;
-          return applyAmount({ ...t, ...rest });
+          const { amount: _ignored, accountId: _account, ...rest } = patch;
+          const next = applyAmount({ ...t, ...rest });
+          // A different account means a different statement, so it's no longer reconciled.
+          return moveTo
+            ? { ...next, accountId: moveTo.id, kind: isCashAccount(moveTo) ? ('spend' as const) : ('slip' as const), reconciled: false, cleared: false }
+            : next;
         }
         // Keep the other half of a transfer in sync.
         if (target.transferPairId && t.transferPairId === target.transferPairId) {

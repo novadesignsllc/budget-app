@@ -1,130 +1,243 @@
 import { router } from 'expo-router';
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { EmptyState } from '@/components/empty-state';
-import { FloatingAction } from '@/components/floating-action';
-import { ICON_INSET, Row, RowIcon, Section } from '@/components/list';
-import { Money } from '@/components/money';
+import { Card, IconTile } from '@/components/card';
+import { FilterPills } from '@/components/filter-pills';
 import { Screen } from '@/components/screen';
+import { ActionButton, ScreenActions } from '@/components/screen-actions';
+import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
-import { formatDay } from '@/domain/dates';
-import { FREQUENCY_LABEL, monthlyCost } from '@/domain/recurring';
-import { isCashAccount, type Recurring as RecurringItem, type RecurringKind } from '@/domain/types';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { useToast } from '@/components/toast';
+import { daysBetween, formatShortDate, today } from '@/domain/dates';
+import { formatMoney } from '@/domain/money';
+import { monthlyCost } from '@/domain/recurring';
+import { isCashAccount, type Recurring as RecurringItem } from '@/domain/types';
 import { useAccounts } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
-import { groupHue, radius, spacing, useColors } from '@/theme';
+import { groupColor, softOf, spacing, useColors } from '@/theme';
 import { envelopeIcon } from '@/utils/envelope-icon';
+import { haptic } from '@/utils/haptics';
+
+type Sort = 'date' | 'amount' | 'bill' | 'subscription';
+
+const COLUMNS = 3;
+const GAP = 8;
+const BILLS = groupColor('Bills');
 
 export function Recurring() {
-  const colors = useColors();
-  const scheme = useColorScheme();
   const items = useStore((s) => s.recurring);
   const envelopes = useStore((s) => s.envelopes);
+  const approve = useStore((s) => s.approveRecurring);
+  const showToast = useToast((s) => s.show);
   const { all: accounts } = useAccounts();
+  const [view, setView] = useState<Sort>('date');
+  const [width, setWidth] = useState(0);
+
   const accountById = new Map(accounts.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
+  const day = today();
+  const active = items.filter((r) => r.active);
+  const monthly = active.reduce((a, r) => a + monthlyCost(r), 0);
+  const context = `${formatMoney(monthly, { whole: true })} a month · ${items.length} ${
+    items.length === 1 ? 'bill or subscription' : 'bills and subscriptions'
+  }`;
 
-  const byKind = (k: RecurringKind) => items.filter((r) => r.kind === k).sort((a, b) => a.nextDue.localeCompare(b.nextDue));
-  const total = (list: RecurringItem[]) => list.filter((r) => r.active).reduce((a, r) => a + monthlyCost(r), 0);
-  const bills = byKind('bill');
-  const subs = byKind('subscription');
-  const onCards = items.filter((r) => {
-    const a = accountById.get(r.accountId);
-    return a && !isCashAccount(a);
-  });
+  const byDate = (a: RecurringItem, b: RecurringItem) =>
+    Number(b.active) - Number(a.active) || a.nextDue.localeCompare(b.nextDue);
+  const list = items
+    .filter((r) => (view === 'bill' || view === 'subscription' ? r.kind === view : true))
+    .sort(view === 'amount' ? (a, b) => b.amount - a.amount || byDate(a, b) : byDate);
+  const tileWidth = width > 0 ? (width - GAP * (COLUMNS - 1)) / COLUMNS : 0;
+
+  function approveItem(r: RecurringItem) {
+    approve(r.id);
+    haptic('success');
+    showToast({ message: `Added ${r.name} · ${formatMoney(r.amount)}` });
+  }
+
+  const add = (
+    <ScreenActions>
+      <ActionButton
+        variant="ink"
+        icon={{ sf: 'plus', md: 'add' }}
+        label="Add"
+        accessibilityLabel="Add a bill or subscription"
+        onPress={() => router.push('/edit-recurring')}
+      />
+    </ScreenActions>
+  );
 
   if (items.length === 0) {
     return (
       <>
         <Screen>
-          <EmptyState
-            title="Add your bills and subscriptions"
-            body="Rent, utilities, Netflix. When one comes due it shows up on Home for a one-tap approve, so nothing comes out without you seeing it."
-            action={<Button title="Add one" onPress={() => router.push('/edit-recurring')} />}
-          />
+          <ScreenTitle title="Recurring" context="Bills and subscriptions" />
+          <Card padded>
+            <Text variant="section">Add your bills and subscriptions</Text>
+            <Text variant="callout" tone="textSecondary">
+              Rent, utilities, Netflix. When one comes due it shows up on Home for a one-tap approve, so nothing comes
+              out without you seeing it.
+            </Text>
+            <Button
+              title="Add one"
+              onPress={() => router.push('/edit-recurring')}
+              style={{ alignSelf: 'flex-start' }}
+            />
+          </Card>
         </Screen>
-        <FloatingAction label="Add" onPress={() => router.push('/edit-recurring')} />
+        {add}
       </>
     );
   }
 
-  function rows(list: RecurringItem[]) {
-    return list.map((r) => {
-      const account = accountById.get(r.accountId);
-      const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
-      const onCard = !!account && !isCashAccount(account);
-      const hue = envelope ? groupHue(envelope.group, scheme) : { fg: colors.textSecondary, soft: colors.fill };
-      const icon = envelopeIcon(envelope?.name ?? r.name);
-      return (
-        <Row
-          key={r.id}
-          href={{ pathname: '/edit-recurring', params: { id: r.id } }}
-          leading={
-            <RowIcon
-              sf={onCard ? 'creditcard.fill' : icon.sf}
-              md={onCard ? 'credit_card' : icon.md}
-              fg={onCard ? colors.negative : hue.fg}
-              bg={onCard ? colors.negativeSoft : hue.soft}
-            />
-          }
-          title={r.name}
-          titleTone={onCard ? 'negative' : 'text'}
-          subtitle={[r.active ? formatDay(r.nextDue) : 'Paused', FREQUENCY_LABEL[r.frequency], account?.name]
-            .filter(Boolean)
-            .join(' · ')}
-          subtitleTone={onCard ? 'negative' : 'textSecondary'}
-          trailing={<Money cents={r.amount} weight="600" tone={onCard ? 'negative' : r.active ? 'text' : 'textTertiary'} />}
-        />
-      );
-    });
-  }
-
-  const tile = (label: string, value: number, fg: string, bg: string) => (
-    <View style={{ flex: 1, backgroundColor: bg, borderRadius: radius.lg, borderCurve: 'continuous', padding: spacing.lg - 2, gap: 2 }}>
-      <Text variant="footnote" weight="500" color={fg}>
-        {label}
-      </Text>
-      <Money cents={value} variant="title" weight="700" />
-    </View>
-  );
-
   return (
     <>
       <Screen>
-        <View style={{ flexDirection: 'row', gap: spacing.sm + 2 }}>
-          {tile('Bills a month', total(bills), colors.blue, colors.blueSoft)}
-          {tile('Subscriptions a month', total(subs), colors.accent, colors.accentSoft)}
+        <ScreenTitle title="Recurring" context={context} />
+
+        <FilterPills
+          center
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'date', label: 'By date' },
+            { value: 'amount', label: 'By amount' },
+            { value: 'bill', label: 'Bills' },
+            { value: 'subscription', label: 'Subscriptions' },
+          ]}
+        />
+
+        <View
+          onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+          style={{ flexDirection: 'row', flexWrap: 'wrap', gap: GAP }}
+        >
+          {tileWidth > 0 &&
+            list.map((r) => {
+              const account = accountById.get(r.accountId);
+              const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
+              return (
+                <Tile
+                  key={r.id}
+                  item={r}
+                  width={tileWidth}
+                  day={day}
+                  onCard={!!account && !isCashAccount(account)}
+                  envelopeName={envelope?.name}
+                  onApprove={() => approveItem(r)}
+                />
+              );
+            })}
         </View>
 
-        {onCards.length > 0 && (
-          <View style={{ backgroundColor: colors.negativeSoft, borderRadius: radius.lg, padding: spacing.lg - 2, gap: 2 }}>
-            <Text variant="headline" tone="negative">
-              {onCards.length === 1 ? `${onCards[0].name} is on a card` : `${onCards.length} of these are on cards`}
-            </Text>
-            <Text variant="callout" tone="negative">
-              Each charge is a slip. Move it to a bank account when you can.
-            </Text>
-          </View>
+        {list.length === 0 && (
+          <Text variant="footnote" tone="textSecondary" align="center">
+            Nothing here yet.
+          </Text>
         )}
-
-        {bills.length > 0 && (
-          <Section
-            title="Bills"
-            footer="Bill amounts can change. You confirm the real amount each time."
-            inset={ICON_INSET}
-          >
-            {rows(bills)}
-          </Section>
-        )}
-        {subs.length > 0 && (
-          <Section title="Subscriptions" inset={ICON_INSET}>
-            {rows(subs)}
-          </Section>
+        {list.some((r) => r.kind === 'bill') && (
+          <Text variant="footnote" tone="textSecondary" align="center">
+            Bills marked ~ change each month. Tap the transaction after you approve to fix the amount.
+          </Text>
         )}
       </Screen>
-      <FloatingAction label="Add" onPress={() => router.push('/edit-recurring')} />
+      {add}
     </>
+  );
+}
+
+/** One bill or subscription: icon, name, amount, and when it's due (or Approve). */
+function Tile({
+  item,
+  width,
+  day,
+  onCard,
+  envelopeName,
+  onApprove,
+}: {
+  item: RecurringItem;
+  width: number;
+  day: string;
+  onCard: boolean;
+  envelopeName?: string;
+  onApprove: () => void;
+}) {
+  const colors = useColors();
+  const due = item.active && item.nextDue <= day;
+  const days = daysBetween(day, item.nextDue);
+  const byName = envelopeIcon(item.name);
+  const icon = onCard
+    ? { sf: 'creditcard.fill' as const, md: 'credit_card' as const }
+    : byName.md === 'inbox' && envelopeName
+      ? envelopeIcon(envelopeName)
+      : byName;
+  const amount =
+    item.kind === 'bill'
+      ? `~${formatMoney(item.amount, { whole: item.amount % 100 === 0 })}`
+      : formatMoney(item.amount);
+  const when = !item.active
+    ? 'Paused'
+    : onCard
+      ? 'Slip · on a card'
+      : days === 1
+        ? 'Tomorrow'
+        : days <= 7
+          ? `In ${days} days`
+          : formatShortDate(item.nextDue);
+  const ink = onCard ? 'negative' : 'text';
+
+  return (
+    <Card tone={due ? 'due' : onCard ? 'slip' : 'default'} style={{ width, opacity: item.active ? 1 : 0.6 }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, ${amount}, ${due ? 'due' : when}`}
+        onPress={() => router.push({ pathname: '/edit-recurring', params: { id: item.id } })}
+        style={({ pressed }) => ({
+          alignItems: 'center',
+          gap: 4,
+          paddingTop: spacing.md,
+          paddingBottom: due ? 2 : spacing.md,
+          paddingHorizontal: 6,
+          backgroundColor: pressed ? colors.control : 'transparent',
+        })}
+      >
+        <IconTile
+          sf={icon.sf}
+          md={icon.md}
+          color={onCard ? colors.negativeStrong : BILLS}
+          bg={onCard ? softOf(colors.negativeStrong, 0.14) : colors.blueSoft}
+        />
+        <Text variant="row" weight="600" tone={ink} numberOfLines={1} align="center">
+          {item.name}
+        </Text>
+        <Text variant="row" tone={ink} style={{ fontVariant: ['tabular-nums'] }}>
+          {amount}
+        </Text>
+        {!due && (
+          <Text variant="caption" tone={onCard ? 'negative' : 'textSecondary'} numberOfLines={1}>
+            {when}
+          </Text>
+        )}
+      </Pressable>
+      {due && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Approve ${item.name}`}
+          hitSlop={4}
+          onPress={onApprove}
+          style={({ pressed }) => ({
+            alignItems: 'center',
+            paddingTop: 2,
+            paddingBottom: spacing.md,
+            backgroundColor: pressed ? colors.control : 'transparent',
+          })}
+        >
+          <Text variant="caption" weight="600" tone="orange">
+            Approve
+          </Text>
+        </Pressable>
+      )}
+    </Card>
   );
 }

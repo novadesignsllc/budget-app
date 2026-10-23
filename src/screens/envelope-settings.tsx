@@ -2,19 +2,71 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Chip } from '@/components/chip';
-import { Field, FieldLabel } from '@/components/field';
+import { Dropdown, type DropdownOption } from '@/components/dropdown';
+import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
 import { targetFor } from '@/domain/targets';
+import type { Envelope } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { DEBT_GROUP, useStore } from '@/store';
-import { spacing } from '@/theme';
+import { groupColor, spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
+
+import { SheetHeader } from '@/components/sheet-header';
+
+const NEW_GROUP = '__new__';
+const GROUP_HINT: Record<string, string> = {
+  Bills: 'The same amount goes out every month',
+  Everyday: 'Money you spend through the month',
+  Savings: 'Added each month and left alone',
+};
+
+/** Group choice for envelope sheets: the existing groups, then "New group…" which reveals a name field. */
+export function GroupPicker({
+  envelopes,
+  group,
+  newGroup,
+  onGroup,
+  onNewGroup,
+}: {
+  envelopes: Envelope[];
+  /** The chosen group, or NEW_GROUP while typing a new one. */
+  group: string;
+  newGroup: string;
+  onGroup: (group: string) => void;
+  onNewGroup: (name: string) => void;
+}) {
+  const groups = [...new Set(['Bills', 'Everyday', 'Savings', ...envelopes.map((e) => e.group)])].filter(
+    (g) => g !== DEBT_GROUP,
+  );
+  const options: DropdownOption<string>[] = [
+    ...groups.map((g) => ({
+      value: g,
+      label: g,
+      dot: groupColor(g),
+      description: GROUP_HINT[g],
+    })),
+    { value: NEW_GROUP, label: 'New group…' },
+  ];
+  return (
+    <>
+      <Dropdown label="Group" value={group} options={options} onChange={onGroup} />
+      {group === NEW_GROUP && (
+        <Field label="Group name" value={newGroup} onChangeText={onNewGroup} placeholder="Kids" autoFocus />
+      )}
+    </>
+  );
+}
+
+export function resolveGroup(group: string, newGroup: string): string | null {
+  if (group !== NEW_GROUP) return group;
+  return newGroup.trim() || null;
+}
 
 export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?: MonthKey }) {
   const month = monthParam ?? monthOf(today());
@@ -25,42 +77,45 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const ledger = useLedger();
   const [name, setName] = useState(envelope?.name ?? '');
   const [group, setGroup] = useState(envelope?.group ?? 'Everyday');
+  const [newGroup, setNewGroup] = useState('');
   const current = envelope ? targetFor(envelope, month) : null;
   const [target, setTarget] = useState(current ? (current / 100).toFixed(2) : '');
+  const [confirmHide, setConfirmHide] = useState(false);
 
   if (!envelope) {
     return (
       <SheetScreen>
-        <Text variant="title">This envelope is gone</Text>
+        <SheetHeader title="Edit envelope" />
+        <Text variant="body" tone="textSecondary" align="center">
+          This envelope is gone.
+        </Text>
       </SheetScreen>
     );
   }
 
-  const groups = [...new Set(['Bills', 'Everyday', 'Savings', ...envelopes.map((e) => e.group)])].filter(
-    (g) => g !== DEBT_GROUP,
-  );
   const available = ledger.available.get(id) ?? 0;
   const isDebt = !!envelope.debtAccountId;
+  const finalGroup = resolveGroup(group, newGroup);
 
   return (
     <SheetScreen>
-      <Text variant="title">Edit envelope</Text>
+      <SheetHeader title="Edit envelope" />
       <Field label="Name" value={name} onChangeText={setName} editable={!isDebt} />
       {!isDebt && (
-        <View style={{ gap: spacing.xs + 2 }}>
-          <FieldLabel label="Group" />
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 }}>
-            {groups.map((g) => (
-              <Chip key={g} label={g} selected={g === group} onPress={() => setGroup(g)} />
-            ))}
-          </View>
-        </View>
+        <GroupPicker
+          envelopes={envelopes}
+          group={group}
+          newGroup={newGroup}
+          onGroup={setGroup}
+          onNewGroup={setNewGroup}
+        />
       )}
       {!isDebt && (
         <Field
-          label={`${group === 'Savings' ? 'Put in each month' : 'Monthly target'} from ${formatMonth(month)}`}
-          hint="Earlier months keep the target they had."
+          label={finalGroup === 'Savings' ? 'Put in each month' : 'Monthly target'}
           optional
+          note={`applies from ${formatMonth(month)} on`}
+          hint="Earlier months keep the target they had."
           value={target}
           onChangeText={setTarget}
           placeholder="0.00"
@@ -71,11 +126,11 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
       <Button
         title="Save"
         size="lg"
-        disabled={!name.trim()}
+        disabled={!name.trim() || !finalGroup}
         onPress={() => {
           updateEnvelope(id, {
             name: isDebt ? envelope.name : name.trim(),
-            group: isDebt ? envelope.group : group,
+            group: isDebt || !finalGroup ? envelope.group : finalGroup,
           });
           const next = parseMoney(target);
           if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);
@@ -86,19 +141,20 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
       {!isDebt && (
         <View style={{ gap: spacing.xs + 2 }}>
           <Button
-            title="Hide envelope"
+            title={confirmHide ? 'Tap again to hide' : 'Hide envelope'}
             variant="destructive"
             disabled={available !== 0}
             onPress={() => {
+              if (!confirmHide) return setConfirmHide(true);
               updateEnvelope(id, { hidden: true });
               closeSheet();
             }}
           />
-          {available !== 0 && (
-            <Text variant="footnote" tone="textSecondary" align="center">
-              Move its money out before hiding it.
-            </Text>
-          )}
+          <Text variant="footnote" tone="textSecondary" align="center">
+            {available !== 0
+              ? 'Move its money out before hiding it.'
+              : 'It leaves the Budget. Its past transactions stay.'}
+          </Text>
         </View>
       )}
     </SheetScreen>

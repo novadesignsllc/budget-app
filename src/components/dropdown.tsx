@@ -247,8 +247,6 @@ export function Dropdown<T extends string>({
       </View>
     );
   }
-
-  let lastSection: string | undefined;
   return (
     <>
       {trigger}
@@ -308,9 +306,8 @@ export function Dropdown<T extends string>({
                   Nothing matches.
                 </Text>
               )}
-              {visible.map((o) => {
-                const header = o.section && o.section !== lastSection ? o.section : null;
-                lastSection = o.section;
+              {visible.map((o, i) => {
+                const header = o.section && o.section !== visible[i - 1]?.section ? o.section : null;
                 const isSelected = o.value === value;
                 return (
                   <View key={o.value}>

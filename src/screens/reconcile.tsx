@@ -1,130 +1,143 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Chip } from '@/components/chip';
+import { Card } from '@/components/card';
 import { Field } from '@/components/field';
-import { Section } from '@/components/list';
 import { Money } from '@/components/money';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
-import { formatShortDate, today } from '@/domain/dates';
+import { useToast } from '@/components/toast';
 import { formatMoney, parseMoney } from '@/domain/money';
-import { useLedger } from '@/hooks/use-ledger';
+import { canReconcile, reconciledBalance } from '@/domain/reconcile';
+import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
+import { spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
+function SummaryRow({ label, children, last }: { label: string; children: React.ReactNode; last?: boolean }) {
+  const colors = useColors();
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 40,
+        paddingHorizontal: spacing.md,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: colors.hairline,
+      }}
+    >
+      <Text variant="body" tone="textSecondary" style={{ flex: 1 }}>
+        {label}
+      </Text>
+      {children}
+    </View>
+  );
+}
+
 /**
- * Weekly check: does the app's balance match the bank? If not, mark what's still
- * pending at the bank, and whatever difference remains is posted as an adjustment.
+ * The last step of reconciling, when the bank still shows a different number after
+ * everything posted is checked off: post the difference as an adjustment.
+ * `ids` are transactions checked off on the account screen; they're locked on save too.
  */
-export function Reconcile({ id }: { id: string }) {
-  const ledger = useLedger();
+export function Reconcile({ id, ids }: { id: string; ids: string[] }) {
   const account = useStore((s) => s.accounts.find((a) => a.id === id));
   const transactions = useStore((s) => s.transactions);
-  const reconcile = useStore((s) => s.reconcile);
-  const [mode, setMode] = useState<'ask' | 'fix'>('ask');
+  const reconcileTransactions = useStore((s) => s.reconcileTransactions);
+  const addAdjustment = useStore((s) => s.addAdjustment);
+  const showToast = useToast((s) => s.show);
   const [bankText, setBankText] = useState('');
-  const [pending, setPending] = useState<string[]>([]);
 
-  const uncleared = useMemo(
-    () =>
-      transactions
-        .filter((t) => t.accountId === id && !t.cleared && t.date <= today())
-        .sort((a, b) => b.date.localeCompare(a.date)),
-    [transactions, id],
-  );
-
-  if (!account) return null;
-  const balance = ledger.balance.get(id) ?? 0;
-  const bank = parseMoney(bankText);
-  const pendingTotal = uncleared.filter((t) => pending.includes(t.id)).reduce((a, t) => a + t.amount, 0);
-  const expected = balance - pendingTotal;
-  const diff = bank === null ? null : bank - expected;
-
-  function finish(bankBalance: number, pendingIds: string[]) {
-    reconcile(id, bankBalance, pendingIds);
-    haptic('success');
-    closeSheet();
-  }
-
-  if (mode === 'ask') {
+  if (!account) {
     return (
       <SheetScreen>
-        <View style={{ gap: spacing.xs }}>
-          <Text variant="callout" weight="500" tone="textSecondary">
-            Does your bank app say
-          </Text>
-          <Money cents={balance} variant="display" />
+        <SheetHeader title="Adjustment" />
+        <Card padded>
           <Text variant="callout" tone="textSecondary">
-            for {account.name}?
+            This account doesn’t exist anymore.
           </Text>
-        </View>
-        <Button title="Yes, it matches" size="lg" onPress={() => finish(balance, [])} />
-        <Button title="No, it's different" size="lg" variant="secondary" onPress={() => setMode('fix')} />
+        </Card>
       </SheetScreen>
     );
   }
 
+  const picked = transactions.filter(
+    (t) => ids.includes(t.id) && t.accountId === id && !t.reconciled && canReconcile(t),
+  );
+  const expected = reconciledBalance(account, transactions) + picked.reduce((a, t) => a + t.amount, 0);
+  const bank = parseMoney(bankText);
+  const diff = bank === null ? null : bank - expected;
+
+  function save() {
+    if (bank === null || diff === null) return;
+    reconcileTransactions(
+      id,
+      picked.map((t) => t.id),
+    );
+    if (diff !== 0) addAdjustment(id, diff);
+    haptic('success');
+    showToast({
+      message:
+        diff === 0
+          ? `${account!.name} is reconciled.`
+          : `Added a ${formatMoney(diff, { signed: true })} adjustment. ${account!.name} matches your bank.`,
+    });
+    closeSheet();
+  }
+
   return (
     <SheetScreen>
-      <Text variant="title">What does the bank say?</Text>
+      <SheetHeader title="Bank shows something else" />
+      <Text variant="callout" tone="textSecondary" align="center">
+        Look for a missing or mistyped transaction first. If you can’t find it, post the difference so {account.name}{' '}
+        matches your bank.
+      </Text>
+
       <Field
-        label="Bank balance"
+        label="Balance in your bank app"
         value={bankText}
         onChangeText={setBankText}
-        placeholder={(balance / 100).toFixed(2)}
+        placeholder={(expected / 100).toFixed(2)}
         keyboardType="numbers-and-punctuation"
         inputMode="decimal"
         autoFocus
       />
 
-      {uncleared.length > 0 && (
-        <Section
-          title="Still pending at the bank?"
-          footer="Tap anything the bank hasn't posted yet. It stays in your balance here but is left out of the comparison."
-        >
-          {uncleared.map((t) => {
-            const isPending = pending.includes(t.id);
-            return (
-              <View
-                key={t.id}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.lg }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text variant="body" numberOfLines={1}>
-                    {t.payee}
-                  </Text>
-                  <Text variant="footnote" tone="textSecondary">
-                    {formatShortDate(t.date)} · {formatMoney(t.amount, { signed: true })}
-                  </Text>
-                </View>
-                <Chip
-                  label={isPending ? 'Pending' : 'Posted'}
-                  selected={isPending}
-                  onPress={() => setPending((p) => (isPending ? p.filter((x) => x !== t.id) : [...p, t.id]))}
-                />
-              </View>
-            );
-          })}
-        </Section>
-      )}
+      <Card>
+        <SummaryRow label={picked.length ? `Reconciled, with ${picked.length} checked off` : 'Reconciled in the app'}>
+          <Money cents={expected} weight="500" />
+        </SummaryRow>
+        <SummaryRow label="Difference" last>
+          {diff === null ? (
+            <Text variant="body" tone="textTertiary">
+              Enter the bank balance
+            </Text>
+          ) : (
+            <Money cents={diff} weight="600" signed={diff !== 0} tone={diff === 0 ? 'positive' : 'auto'} />
+          )}
+        </SummaryRow>
+      </Card>
 
-      {diff !== null && (
-        <Text variant="callout" tone={diff === 0 ? 'positive' : 'textSecondary'}>
-          {diff === 0
-            ? 'That matches.'
-            : `Off by ${formatMoney(Math.abs(diff))}. Look for a missing transaction first. If you can't find it, save and the app adds a ${formatMoney(diff, { signed: true })} adjustment to Ready to assign.`}
+      {diff !== null && diff !== 0 && (
+        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: 2 }}>
+          The adjustment goes to Ready to assign, already reconciled.
+          {diff < 0 ? ' Ready to assign drops by the same amount.' : ''}
         </Text>
       )}
 
       <Button
-        title={diff === null ? 'Enter the bank balance' : diff === 0 ? 'Mark as checked' : 'Save with adjustment'}
+        title={
+          diff === null
+            ? 'Enter the bank balance'
+            : diff === 0
+              ? 'Mark reconciled'
+              : `Post ${formatMoney(diff, { signed: true })} adjustment`
+        }
         size="lg"
         disabled={bank === null}
-        onPress={() => bank !== null && finish(bank, pending)}
+        onPress={save}
       />
     </SheetScreen>
   );

@@ -8,6 +8,7 @@ import { ToastHost } from '@/components/toast';
 import { useSession, useSessionBootstrap } from '@/sync/session';
 import { useColors } from '@/theme';
 import { pinLightAppearance } from '@/theme/preference';
+import '@/theme/web-reset';
 
 SplashScreen.preventAutoHideAsync();
 pinLightAppearance();

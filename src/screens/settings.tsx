@@ -1,84 +1,114 @@
-import { View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { backend, inDemo } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
-import { Button } from '@/components/button';
-import { FieldLabel } from '@/components/field';
-import { SheetScreen } from '@/components/screen';
-import { Segmented } from '@/components/segmented';
-import { Text } from '@/components/text';
+import { Card } from '@/components/card';
+import { Screen } from '@/components/screen';
+import { ActionButton, ScreenActions } from '@/components/screen-actions';
+import { ScreenTitle } from '@/components/screen-title';
+import { Text, type TextTone } from '@/components/text';
+import { PayeesCard } from '@/screens/settings-payees';
 import { useSession } from '@/sync/session';
 import { useStore } from '@/store';
 import { loadSampleData } from '@/store/sample-data';
-import { PayeesSection } from '@/screens/settings-payees';
-import { spacing } from '@/theme';
-import { useThemePreference, type ThemePreference } from '@/theme/preference';
-import { closeSheet } from '@/utils/close-sheet';
+import { spacing, useColors } from '@/theme';
+
+function ActionRow({
+  title,
+  detail,
+  tone = 'text',
+  onPress,
+  last,
+}: {
+  title: string;
+  detail?: string;
+  tone?: TextTone;
+  onPress: () => void;
+  last?: boolean;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        height: 42,
+        paddingHorizontal: spacing.md + 2,
+        gap: spacing.sm,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: colors.hairline,
+        backgroundColor: pressed ? colors.control : colors.surface,
+      })}
+    >
+      <Text variant="body" tone={tone} style={{ flex: 1 }}>
+        {title}
+      </Text>
+      {detail ? (
+        <Text variant="callout" tone="textSecondary">
+          {detail}
+        </Text>
+      ) : null}
+    </Pressable>
+  );
+}
 
 export function Settings() {
   const user = useSession((s) => s.user);
   const empty = useStore((s) => s.accounts.length === 0);
-  const preference = useThemePreference((s) => s.preference);
-  const setPreference = useThemePreference((s) => s.set);
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const devSample = __DEV__ && empty && !inDemo;
 
   return (
-    <SheetScreen>
-      <Text variant="title">Settings</Text>
+    <>
+      <Screen>
+        <ScreenTitle title="Settings" context={inDemo ? 'Demo' : (user?.email ?? 'Signed in with Apple')} />
 
-      <View style={{ gap: spacing.xs + 2 }}>
-        <FieldLabel label="Appearance" />
-        <Segmented<ThemePreference>
-          value={preference}
-          onChange={setPreference}
-          options={[
-            { value: 'system', label: 'System' },
-            { value: 'light', label: 'Light' },
-            { value: 'dark', label: 'Dark' },
-          ]}
-        />
-      </View>
+        <PayeesCard searching={searching} adding={adding} onDoneAdding={() => setAdding(false)} />
 
-      {inDemo ? (
-        <View style={{ gap: spacing.md }}>
-          <Text variant="body" style={{ paddingHorizontal: spacing.xs }}>
-            You’re in the demo. Nothing here touches your real account.
-          </Text>
-          <Button title="Exit demo" variant="secondary" onPress={() => void setDemoMode(false)} />
-        </View>
-      ) : (
-        <>
-          <View style={{ gap: spacing.xs }}>
-            <FieldLabel label="Signed in as" />
-            <Text variant="body" selectable style={{ paddingHorizontal: spacing.xs }}>
-              {user?.email ?? 'Apple ID (email hidden)'}
-            </Text>
-            <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-              Your data syncs through Firebase to any device signed in to this account.
+        <Card>
+          {inDemo ? (
+            <ActionRow title="Exit demo" detail="Back to your account ›" onPress={() => void setDemoMode(false)} last />
+          ) : (
+            <>
+              <ActionRow title="Try the demo" detail="Six months of sample data ›" onPress={() => void setDemoMode(true)} />
+              {devSample && <ActionRow title="Load sample data" detail="Dev only" onPress={loadSampleData} />}
+              <ActionRow title="Sign out" tone="negative" onPress={() => void backend.signOut()} last />
+            </>
+          )}
+        </Card>
+
+        {!inDemo && (
+          <View style={{ paddingHorizontal: 2 }}>
+            <Text variant="footnote" tone="textTertiary" align="center">
+              Your data syncs to every device signed in to this account.
             </Text>
           </View>
-
-          <Button
-            title="Sign out"
-            variant="destructive"
-            onPress={() => {
-              closeSheet();
-              void backend.signOut();
-            }}
-          />
-        </>
-      )}
-      <PayeesSection />
-
-      {__DEV__ && empty && !inDemo && (
-        <Button
-          title="Load sample data"
-          variant="ghost"
+        )}
+      </Screen>
+      <ScreenActions>
+        <ActionButton
+          icon={{ sf: 'magnifyingglass', md: 'search' }}
+          variant={searching ? 'accent' : 'outline'}
+          accessibilityLabel={searching ? 'Stop searching payees' : 'Search payees'}
           onPress={() => {
-            loadSampleData();
-            closeSheet();
+            setSearching(!searching);
+            setAdding(false);
           }}
         />
-      )}
-    </SheetScreen>
+        <ActionButton
+          icon={{ sf: 'plus', md: 'add' }}
+          variant="ink"
+          accessibilityLabel="Add a payee"
+          onPress={() => {
+            setAdding(!adding);
+            setSearching(false);
+          }}
+        />
+      </ScreenActions>
+    </>
   );
 }

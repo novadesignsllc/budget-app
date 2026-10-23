@@ -1,36 +1,33 @@
 import { useState } from 'react';
-import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Chip } from '@/components/chip';
-import { Field, FieldLabel } from '@/components/field';
+import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
-import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
-import { monthOf } from '@/domain/months';
-import { DEBT_GROUP, useStore } from '@/store';
-import { spacing } from '@/theme';
+import { formatMonth, monthOf, type MonthKey } from '@/domain/months';
+import { useStore } from '@/store';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
-export function NewEnvelope() {
+import { GroupPicker, resolveGroup } from './envelope-settings';
+import { SheetHeader } from '@/components/sheet-header';
+
+export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
+  const month = monthParam ?? monthOf(today());
   const envelopes = useStore((s) => s.envelopes);
   const addEnvelope = useStore((s) => s.addEnvelope);
-  const groups = [...new Set(['Bills', 'Everyday', 'Savings', ...envelopes.map((e) => e.group)])].filter(
-    (g) => g !== DEBT_GROUP,
-  );
   const [name, setName] = useState('');
   const [group, setGroup] = useState('Everyday');
   const [newGroup, setNewGroup] = useState('');
   const [target, setTarget] = useState('');
 
-  const finalGroup = newGroup.trim() || group;
+  const finalGroup = resolveGroup(group, newGroup);
   const duplicate = envelopes.some((e) => e.name.toLowerCase() === name.trim().toLowerCase() && !e.hidden);
 
   return (
     <SheetScreen>
-      <Text variant="title">New envelope</Text>
+      <SheetHeader title="New envelope" />
       <Field
         label="Name"
         value={name}
@@ -39,25 +36,17 @@ export function NewEnvelope() {
         autoFocus
         error={duplicate ? 'You already have an envelope with this name.' : undefined}
       />
-      <View style={{ gap: spacing.sm }}>
-        <FieldLabel label="Group" />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {groups.map((g) => (
-            <Chip key={g} label={g} selected={!newGroup && g === group} onPress={() => { setGroup(g); setNewGroup(''); }} />
-          ))}
-        </View>
-        <Field label="Or a new group" value={newGroup} onChangeText={setNewGroup} placeholder="Kids" />
-        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          {finalGroup === 'Savings'
-            ? 'Savings: money you add each month and leave alone.'
-            : finalGroup === 'Bills'
-              ? 'Bills: the same amount goes out every month.'
-              : 'Money you spend through the month.'}
-        </Text>
-      </View>
+      <GroupPicker
+        envelopes={envelopes}
+        group={group}
+        newGroup={newGroup}
+        onGroup={setGroup}
+        onNewGroup={setNewGroup}
+      />
       <Field
         label={finalGroup === 'Savings' ? 'Put in each month' : 'Monthly target'}
         optional
+        note={`applies from ${formatMonth(month)} on`}
         value={target}
         onChangeText={setTarget}
         placeholder="0.00"
@@ -67,9 +56,15 @@ export function NewEnvelope() {
       <Button
         title="Create envelope"
         size="lg"
-        disabled={!name.trim() || duplicate}
+        disabled={!name.trim() || duplicate || !finalGroup}
         onPress={() => {
-          addEnvelope({ name, group: finalGroup, monthlyTarget: parseMoney(target) ?? undefined, month: monthOf(today()) });
+          if (!finalGroup) return;
+          addEnvelope({
+            name,
+            group: finalGroup,
+            monthlyTarget: parseMoney(target) ?? undefined,
+            month,
+          });
           haptic('success');
           closeSheet();
         }}

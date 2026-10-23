@@ -2,25 +2,28 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Chip } from '@/components/chip';
 import { DateField } from '@/components/date-field';
+import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
-import { Segmented } from '@/components/segmented';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
-import { parseMoney } from '@/domain/money';
+import { formatMoney, parseMoney } from '@/domain/money';
 import { FREQUENCY_LABEL } from '@/domain/recurring';
 import { isCashAccount, type Frequency, type RecurringKind } from '@/domain/types';
-import { useAccounts } from '@/hooks/use-ledger';
+import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
-import { spacing } from '@/theme';
+import { groupColor, radius, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
+import { SheetHeader } from '@/components/sheet-header';
+
 const FREQUENCIES: Frequency[] = ['weekly', 'biweekly', 'monthly', 'quarterly', 'yearly'];
+const GROUP_ORDER = ['Bills', 'Everyday', 'Savings'];
 
 export function EditRecurring({ id }: { id?: string }) {
+  const colors = useColors();
   const existing = useStore((s) => s.recurring.find((r) => r.id === id));
   const envelopes = useStore((s) => s.envelopes);
   const addRecurring = useStore((s) => s.addRecurring);
@@ -28,6 +31,7 @@ export function EditRecurring({ id }: { id?: string }) {
   const deleteRecurring = useStore((s) => s.deleteRecurring);
   const skipRecurring = useStore((s) => s.skipRecurring);
   const { all: accounts, cash } = useAccounts();
+  const ledger = useLedger();
 
   const [name, setName] = useState(existing?.name ?? '');
   const [kind, setKind] = useState<RecurringKind>(existing?.kind ?? 'bill');
@@ -41,33 +45,61 @@ export function EditRecurring({ id }: { id?: string }) {
   const amount = parseMoney(amountText);
   const account = accounts.find((a) => a.id === accountId);
   const onCard = !!account && !isCashAccount(account);
-  const spendable = envelopes.filter((e) => !e.hidden && !e.debtAccountId);
+  const rank = (g: string) => (GROUP_ORDER.includes(g) ? GROUP_ORDER.indexOf(g) : 50);
+  const spendable = envelopes
+    .filter((e) => !e.hidden && !e.debtAccountId)
+    .sort((a, b) => rank(a.group) - rank(b.group) || a.group.localeCompare(b.group) || a.order - b.order);
   const valid = name.trim() && amount && amount > 0 && accountId && envelopeId;
+
+  // Bank accounts first, then cards in their own red section. Loans can't pay a bill.
+  const accountOptions: DropdownOption<string>[] = accounts
+    .filter((a) => isCashAccount(a) || a.kind === 'credit_card' || a.id === accountId)
+    .sort((a, b) => Number(!isCashAccount(a)) - Number(!isCashAccount(b)))
+    .map((a) => {
+      const card = !isCashAccount(a);
+      return {
+        value: a.id,
+        label: a.name,
+        face: a.order,
+        section: card ? 'Cards · every charge is a slip' : 'Bank accounts',
+        tone: card ? 'negative' : undefined,
+        detail: formatMoney(ledger.balance.get(a.id) ?? 0),
+      };
+    });
+  const envelopeOptions: DropdownOption<string>[] = spendable.map((e) => ({
+    value: e.id,
+    label: e.name,
+    dot: groupColor(e.group),
+    section: e.group,
+  }));
 
   function save() {
     if (!valid || !amount || !accountId) return;
-    const data = { name: name.trim(), kind, amount, accountId, envelopeId, frequency, nextDue };
+    const data = {
+      name: name.trim(),
+      kind,
+      amount,
+      accountId,
+      envelopeId,
+      frequency,
+      nextDue,
+    };
     if (existing) updateRecurring(existing.id, data);
     else addRecurring(data);
     haptic('success');
     closeSheet();
   }
 
+  const rowStyle = { borderBottomWidth: 1, borderBottomColor: colors.hairline };
+
   return (
     <SheetScreen>
-      <Text variant="title">{existing ? existing.name : 'New recurring'}</Text>
-      <Segmented
-        value={kind}
-        onChange={setKind}
-        options={[
-          { value: 'bill', label: 'Bill' },
-          { value: 'subscription', label: 'Subscription' },
-        ]}
-      />
+      <SheetHeader title={existing ? existing.name : 'New recurring'} />
+
       <Field label="Name" value={name} onChangeText={setName} placeholder={kind === 'bill' ? 'Electric' : 'Netflix'} />
       <Field
         label={kind === 'bill' ? 'Usual amount' : 'Amount'}
-        hint={kind === 'bill' ? 'You confirm the real amount when it comes due.' : undefined}
+        hint={kind === 'bill' ? 'Bills can change. Fix the amount on the transaction after you approve it.' : undefined}
         value={amountText}
         onChangeText={setAmountText}
         placeholder="0.00"
@@ -75,56 +107,90 @@ export function EditRecurring({ id }: { id?: string }) {
         inputMode="decimal"
       />
 
-      <View style={{ gap: spacing.sm }}>
-        <Text variant="footnote" weight="500" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          Paid from
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {accounts.map((a) => (
-            <Chip
-              key={a.id}
-              label={a.name}
-              selected={a.id === accountId}
-              tone={isCashAccount(a) ? 'default' : 'negative'}
-              onPress={() => setAccountId(a.id)}
+      <View style={{ gap: 6 }}>
+        <View
+          style={{
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.menu,
+            borderCurve: 'continuous',
+            overflow: 'hidden',
+          }}
+        >
+          <View style={rowStyle}>
+            <Dropdown
+              variant="row"
+              label="Kind"
+              value={kind}
+              onChange={setKind}
+              options={[
+                {
+                  value: 'bill',
+                  label: 'Bill',
+                  description: 'Rent, utilities. The amount can change.',
+                },
+                {
+                  value: 'subscription',
+                  label: 'Subscription',
+                  description: 'Netflix, Spotify. Same price each time.',
+                },
+              ]}
             />
-          ))}
+          </View>
+          <View style={rowStyle}>
+            <Dropdown
+              variant="row"
+              label="Paid from"
+              value={accountId}
+              onChange={setAccountId}
+              options={accountOptions}
+            />
+          </View>
+          <View style={rowStyle}>
+            <Dropdown
+              variant="row"
+              label="Envelope"
+              value={envelopeId}
+              onChange={setEnvelopeId}
+              options={envelopeOptions}
+              searchable
+              placeholder={spendable.length ? 'Choose' : 'None yet'}
+            />
+          </View>
+          <View style={rowStyle}>
+            <Dropdown
+              variant="row"
+              label="How often"
+              value={frequency}
+              onChange={setFrequency}
+              options={FREQUENCIES.map((f) => ({
+                value: f,
+                label: FREQUENCY_LABEL[f],
+              }))}
+            />
+          </View>
+          <View
+            style={{
+              minHeight: 40,
+              justifyContent: 'center',
+              paddingHorizontal: spacing.md,
+            }}
+          >
+            <DateField label="Next due" value={nextDue} onChange={setNextDue} />
+          </View>
         </View>
         {onCard && (
-          <Text variant="footnote" tone="negative" style={{ paddingHorizontal: spacing.xs }}>
+          <Text variant="footnote" tone="negative" style={{ paddingHorizontal: 2 }}>
             Recurring charges on a card are slips every time. Move this to a bank account when you can.
           </Text>
         )}
+        {spendable.length === 0 && (
+          <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: 2 }}>
+            Make envelopes on the Budget tab first.
+          </Text>
+        )}
       </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text variant="footnote" weight="500" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          Envelope
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {spendable.map((e) => (
-            <Chip key={e.id} label={e.name} selected={e.id === envelopeId} onPress={() => setEnvelopeId(e.id)} />
-          ))}
-          {spendable.length === 0 && (
-            <Text variant="callout" tone="textSecondary">
-              Make envelopes on the Budget tab first.
-            </Text>
-          )}
-        </View>
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
-        <Text variant="footnote" weight="500" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          How often
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {FREQUENCIES.map((f) => (
-            <Chip key={f} label={FREQUENCY_LABEL[f]} selected={f === frequency} onPress={() => setFrequency(f)} />
-          ))}
-        </View>
-      </View>
-
-      <DateField label="Next due" value={nextDue} onChange={setNextDue} />
 
       <Button title={existing ? 'Save' : 'Add'} size="lg" disabled={!valid} onPress={save} />
 

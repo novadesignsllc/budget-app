@@ -2,15 +2,17 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Button } from '@/components/button';
-import { Chip } from '@/components/chip';
+import { Card } from '@/components/card';
 import { DateField } from '@/components/date-field';
+import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Field } from '@/components/field';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
-import { isCashAccount } from '@/domain/types';
+import { isCashAccount, type Account } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
 import { spacing } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
@@ -34,35 +36,35 @@ export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?:
 
   const valid = !!fromId && !!toId && fromId !== toId && !!amount && amount > 0;
 
+  const option = (a: Account): DropdownOption<string> => {
+    const balance = ledger.balance.get(a.id) ?? 0;
+    const debt = !isCashAccount(a);
+    return {
+      value: a.id,
+      label: a.name,
+      face: a.order,
+      detail: debt ? `${formatMoney(-balance)} owed` : formatMoney(balance),
+      section: debt ? 'Debts' : 'Accounts',
+    };
+  };
+  const toOptions = [...all.filter(isCashAccount), ...all.filter((a) => !isCashAccount(a))]
+    .filter((a) => a.id !== fromId)
+    .map(option);
+
   return (
     <SheetScreen>
-      <Text variant="title">{isPayment ? `Pay ${to!.name}` : 'Transfer'}</Text>
+      <SheetHeader title={isPayment ? `Pay ${to!.name}` : 'Transfer'} />
 
-      <View style={{ gap: spacing.sm }}>
-        <Text variant="footnote" weight="500" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          From
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-          {cash.map((a) => (
-            <Chip key={a.id} label={a.name} selected={a.id === fromId} onPress={() => setFromId(a.id)} />
-          ))}
-        </View>
-      </View>
-
-      {!toParam && (
-        <View style={{ gap: spacing.sm }}>
-          <Text variant="footnote" weight="500" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-            To
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {all
-              .filter((a) => a.id !== fromId)
-              .map((a) => (
-                <Chip key={a.id} label={a.name} selected={a.id === toId} onPress={() => setToId(a.id)} />
-              ))}
-          </View>
-        </View>
-      )}
+      <Dropdown
+        label="From"
+        value={fromId}
+        options={cash.map(option)}
+        onChange={(v) => {
+          setFromId(v);
+          if (v === toId) setToId(undefined);
+        }}
+      />
+      <Dropdown label="To" value={toId} options={toOptions} onChange={setToId} placeholder="Choose an account" />
 
       <Field
         label="Amount"
@@ -71,17 +73,29 @@ export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?:
         placeholder="0.00"
         keyboardType="decimal-pad"
         inputMode="decimal"
-        hint={
-          isPayment
-            ? `Comes out of the ${to!.name} payment envelope, which has ${formatMoney(ready)}.`
-            : 'Moving money between your own accounts doesn’t change your budget.'
+        error={
+          isPayment && amount && amount > ready
+            ? `That’s ${formatMoney(amount - ready)} more than the envelope has. It’ll go negative.`
+            : undefined
         }
-        error={isPayment && amount && amount > ready ? `That's ${formatMoney(amount - ready)} more than the envelope has. It'll go negative.` : undefined}
       />
-      <DateField label="Date" value={date} onChange={setDate} />
+
+      <Card style={{ paddingHorizontal: spacing.md, paddingVertical: 6 }}>
+        <DateField label="Date" value={date} onChange={setDate} />
+      </Card>
+
+      <View style={{ paddingHorizontal: 2 }}>
+        <Text variant="footnote" tone="textSecondary">
+          {isPayment
+            ? envelope
+              ? `Comes out of the ${to!.name} payment envelope, which has ${formatMoney(ready)}.`
+              : `${to!.name} has no payment envelope yet, so this comes out of Ready to assign.`
+            : 'Moving money between your own accounts doesn’t change your budget.'}
+        </Text>
+      </View>
 
       <Button
-        title={isPayment ? `Pay ${amount ? formatMoney(amount) : ''}`.trim() : 'Transfer'}
+        title={isPayment ? `Pay ${amount ? formatMoney(amount) : ''}`.trim() : amount ? `Move ${formatMoney(amount)}` : 'Transfer'}
         size="lg"
         disabled={!valid}
         onPress={() => {

@@ -148,8 +148,11 @@ type Actions = {
    * skipped and returned, since a flagged transaction can't be reconciled.
    */
   reconcileTransactions: (accountId: string, ids: string[]) => string[];
-  /** Posts a leftover difference found while reconciling, already reconciled. */
-  addAdjustment: (accountId: string, amount: Cents) => void;
+  /**
+   * Posts a balance correction with no envelope. From reconciling it's already
+   * reconciled; an error adjustment (`fix`) is a plain transaction.
+   */
+  addAdjustment: (accountId: string, amount: Cents, opts?: { fix?: boolean }) => void;
   transfer: (input: {
     fromAccountId: string;
     toAccountId: string;
@@ -442,7 +445,7 @@ export const useStore = create<Store>()((set, get) => ({
     return skipped;
   },
 
-  addAdjustment: (accountId, amount) => {
+  addAdjustment: (accountId, amount, opts) => {
     if (!amount) return;
     set((s) => ({
       transactions: [
@@ -453,9 +456,9 @@ export const useStore = create<Store>()((set, get) => ({
           accountId,
           amount,
           kind: 'adjustment',
-          payee: 'Balance adjustment',
+          payee: opts?.fix ? 'Error adjustment' : 'Balance adjustment',
           cleared: true,
-          reconciled: true,
+          reconciled: !opts?.fix,
           createdAt: Date.now(),
         },
       ],

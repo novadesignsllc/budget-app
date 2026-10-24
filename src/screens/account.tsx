@@ -276,11 +276,16 @@ export function AccountDetail({ id, header }: { id: string; header?: React.React
             {debt ? (
               <ActionButton label="Make a payment" onPress={() => router.push({ pathname: '/transfer', params: { to: id } })} />
             ) : (
-              <ActionButton
-                label="Transfer"
-                icon={{ sf: 'arrow.left.arrow.right', md: 'swap_horiz' }}
-                onPress={() => router.push({ pathname: '/transfer', params: { from: id } })}
-              />
+              <>
+                <ActionButton
+                  label="Error adjustment"
+                  onPress={() => router.push({ pathname: '/fix-balance', params: { id } })}
+                />
+                <ActionButton
+                  label="Transfer"
+                  onPress={() => router.push({ pathname: '/transfer', params: { from: id } })}
+                />
+              </>
             )}
             <ActionButton icon={{ sf: 'checkmark', md: 'check' }} label="Reconcile" variant="accent" onPress={start} />
           </>

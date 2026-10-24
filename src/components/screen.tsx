@@ -6,13 +6,16 @@ import { keyboardTop } from '@/utils/keyboard';
 import { gutter, maxContentWidth, spacing } from '@/theme';
 
 import { useDock } from './dock';
+import { MenuHost } from './menu-host';
 
 /** The scroll container for tab screens: gutter, card rhythm, room for the action bar. */
 export function Screen({
   children,
   contentContainerStyle,
   ...props
-}: ScrollViewProps & { ref?: React.Ref<React.ComponentRef<typeof ScrollView>> }) {
+}: ScrollViewProps & {
+  ref?: React.Ref<React.ComponentRef<typeof ScrollView>>;
+}) {
   const { contentBottom } = useDock();
   return (
     <ScrollView
@@ -58,27 +61,38 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
   const reveal: Reveal = (view) =>
     view?.measureInWindow((_x: number, y: number, _w: number, h: number) => {
       const over = y + h + spacing.md - keyboardTop(window.height);
-      if (over > 0) scrollRef.current?.scrollTo({ y: offset.current + over, animated: true });
+      if (over > 0)
+        scrollRef.current?.scrollTo({
+          y: offset.current + over,
+          animated: true,
+        });
     });
   return (
     <SheetReveal value={reveal}>
-      <ScrollView
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
-        automaticallyAdjustKeyboardInsets
-        scrollEventThrottle={32}
-        onScroll={(e) => {
-          offset.current = e.nativeEvent.contentOffset.y;
-          onScroll?.(e);
-        }}
-        contentContainerStyle={[
-          { padding: gutter, paddingTop: spacing.lg, gap: spacing.md + 2, paddingBottom: spacing.xxxl },
-          contentContainerStyle,
-        ]}
-        {...props}
-      >
-        {children}
-      </ScrollView>
+      <MenuHost>
+        <ScrollView
+          ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
+          automaticallyAdjustKeyboardInsets
+          scrollEventThrottle={32}
+          onScroll={(e) => {
+            offset.current = e.nativeEvent.contentOffset.y;
+            onScroll?.(e);
+          }}
+          contentContainerStyle={[
+            {
+              padding: gutter,
+              paddingTop: spacing.lg,
+              gap: spacing.md + 2,
+              paddingBottom: spacing.xxxl,
+            },
+            contentContainerStyle,
+          ]}
+          {...props}
+        >
+          {children}
+        </ScrollView>
+      </MenuHost>
     </SheetReveal>
   );
 }

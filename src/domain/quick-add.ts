@@ -210,20 +210,19 @@ export function envelopeFor(payee: string, ctx: Pick<ParseContext, 'envelopes' |
 
 /**
  * A draft from the two typed fields. The name is taken as written (so "7-Eleven" stays a
- * name), and a name like "Paycheck" starts out as income.
+ * name), and it always starts as an outflow; the Outflow/Inflow toggle changes that.
  */
 export function draftFromFields(payee: string, amount: Cents | null, ctx: ParseContext): ParsedEntry {
   const name = payee.trim();
-  const isIncome = INCOME_RE.test(name);
   const account = defaultAccount(ctx.accounts) ?? null;
-  const { envelopeId, envelopeSource } = isIncome ? NO_ENVELOPE : envelopeFor(name, ctx);
+  const { envelopeId, envelopeSource } = envelopeFor(name, ctx);
   return {
     amount,
     payee: name,
     date: ctx.today,
     accountId: account?.id ?? null,
     accountMentioned: false,
-    kind: isIncome ? 'income' : 'spend',
+    kind: 'spend',
     envelopeId,
     envelopeSource,
   };
@@ -251,14 +250,23 @@ function findNote(text: string): { memo: string; index: number } | null {
   return { memo: memo.charAt(0).toUpperCase() + memo.slice(1), index: m.index };
 }
 
-/** "from the groceries envelope", "groceries envelope", "envelope groceries". */
-function findEnvelope(text: string, envelopes: Envelope[]): { id: string; matched: string } | null {
+/**
+ * An envelope said by name: "groceries envelope", "envelope groceries", or just
+ * "eating out" anywhere in the sentence ("Chipotle 14.50 eating out", "... for gas").
+ * Saying "envelope" wins over a bare name.
+ */
+function findEnvelope(text: string, envelopes: Envelope[]): { id: string; matched: string; bare: boolean } | null {
   const usable = envelopes.filter((e) => !e.hidden && !e.debtAccountId).sort((a, b) => b.name.length - a.name.length);
+  const lead = '(?:\\b(?:from|for|in|into|out of|under)\\s+)?(?:\\b(?:the|my)\\s+)?';
   for (const e of usable) {
-    const name = escapeRe(e.name.toLowerCase());
-    const re = new RegExp(`(?:\\b(?:from|in|into|out of)\\s+)?(?:\\b(?:the|my)\\s+)?\\b${name}\\s+envelope\\b|\\benvelope\\s+${name}\\b`, 'i');
-    const m = text.match(re);
-    if (m) return { id: e.id, matched: m[0] };
+    const name = escapeRe(e.name.toLowerCase()).replace(/\\? /g, '\\s+');
+    const m = text.match(new RegExp(`${lead}\\b${name}\\s+envelope\\b|\\benvelope\\s+${name}\\b`, 'i'));
+    if (m) return { id: e.id, matched: m[0], bare: false };
+  }
+  for (const e of usable) {
+    const name = escapeRe(e.name.toLowerCase()).replace(/\\? /g, '\\s+');
+    const m = text.match(new RegExp(`${lead}\\b${name}(?![\\w'])`, 'i'));
+    if (m) return { id: e.id, matched: m[0], bare: true };
   }
   return null;
 }
@@ -279,8 +287,6 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
   const direction = rest.match(/\b(inflow|outflow)\b/i);
   if (direction) rest = rest.replace(direction[0], ' ');
 
-  const saidEnvelope = findEnvelope(rest, ctx.envelopes);
-  if (saidEnvelope) rest = rest.replace(saidEnvelope.matched, ' ');
 
   const date = findDate(rest, ctx.today);
   if (date) rest = rest.replace(new RegExp(escapeRe(date.matched), 'i'), ' ');
@@ -305,6 +311,14 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
   const found = findAccount(rest, ctx.accounts);
   // "checking account", "chase card": the trailing word goes with the account.
   if (found) rest = rest.replace(new RegExp(`${escapeRe(found.matched)}(?:\\s+(?:account|card))?`, 'i'), ' ');
+
+  const saidEnvelope = findEnvelope(rest, ctx.envelopes);
+  if (saidEnvelope) {
+    const without = rest.replace(saidEnvelope.matched, ' ');
+    // "Groceries 54" names only the envelope: keep it as the payee too.
+    const leavesAName = /[a-z]/i.test(without.replace(/\d[\d.,$]*/g, ''));
+    if (!saidEnvelope.bare || leavesAName) rest = without;
+  }
 
   const isIncome = direction ? direction[1].toLowerCase() === 'inflow' : sign === '+' || INCOME_RE.test(said);
   const account = found?.account ?? defaultAccount(ctx.accounts) ?? null;

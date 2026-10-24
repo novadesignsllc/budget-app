@@ -492,10 +492,12 @@ function EnvelopeRow({
             style={({ pressed }) => ({
               flex: 1,
               minWidth: 0,
+              // Room between a long name's "…" and the Assigned chip, which reaches 6pt into this side.
+              paddingRight: spacing.md,
               opacity: pressed ? 0.5 : 1,
             })}
           >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
               <Text style={{ width: 20, textAlign: 'center', fontSize: 16, lineHeight: 20, opacity: past ? 0.6 : 1 }}>
                 {envelopeEmoji(envelope)}
               </Text>
@@ -504,7 +506,8 @@ function EnvelopeRow({
                 weight="500"
                 tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
                 numberOfLines={1}
-                style={{ flex: 1 }}
+                ellipsizeMode="tail"
+                style={{ flex: 1, minWidth: 0 }}
               >
                 {envelope.name}
               </Text>

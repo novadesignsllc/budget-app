@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { parseQuickAdd, type ParseContext } from './quick-add';
+import { draftFromFields, parseQuickAdd, type ParseContext } from './quick-add';
 
 const ctx: ParseContext = {
   today: '2026-10-22', // a Thursday
@@ -139,5 +139,24 @@ describe('dictating everything', () => {
   });
   it('outflow wins over a name that sounds like income', () => {
     expect(parseQuickAdd('deposit refund 25 outflow', spoken).kind).toBe('spend');
+  });
+});
+
+describe('envelopes said by name', () => {
+  const spoken = { ...ctx, spoken: true };
+  it('hears an envelope name anywhere in the sentence', () => {
+    expect(parseQuickAdd('Chipotle 1450 eating out', spoken)).toMatchObject({
+      payee: 'Chipotle',
+      amount: 1450,
+      envelopeId: 'eat',
+      envelopeSource: 'said',
+    });
+    expect(parseQuickAdd('Shell 40 for gas', spoken)).toMatchObject({ payee: 'Shell', envelopeId: 'gas' });
+  });
+  it('keeps the name when the envelope is all that was said', () => {
+    expect(parseQuickAdd('groceries 54', spoken)).toMatchObject({ payee: 'Groceries', envelopeId: 'groc' });
+  });
+  it('typed names always start as outflow', () => {
+    expect(draftFromFields('Paycheck', 184216, ctx).kind).toBe('spend');
   });
 });

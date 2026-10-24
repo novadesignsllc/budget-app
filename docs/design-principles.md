@@ -79,3 +79,9 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-24 | Debt page = the account register with the payoff card and details on top: Monthly target (Minimum or Custom), one Activity list with slips in red, Make a payment and Reconcile bottom right. No Enter statement, no payment envelope row | Neater, and debts reconcile the same way accounts do |
 | 2026-10-24 | Debt payment envelopes can't be edited; their name is the debt's and their target comes from the debt page | User request |
 | 2026-10-24 | Recurring sheet: Save · Pause · Delete in one row | User request |
+| 2026-10-24 | Sheet menus draw in a layer inside the sheet, not a Modal | A Modal took the keyboard away on iPhone |
+| 2026-10-24 | Transaction rows: Envelope, Date, Account, Flag, Note, then Outflow/Inflow. Typed entries always start as Outflow | User request |
+| 2026-10-24 | Reconciled rows get a grey background as well as grey text | Easier to tell apart |
+| 2026-10-24 | Envelope names always end in "…" before reaching the Assigned column, with a gap before the chip | Long names ran into the numbers |
+| 2026-10-24 | Dictation hears an envelope by its name alone ("Chipotle 14.50 eating out") | Requiring the word "envelope" missed it |
+| 2026-10-24 | Bank accounts have Error adjustment: type the correct balance and the difference posts with no envelope | Fix a wrong balance without reconciling |

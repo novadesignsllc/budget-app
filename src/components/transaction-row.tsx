@@ -113,7 +113,7 @@ export function TransactionRow({
         paddingHorizontal: spacing.md,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
-        backgroundColor: pressed ? colors.control : slip ? colors.negativeTint : colors.surface,
+        backgroundColor: pressed ? colors.fill : done ? colors.control : slip ? colors.negativeTint : colors.surface,
         opacity: select?.disabled ? 0.55 : 1,
       })}
     >

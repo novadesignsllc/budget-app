@@ -176,6 +176,7 @@ export function EditTransaction({ id }: { id: string }) {
             placeholder="Choose"
           />
         )}
+        <DateRow label="Date" value={date} onChange={setDate} max={today()} last />
         {spending ? (
           <Dropdown variant="row" label="Account" value={accountId} options={accountOptions} onChange={setAccountId} />
         ) : (
@@ -185,7 +186,7 @@ export function EditTransaction({ id }: { id: string }) {
             </Text>
           </FormRow>
         )}
-        <DateRow label="Date" value={date} onChange={setDate} max={today()} last />
+        <FlagRow value={flag} onChange={setFlagState} />
         <InputRow
           ref={noteRef}
           label="Note"
@@ -194,7 +195,6 @@ export function EditTransaction({ id }: { id: string }) {
           returnKeyType="done"
           placeholder="Add a note"
         />
-        <FlagRow value={flag} onChange={setFlagState} />
       </FormCard>
 
       <Button

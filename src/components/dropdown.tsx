@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
@@ -10,6 +10,7 @@ import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/them
 import { FieldLabel } from './field';
 import { Icon } from './icon';
 import { FORM_ROW_HEIGHT } from './form';
+import { useMenuHost } from './menu-host';
 import { Text } from './text';
 
 export type DropdownOption<T extends string> = {
@@ -106,7 +107,11 @@ export function Dropdown<T extends string>({
   const [frame, setFrame] = useState({ x: 0, y: 0, w: 0, h: 0 });
   // The keyboard stays up while a menu is open, so the menu fits in the space above it.
   const [floor, setFloor] = useState(window.height);
+  const [containerHeight, setContainerHeight] = useState(window.height);
   const restoreFocus = useRef<() => void>(() => {});
+  // Inside a sheet the menu draws in the sheet's own layer, so the keyboard stays up.
+  const host = useMenuHost();
+  const layerKey = useId();
   const [query, setQuery] = useState('');
   const selected = options.find((o) => o.value === value);
 
@@ -118,12 +123,21 @@ export function Dropdown<T extends string>({
   const openMenu = () => {
     haptic('selection');
     restoreFocus.current = rememberFocus();
-    triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-      setFrame({ x, y, w, h });
-      setFloor(keyboardTop(window.height));
-      setQuery('');
-      setOpen(true);
-    });
+    // Positions are relative to whatever the menu draws in: the sheet's layer or the window.
+    const inContainer = (cb: (c: { x: number; y: number; h: number }) => void) => {
+      if (host?.ref.current)
+        host.ref.current.measureInWindow((x: number, y: number, _w: number, h: number) => cb({ x, y, h }));
+      else cb({ x: 0, y: 0, h: window.height });
+    };
+    triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) =>
+      inContainer((c) => {
+        setFrame({ x: x - c.x, y: y - c.y, w, h });
+        setContainerHeight(c.h);
+        setFloor(Math.min(c.h, keyboardTop(window.height) - c.y));
+        setQuery('');
+        setOpen(true);
+      }),
+    );
   };
 
   const close = () => {
@@ -154,7 +168,7 @@ export function Dropdown<T extends string>({
   const maxHeight = Math.max(120, Math.min(360, below ? roomBelow : roomAbove));
   const alignRight = variant === 'compact' || frame.x + menuWidth > window.width - spacing.lg;
   const left = alignRight ? Math.max(spacing.lg, frame.x + frame.w - menuWidth) : frame.x;
-  const position = below ? { top: frame.y + frame.h + 6 } : { bottom: window.height - frame.y + 6 };
+  const position = below ? { top: frame.y + frame.h + 6 } : { bottom: containerHeight - frame.y + 6 };
 
   const valueText = selected?.label ?? placeholder;
   const valueTone = selected ? (selected.tone === 'negative' ? 'negative' : 'text') : 'placeholder';
@@ -283,148 +297,157 @@ export function Dropdown<T extends string>({
       </View>
     );
   }
+  const menu = (
+    <Pressable
+      accessibilityLabel="Close menu"
+      onPress={close}
+      style={{ flex: 1, backgroundColor: 'rgba(11,18,32,0.06)' }}
+    >
+      <Animated.View
+        entering={reduceMotion ? undefined : menuIn('top' in position ? -6 : 6)}
+        style={{
+          position: 'absolute',
+          left,
+          width: menuWidth,
+          maxHeight,
+          ...position,
+        }}
+      >
+        <Pressable
+          onPress={() => {}}
+          accessibilityRole="menu"
+          style={{
+            maxHeight,
+            backgroundColor: colors.surface,
+            borderWidth: 1,
+            borderColor: 'rgba(20,40,80,0.14)',
+            borderRadius: radius.menu,
+            borderCurve: 'continuous',
+            padding: 5,
+            overflow: 'hidden',
+          }}
+        >
+          {searchable && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 7,
+                height: 34,
+                margin: 2,
+                marginBottom: 5,
+                paddingHorizontal: 9,
+                borderRadius: radius.button,
+                backgroundColor: colors.control,
+              }}
+            >
+              <Icon sf="magnifyingglass" md="search" size={12} color={colors.textTertiary} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search"
+                placeholderTextColor={colors.placeholder}
+                autoFocus={process.env.EXPO_OS === 'web'}
+                accessibilityLabel="Search options"
+                style={[typeScale.callout, { flex: 1, color: colors.text, height: 34 }]}
+              />
+            </View>
+          )}
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
+            {visible.length === 0 && (
+              <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md }}>
+                Nothing matches.
+              </Text>
+            )}
+            {visible.map((o, i) => {
+              const header = o.section && o.section !== visible[i - 1]?.section ? o.section : null;
+              const isSelected = o.value === value;
+              return (
+                <View key={o.value}>
+                  {header && (
+                    <Text
+                      variant="label"
+                      tone="textTertiary"
+                      caps
+                      style={{
+                        paddingHorizontal: 9,
+                        paddingTop: 7,
+                        paddingBottom: 3,
+                      }}
+                    >
+                      {header}
+                    </Text>
+                  )}
+                  <Pressable
+                    accessibilityRole="menuitem"
+                    accessibilityState={{
+                      selected: isSelected,
+                      disabled: o.disabled,
+                    }}
+                    disabled={o.disabled}
+                    onPress={() => pick(o)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 9,
+                      minHeight: o.description ? 48 : 36,
+                      paddingHorizontal: 9,
+                      borderRadius: radius.button,
+                      backgroundColor: isSelected ? colors.accentSoft : pressed ? colors.control : 'transparent',
+                      opacity: o.disabled ? 0.45 : 1,
+                    })}
+                  >
+                    <Leading o={o} />
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text
+                        variant="body"
+                        weight={isSelected ? '500' : '400'}
+                        tone={o.tone === 'negative' ? 'negative' : 'text'}
+                        numberOfLines={1}
+                      >
+                        {o.label}
+                      </Text>
+                      {o.description && (
+                        <Text variant="footnote" tone="textSecondary" numberOfLines={1}>
+                          {o.description}
+                        </Text>
+                      )}
+                    </View>
+                    {o.detail && (
+                      <Text
+                        variant="footnote"
+                        tone={o.tone === 'negative' ? 'negative' : 'textSecondary'}
+                        style={{ fontVariant: ['tabular-nums'] }}
+                      >
+                        {o.detail}
+                      </Text>
+                    )}
+                    <View style={{ width: 13 }}>
+                      {isSelected && <Icon sf="checkmark" md="check" size={13} color={colors.accent} weight="bold" />}
+                    </View>
+                  </Pressable>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </Pressable>
+      </Animated.View>
+    </Pressable>
+  );
+
+  useEffect(() => {
+    if (host) host.set(layerKey, open ? menu : null);
+  });
+  useEffect(() => () => host?.set(layerKey, null), [host, layerKey]);
+
   return (
     <>
       {trigger}
-      <Modal visible={open} transparent animationType="none" onRequestClose={close}>
-        <Pressable
-          accessibilityLabel="Close menu"
-          onPress={close}
-          style={{ flex: 1, backgroundColor: 'rgba(11,18,32,0.06)' }}
-        >
-          <Animated.View
-            entering={reduceMotion ? undefined : menuIn('top' in position ? -6 : 6)}
-            style={{
-              position: 'absolute',
-              left,
-              width: menuWidth,
-              maxHeight,
-              ...position,
-            }}
-          >
-            <Pressable
-              onPress={() => {}}
-              accessibilityRole="menu"
-              style={{
-                maxHeight,
-                backgroundColor: colors.surface,
-                borderWidth: 1,
-                borderColor: 'rgba(20,40,80,0.14)',
-                borderRadius: radius.menu,
-                borderCurve: 'continuous',
-                padding: 5,
-                overflow: 'hidden',
-              }}
-            >
-              {searchable && (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 7,
-                    height: 34,
-                    margin: 2,
-                    marginBottom: 5,
-                    paddingHorizontal: 9,
-                    borderRadius: radius.button,
-                    backgroundColor: colors.control,
-                  }}
-                >
-                  <Icon sf="magnifyingglass" md="search" size={12} color={colors.textTertiary} />
-                  <TextInput
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="Search"
-                    placeholderTextColor={colors.placeholder}
-                    autoFocus={process.env.EXPO_OS === 'web'}
-                    accessibilityLabel="Search options"
-                    style={[typeScale.callout, { flex: 1, color: colors.text, height: 34 }]}
-                  />
-                </View>
-              )}
-              <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
-                {visible.length === 0 && (
-                  <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md }}>
-                    Nothing matches.
-                  </Text>
-                )}
-                {visible.map((o, i) => {
-                  const header = o.section && o.section !== visible[i - 1]?.section ? o.section : null;
-                  const isSelected = o.value === value;
-                  return (
-                    <View key={o.value}>
-                      {header && (
-                        <Text
-                          variant="label"
-                          tone="textTertiary"
-                          caps
-                          style={{
-                            paddingHorizontal: 9,
-                            paddingTop: 7,
-                            paddingBottom: 3,
-                          }}
-                        >
-                          {header}
-                        </Text>
-                      )}
-                      <Pressable
-                        accessibilityRole="menuitem"
-                        accessibilityState={{
-                          selected: isSelected,
-                          disabled: o.disabled,
-                        }}
-                        disabled={o.disabled}
-                        onPress={() => pick(o)}
-                        style={({ pressed }) => ({
-                          flexDirection: 'row',
-                          alignItems: 'center',
-                          gap: 9,
-                          minHeight: o.description ? 48 : 36,
-                          paddingHorizontal: 9,
-                          borderRadius: radius.button,
-                          backgroundColor: isSelected ? colors.accentSoft : pressed ? colors.control : 'transparent',
-                          opacity: o.disabled ? 0.45 : 1,
-                        })}
-                      >
-                        <Leading o={o} />
-                        <View style={{ flex: 1, gap: 1 }}>
-                          <Text
-                            variant="body"
-                            weight={isSelected ? '500' : '400'}
-                            tone={o.tone === 'negative' ? 'negative' : 'text'}
-                            numberOfLines={1}
-                          >
-                            {o.label}
-                          </Text>
-                          {o.description && (
-                            <Text variant="footnote" tone="textSecondary" numberOfLines={1}>
-                              {o.description}
-                            </Text>
-                          )}
-                        </View>
-                        {o.detail && (
-                          <Text
-                            variant="footnote"
-                            tone={o.tone === 'negative' ? 'negative' : 'textSecondary'}
-                            style={{ fontVariant: ['tabular-nums'] }}
-                          >
-                            {o.detail}
-                          </Text>
-                        )}
-                        <View style={{ width: 13 }}>
-                          {isSelected && (
-                            <Icon sf="checkmark" md="check" size={13} color={colors.accent} weight="bold" />
-                          )}
-                        </View>
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-            </Pressable>
-          </Animated.View>
-        </Pressable>
-      </Modal>
+      {!host && (
+        <Modal visible={open} transparent animationType="none" onRequestClose={close}>
+          {menu}
+        </Modal>
+      )}
     </>
   );
 }

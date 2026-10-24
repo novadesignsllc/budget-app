@@ -64,6 +64,7 @@ export default function RootLayout() {
             <Stack.Screen name="transaction/[id]" options={sheetStyle} />
             <Stack.Screen name="new-account" options={sheetStyle} />
             <Stack.Screen name="reconcile" options={sheetStyle} />
+            <Stack.Screen name="fix-balance" options={sheetStyle} />
             <Stack.Screen name="envelope/[id]" options={sheetStyle} />
             <Stack.Screen name="new-envelope" options={sheetStyle} />
             <Stack.Screen name="transfer" options={sheetStyle} />

@@ -353,7 +353,11 @@ export function Dropdown<T extends string>({
               />
             </View>
           )}
-          <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0 }}>
+          {/* The list gets its own cap: the card's padding and border, and the search field, come off the top. */}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            style={{ flexGrow: 0, flexShrink: 1, maxHeight: maxHeight - 12 - (searchable ? 41 : 0) }}
+          >
             {visible.length === 0 && (
               <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md }}>
                 Nothing matches.

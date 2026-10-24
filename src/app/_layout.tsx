@@ -34,11 +34,13 @@ export default function RootLayout() {
   }, [loaded]);
   if (!loaded) return null;
 
-  const sheetStyle = (detents: number[]) => ({
+  // One height only: full. With a shorter detent, iOS raises the sheet for the keyboard and
+  // drops it again when the keyboard closes (like tapping a dropdown), so the whole menu jumps.
+  const sheetStyle = {
     ...sheet,
-    sheetAllowedDetents: detents,
+    sheetAllowedDetents: [1],
     contentStyle: { backgroundColor: colors.background },
-  });
+  };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -58,16 +60,16 @@ export default function RootLayout() {
         <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Protected guard={status === 'signedIn'}>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="add" options={sheetStyle([0.62, 1])} />
-            <Stack.Screen name="transaction/[id]" options={sheetStyle([0.8, 1])} />
-            <Stack.Screen name="new-account" options={sheetStyle([1])} />
-            <Stack.Screen name="reconcile" options={sheetStyle([0.7, 1])} />
-            <Stack.Screen name="envelope/[id]" options={sheetStyle([0.75, 1])} />
-            <Stack.Screen name="new-envelope" options={sheetStyle([0.6, 1])} />
-            <Stack.Screen name="transfer" options={sheetStyle([0.6, 1])} />
-            <Stack.Screen name="statement" options={sheetStyle([0.6, 1])} />
-            <Stack.Screen name="edit-recurring" options={sheetStyle([1])} />
-            <Stack.Screen name="debt-plan" options={sheetStyle([0.5, 1])} />
+            <Stack.Screen name="add" options={sheetStyle} />
+            <Stack.Screen name="transaction/[id]" options={sheetStyle} />
+            <Stack.Screen name="new-account" options={sheetStyle} />
+            <Stack.Screen name="reconcile" options={sheetStyle} />
+            <Stack.Screen name="envelope/[id]" options={sheetStyle} />
+            <Stack.Screen name="new-envelope" options={sheetStyle} />
+            <Stack.Screen name="transfer" options={sheetStyle} />
+            <Stack.Screen name="statement" options={sheetStyle} />
+            <Stack.Screen name="edit-recurring" options={sheetStyle} />
+            <Stack.Screen name="debt-plan" options={sheetStyle} />
           </Stack.Protected>
           <Stack.Protected guard={status !== 'signedIn'}>
             <Stack.Screen name="sign-in" options={{ headerShown: false }} />

@@ -68,3 +68,4 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | New transaction is two fields (Name, Amount on the right) plus an Outflow/Inflow toggle; no mic in the sheet, voice starts from the quick-add bar | Typing one line and re-showing the name was redundant |
 | 2026-10-23 | Dictated bare numbers of 3+ digits are dollars and cents ("two twenty-seven" → $2.27); "$", "dollars", a decimal, or a comma keeps whole dollars | Speech turns "two twenty-seven" into "227" |
 | 2026-10-23 | Menus and the calendar open only after the keyboard has finished closing | They measured mid-slide and opened in the wrong place |
+| 2026-10-23 | Every sheet opens at full height and never changes height | A shorter detent made the sheet drop whenever the keyboard closed |

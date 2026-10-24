@@ -318,7 +318,8 @@ export function Budget() {
         )}
 
         {groups.map((g) => {
-          const total = g.items.reduce((a, e) => a + (budget.envelopes.get(e.id)?.available ?? 0), 0);
+          // Add up the rounded Left column, so the header always matches the rows under it.
+          const total = g.items.reduce((a, e) => a + floorDollars(budget.envelopes.get(e.id)?.available ?? 0), 0);
           const hue = hueFor(g.name);
           return (
             <Card key={g.name}>

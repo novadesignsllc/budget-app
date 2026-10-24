@@ -3,7 +3,7 @@ import { TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
-import { FormCard, InputRow } from '@/components/form';
+import { amountInputProps, FormCard, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { parseMoney } from '@/domain/money';
 import type { AccountKind, CashKind } from '@/domain/types';
@@ -68,11 +68,8 @@ export function NewAccount({ debt }: { debt?: boolean }) {
         <InputRow
           ref={balanceRef}
           label={isCash ? 'Balance today' : 'Owed today'}
-          value={balance}
-          onChangeText={setBalance}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          inputMode="decimal"
+          {...amountInputProps(balance, setBalance, isCash)}
+          placeholder="$0.00"
           returnKeyType={isCash ? 'done' : 'next'}
           submitBehavior={isCash ? undefined : 'submit'}
           onSubmitEditing={isCash ? undefined : () => aprRef.current?.focus()}
@@ -96,11 +93,8 @@ export function NewAccount({ debt }: { debt?: boolean }) {
           <InputRow
             ref={minRef}
             label="Minimum"
-            value={min}
-            onChangeText={setMin}
+            {...amountInputProps(min, setMin)}
             placeholder="Estimated"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
             returnKeyType="next"
             submitBehavior="submit"
             onSubmitEditing={() => dueRef.current?.focus()}

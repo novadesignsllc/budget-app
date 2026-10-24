@@ -67,5 +67,15 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-23 | Flags pick a color (none plus red, orange, yellow, green, blue, purple) from a custom row, not a switch | User asked for a custom flag color selector |
 | 2026-10-23 | New transaction is two fields (Name, Amount on the right) plus an Outflow/Inflow toggle; no mic in the sheet, voice starts from the quick-add bar | Typing one line and re-showing the name was redundant |
 | 2026-10-23 | Dictated bare numbers of 3+ digits are dollars and cents ("two twenty-seven" → $2.27); "$", "dollars", a decimal, or a comma keeps whole dollars | Speech turns "two twenty-seven" into "227" |
-| 2026-10-23 | Menus and the calendar open only after the keyboard has finished closing | They measured mid-slide and opened in the wrong place |
+| 2026-10-23 | ~~Menus and the calendar open only after the keyboard has finished closing~~ (replaced 2026-10-24) | They measured mid-slide and opened in the wrong place |
 | 2026-10-23 | Every sheet opens at full height and never changes height | A shorter detent made the sheet drop whenever the keyboard closed |
+| 2026-10-24 | Money is typed from the right like YNAB: 4 → $0.04, 4 3 5 7 → $43.57. Budget amounts (assigned, targets) stay whole dollars | User request |
+| 2026-10-24 | The keyboard stays up in sheets: menus, the calendar, toggles and flags open over it and the cursor stays put; Save closes everything | Closing the keyboard first made menus lag and jump |
+| 2026-10-24 | Assigning: only ✓ Done on the keyboard bar saves; Cancel or tapping away puts it back. The bar is just Cancel and Done, no status line | User wants to confirm the number |
+| 2026-10-24 | Dictation is voice only: it shows what it understood as you talk ($10.27, not "1027") and has nothing to tap. It hears inflow/outflow, the account, "<name> envelope", "<color> flag", and "note …" | Dictating and tapping mixed together was confusing |
+| 2026-10-24 | No "~" on bill amounts | Bills are exact; wrong ones get fixed when approving |
+| 2026-10-24 | Home shows Recent (last 7 days of transactions) under Accounts | User request |
+| 2026-10-24 | Reconciled transactions are grey everywhere; no lock icon. Saving one asks "Are you sure?" | The lock was too small to see |
+| 2026-10-24 | Debt page = the account register with the payoff card and details on top: Monthly target (Minimum or Custom), one Activity list with slips in red, Make a payment and Reconcile bottom right. No Enter statement, no payment envelope row | Neater, and debts reconcile the same way accounts do |
+| 2026-10-24 | Debt payment envelopes can't be edited; their name is the debt's and their target comes from the debt page | User request |
+| 2026-10-24 | Recurring sheet: Save · Pause · Delete in one row | User request |

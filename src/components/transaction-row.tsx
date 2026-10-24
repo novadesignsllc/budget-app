@@ -21,14 +21,15 @@ const ROW_HEIGHT = 46;
 /** The table runs a size smaller than the rest of the app so the money columns breathe. */
 const cell = { fontSize: 12, lineHeight: 15 } as const;
 
-export function DateBlock({ date, tone }: { date: string; tone?: 'negative' }) {
+export function DateBlock({ date, tone }: { date: string; tone?: 'negative' | 'muted' }) {
   const d = fromISODate(date);
+  const ink = tone === 'muted' ? 'textTertiary' : tone;
   return (
     <View style={{ width: TXN_COLUMNS.date, alignItems: 'center' }}>
-      <Text variant="caption" weight="600" tone={tone ?? 'textTertiary'} style={{ fontSize: 9, lineHeight: 11 }} caps>
+      <Text variant="caption" weight="600" tone={ink ?? 'textTertiary'} style={{ fontSize: 9, lineHeight: 11 }} caps>
         {month.format(d)}
       </Text>
-      <Text variant="row" weight="600" tone={tone ?? 'text'} style={{ fontVariant: ['tabular-nums'] }}>
+      <Text variant="row" weight="600" tone={ink ?? 'text'} style={{ fontVariant: ['tabular-nums'] }}>
         {d.getDate()}
       </Text>
     </View>
@@ -56,7 +57,8 @@ export function transactionNote(t: Transaction, account?: Account): string {
 /**
  * One transaction on one line: date, the envelope's emoji, the payee (with its note
  * underneath when there is one), then outflow in red and inflow in green. Slips are tinted
- * red. In reconcile mode the row gets a checkbox instead of opening the editor.
+ * red. Reconciled rows go grey, so finished ones are easy to tell apart. In reconcile mode
+ * the row gets a checkbox instead of opening the editor.
  */
 export function TransactionRow({
   t,
@@ -79,7 +81,8 @@ export function TransactionRow({
 }) {
   const colors = useColors();
   const other = useStore((s) => (t.transferAccountId ? s.accounts.find((a) => a.id === t.transferAccountId) : undefined));
-  const slip = t.kind === 'slip';
+  const done = !!t.reconciled;
+  const slip = t.kind === 'slip' && !done;
   const out = t.amount < 0 ? -t.amount : 0;
   const inn = t.amount > 0 ? t.amount : 0;
   const base = transactionNote(t, account);
@@ -131,23 +134,31 @@ export function TransactionRow({
           {select.selected && <Icon sf="checkmark" md="check" size={11} color={colors.onInk} weight="bold" />}
         </View>
       )}
-      <DateBlock date={t.date} tone={slip ? 'negative' : undefined} />
-      <Text style={{ width: TXN_COLUMNS.emoji, textAlign: 'center', fontSize: 15, lineHeight: 20 }} accessible={false}>
+      <DateBlock date={t.date} tone={slip ? 'negative' : done ? 'muted' : undefined} />
+      <Text
+        style={{ width: TXN_COLUMNS.emoji, textAlign: 'center', fontSize: 15, lineHeight: 20, opacity: done ? 0.4 : 1 }}
+        accessible={false}
+      >
         {transactionEmoji(t, envelope, other)}
       </Text>
       {/* Payee centered on the row; the note sits under it only when there is one. */}
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center', gap: 1 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Text variant="row" weight="600" tone={slip ? 'negative' : 'text'} numberOfLines={1} style={[cell, { flexShrink: 1 }]}>
+          <Text
+            variant="row"
+            weight="600"
+            tone={slip ? 'negative' : done ? 'textTertiary' : 'text'}
+            numberOfLines={1}
+            style={[cell, { flexShrink: 1 }]}
+          >
             {t.payee || 'Untitled'}
           </Text>
           {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={flagHues[t.flagColor ?? 'red']} />}
-          {t.reconciled && !select && <Icon sf="lock.fill" md="lock" size={9} color={colors.textTertiary} />}
         </View>
         {note ? (
           <Text
             variant="caption"
-            tone={slip ? 'negative' : select?.disabled ? 'orange' : 'textSecondary'}
+            tone={slip ? 'negative' : select?.disabled ? 'orange' : done ? 'textTertiary' : 'textSecondary'}
             numberOfLines={1}
             style={{ fontSize: 10.5, lineHeight: 13 }}
           >
@@ -157,10 +168,20 @@ export function TransactionRow({
       </View>
       {columns === 'split' ? (
         <>
-          <Text variant="row" align="right" tone="negative" style={[cell, { width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }]}>
+          <Text
+            variant="row"
+            align="right"
+            tone={done ? 'textTertiary' : 'negative'}
+            style={[cell, { width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }]}
+          >
             {out ? formatMoney(-out) : ''}
           </Text>
-          <Text variant="row" align="right" tone="positive" style={[cell, { width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }]}>
+          <Text
+            variant="row"
+            align="right"
+            tone={done ? 'textTertiary' : 'positive'}
+            style={[cell, { width: TXN_COLUMNS.money, fontVariant: ['tabular-nums'] }]}
+          >
             {inn ? formatMoney(inn, { signed: true }) : ''}
           </Text>
         </>
@@ -168,7 +189,7 @@ export function TransactionRow({
         <Text
           variant="row"
           align="right"
-          tone={t.amount > 0 ? 'positive' : 'negative'}
+          tone={done ? 'textTertiary' : t.amount > 0 ? 'positive' : 'negative'}
           style={[cell, { width: TXN_COLUMNS.amount, fontVariant: ['tabular-nums'] }]}
         >
           {formatMoney(t.amount, { signed: true })}

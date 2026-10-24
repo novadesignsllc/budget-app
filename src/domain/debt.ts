@@ -1,4 +1,4 @@
-import type { Cents } from './types';
+import type { Account, Cents } from './types';
 
 export type Strategy = 'snowball' | 'avalanche';
 
@@ -169,4 +169,14 @@ export function interestFromStatement(statementOwed: Cents, trackedOwed: Cents):
 /** What one month of interest should roughly be, to sanity-check a statement. */
 export function expectedMonthlyInterest(owed: Cents, apr: number): Cents {
   return Math.round((owed * apr) / 10000 / 12);
+}
+
+/**
+ * What a debt's payment envelope should get each month: the custom target if one is set,
+ * otherwise the minimum (or an estimate when there's no minimum). Never more than is owed.
+ */
+export function debtTarget(account: Pick<Account, 'paymentTarget' | 'minPayment' | 'apr'>, owed: Cents): Cents {
+  if (owed <= 0) return 0;
+  const target = account.paymentTarget ?? (account.minPayment || estimateMinPayment(owed, account.apr ?? 0));
+  return Math.min(target, owed);
 }

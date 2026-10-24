@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
-import { FormCard, InputRow } from '@/components/form';
+import { cleanDollars, FormCard, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
@@ -48,11 +48,11 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
         <InputRow
           ref={targetRef}
           label={targetLabel(group)}
-          value={target}
-          onChangeText={setTarget}
-          placeholder="0.00"
-          keyboardType="decimal-pad"
-          inputMode="decimal"
+          value={target ? `$${Number(target).toLocaleString('en-US')}` : ''}
+          onChangeText={(v) => setTarget(cleanDollars(v))}
+          placeholder="$0"
+          keyboardType="number-pad"
+          inputMode="numeric"
           returnKeyType="done"
         />
       </FormCard>

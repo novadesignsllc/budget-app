@@ -1,90 +1,30 @@
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { View } from 'react-native';
 
-import { Button } from '@/components/button';
-import { Card, CardHeader } from '@/components/card';
-import { Icon } from '@/components/icon';
+import { Card } from '@/components/card';
+import { Dropdown } from '@/components/dropdown';
+import { amountInputProps, cleanAmount, cleanDollars, FormCard, InputRow } from '@/components/form';
 import { LineChart } from '@/components/line-chart';
 import { Money } from '@/components/money';
-import { Screen } from '@/components/screen';
-import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
-import { TransactionRow } from '@/components/transaction-row';
-import { formatMoney, parseMoney } from '@/domain/money';
+import { debtTarget, estimateMinPayment } from '@/domain/debt';
+import { ceilDollars, formatDollars, formatMoney, parseMoney } from '@/domain/money';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
+import { AccountDetail } from '@/screens/account';
 import { axisMoney, debtColor, endAtPayoff, horizonTicks, payoffLabel } from '@/screens/debt';
 import { useStore } from '@/store';
-import { spacing, type as typeScale, useColors } from '@/theme';
 
-/** One editable value in the Details card: label on the left, input on the right. */
-function DetailRow({
-  label,
-  value,
-  onChangeText,
-  onCommit,
-  placeholder,
-  suffix,
-  numeric,
-  last,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (v: string) => void;
-  onCommit: () => void;
-  placeholder: string;
-  suffix?: string;
-  numeric?: boolean;
-  last?: boolean;
-}) {
-  const colors = useColors();
-  return (
-    <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        height: 42,
-        paddingHorizontal: spacing.md + 2,
-        gap: spacing.sm,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.hairline,
-      }}
-    >
-      <Text variant="body" tone="textSecondary" style={{ flex: 1 }}>
-        {label}
-      </Text>
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        onBlur={onCommit}
-        onSubmitEditing={onCommit}
-        placeholder={placeholder}
-        placeholderTextColor={colors.placeholder}
-        keyboardType={numeric ? 'number-pad' : 'decimal-pad'}
-        inputMode={numeric ? 'numeric' : 'decimal'}
-        selectTextOnFocus
-        accessibilityLabel={label}
-        style={[
-          typeScale.body,
-          { color: colors.text, fontWeight: '500', textAlign: 'right', minWidth: 90, height: 40, fontVariant: ['tabular-nums'] },
-        ]}
-      />
-      {suffix ? (
-        <Text variant="body" tone="textTertiary">
-          {suffix}
-        </Text>
-      ) : null}
-    </View>
-  );
+/**
+ * A debt's page: the account register (activity, slips in red, Reconcile at the bottom)
+ * with the payoff picture and the debt's details on top.
+ */
+export function DebtDetail({ id }: { id: string }) {
+  return <AccountDetail id={id} header={<DebtHeader id={id} />} />;
 }
 
-export function DebtDetail({ id }: { id: string }) {
-  const colors = useColors();
+function DebtHeader({ id }: { id: string }) {
   const ledger = useLedger();
   const account = useStore((s) => s.accounts.find((a) => a.id === id));
-  const envelope = useStore((s) => s.envelopes.find((e) => e.debtAccountId === id));
-  const envelopes = useStore((s) => s.envelopes);
-  const transactions = useStore((s) => s.transactions);
   const updateAccount = useStore((s) => s.updateAccount);
   const { comparison } = useDebtPlan();
   const { debts } = useAccounts();
@@ -92,13 +32,8 @@ export function DebtDetail({ id }: { id: string }) {
   const [apr, setApr] = useState(account?.apr ? (account.apr / 100).toFixed(2) : '');
   const [min, setMin] = useState(account?.minPayment ? (account.minPayment / 100).toFixed(2) : '');
   const [due, setDue] = useState(account?.dueDay ? String(account.dueDay) : '');
-
-  const activity = useMemo(
-    () =>
-      transactions
-        .filter((t) => t.accountId === id)
-        .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt),
-    [transactions, id],
+  const [custom, setCustom] = useState(
+    account?.paymentTarget ? String(Math.round(account.paymentTarget / 100)) : '',
   );
 
   if (!account) return null;
@@ -108,10 +43,8 @@ export function DebtDetail({ id }: { id: string }) {
   const values = balances ? endAtPayoff(balances).filter((v) => v !== null) : [];
   const horizon = values.length - 1;
   const color = debtColor(debts, id);
-  const ready = envelope ? (ledger.available.get(envelope.id) ?? 0) : 0;
-  const slips = activity.filter((t) => t.kind === 'slip');
-  const rest = activity.filter((t) => t.kind !== 'slip').slice(0, 20);
-  const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
+  const minimum = account.minPayment || estimateMinPayment(owed, account.apr ?? 0);
+  const targetMode = account.paymentTarget ? 'custom' : 'minimum';
 
   const commitDue = () => {
     const n = due ? Number(due) : undefined;
@@ -121,11 +54,13 @@ export function DebtDetail({ id }: { id: string }) {
     }
     updateAccount(id, { dueDay: n });
   };
+  const commitCustom = () => {
+    const dollars = Number(custom || 0);
+    updateAccount(id, { paymentTarget: dollars > 0 ? dollars * 100 : null });
+  };
 
   return (
-    <Screen>
-      <ScreenTitle title={account.name} />
-
+    <View style={{ gap: 12 }}>
       <Card padded>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ gap: 2 }}>
@@ -160,105 +95,74 @@ export function DebtDetail({ id }: { id: string }) {
             accessibilityLabel={`${account.name} goes from ${formatMoney(owed, { whole: true })} to zero by ${payoffLabel(result?.payoffMonth ?? null)}.`}
           />
         )}
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
-          <Button
-            title="Make a payment"
-            style={{ flex: 1 }}
-            onPress={() => router.push({ pathname: '/transfer', params: { to: id } })}
-          />
-          <Button
-            title="Enter statement"
-            variant="secondary"
-            style={{ flex: 1 }}
-            accessibilityLabel="Enter statement balance"
-            onPress={() => router.push({ pathname: '/statement', params: { id } })}
-          />
-        </View>
       </Card>
 
-      {envelope && (
-        <Card>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Payment envelope, ${formatMoney(ready)} ready`}
-            onPress={() => router.push(`/envelope/${envelope.id}`)}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: spacing.sm,
-              paddingHorizontal: spacing.md + 2,
-              paddingVertical: 10,
-              backgroundColor: pressed ? colors.control : colors.surface,
-            })}
-          >
-            <Text variant="body" weight="500" style={{ flex: 1 }}>
-              Payment envelope
-            </Text>
-            <Money cents={ready} weight="600" tone="auto" />
-            <Icon sf="chevron.right" md="chevron_right" size={11} color={colors.textTertiary} weight="semibold" />
-          </Pressable>
-        </Card>
-      )}
-
-      <Card>
-        <CardHeader title="Details" />
-        <DetailRow
-          label="Interest rate"
-          value={apr}
-          onChangeText={setApr}
-          placeholder="24.99"
-          suffix="%"
-          onCommit={() => updateAccount(id, { apr: apr ? Math.round(parseFloat(apr) * 100) : undefined })}
+      <FormCard>
+        <Dropdown<'minimum' | 'custom'>
+          variant="row"
+          label="Monthly target"
+          value={targetMode}
+          onChange={(mode) => {
+            if (mode === 'minimum') {
+              updateAccount(id, { paymentTarget: null });
+              return;
+            }
+            // Start from the minimum, rounded up to whole dollars like the rest of the budget.
+            const start = ceilDollars(minimum);
+            setCustom(String(start / 100));
+            updateAccount(id, { paymentTarget: start });
+          }}
+          options={[
+            { value: 'minimum', label: 'Minimum payment', detail: formatDollars(minimum, 'up') },
+            { value: 'custom', label: 'Custom' },
+          ]}
         />
-        <DetailRow
+        {targetMode === 'custom' && (
+          <InputRow
+            label="Target"
+            value={custom ? `$${Number(custom).toLocaleString('en-US')}` : ''}
+            onChangeText={(v) => setCustom(cleanDollars(v))}
+            onBlur={commitCustom}
+            onSubmitEditing={commitCustom}
+            placeholder={formatDollars(debtTarget(account, owed), 'up')}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            returnKeyType="done"
+          />
+        )}
+        <InputRow
           label="Minimum payment"
-          value={min}
-          onChangeText={setMin}
+          {...amountInputProps(min, setMin)}
+          onBlur={() => updateAccount(id, { minPayment: parseMoney(min) ?? undefined })}
           placeholder="Estimated"
-          onCommit={() => updateAccount(id, { minPayment: parseMoney(min) ?? undefined })}
+          returnKeyType="done"
         />
-        <DetailRow
-          label="Due day of the month"
+        <InputRow
+          label="Interest rate"
+          value={apr ? `${apr}%` : ''}
+          onChangeText={(v) => setApr(cleanAmount(v))}
+          selection={apr ? { start: apr.length, end: apr.length } : undefined}
+          onBlur={() => updateAccount(id, { apr: apr ? Math.round(parseFloat(apr) * 100) : undefined })}
+          placeholder="24.99%"
+          keyboardType="number-pad"
+          inputMode="numeric"
+          returnKeyType="done"
+        />
+        <InputRow
+          label="Due day"
           value={due}
-          onChangeText={setDue}
+          onChangeText={(v) => setDue(v.replace(/\D/g, '').slice(0, 2))}
+          onBlur={commitDue}
           placeholder="Not set"
-          numeric
-          last
-          onCommit={commitDue}
+          keyboardType="number-pad"
+          inputMode="numeric"
+          returnKeyType="done"
         />
-      </Card>
+      </FormCard>
 
-      {slips.length > 0 && (
-        <Card tone="slip">
-          <CardHeader title="Slips" detail={`${slips.length} on this card`} />
-          {slips.map((t, i) => (
-            <TransactionRow
-              key={t.id}
-              t={t}
-              account={account}
-              envelope={t.envelopeId ? envelopeById.get(t.envelopeId) : undefined}
-              columns="single"
-              last={i === slips.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-
-      {rest.length > 0 && (
-        <Card>
-          <CardHeader title="Activity" />
-          {rest.map((t, i) => (
-            <TransactionRow
-              key={t.id}
-              t={t}
-              account={account}
-              envelope={t.envelopeId ? envelopeById.get(t.envelopeId) : undefined}
-              columns="single"
-              last={i === rest.length - 1}
-            />
-          ))}
-        </Card>
-      )}
-    </Screen>
+      <Text variant="section" style={{ marginTop: 4 }}>
+        Activity
+      </Text>
+    </View>
   );
 }

@@ -1,11 +1,12 @@
 import { useRef, useState } from 'react';
-import { TextInput } from 'react-native';
+import { Alert, TextInput, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { ActionList, AmountHero, FormCard, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
+import { spacing } from '@/theme';
 import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
 import { FREQUENCY_LABEL } from '@/domain/recurring';
@@ -35,7 +36,6 @@ export function EditRecurring({ id }: { id?: string }) {
   const [accountId, setAccountId] = useState(existing?.accountId ?? cash[0]?.id);
   const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? 'monthly');
   const [nextDue, setNextDue] = useState(existing?.nextDue ?? today());
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   const amount = parseMoney(amountText);
@@ -58,6 +58,29 @@ export function EditRecurring({ id }: { id?: string }) {
         detail: formatMoney(ledger.balance.get(a.id) ?? 0),
       };
     });
+
+  function remove() {
+    if (!existing) return;
+    // Its envelope goes too; whatever it still holds goes back to Ready to assign.
+    const left = existing.envelopeId ? (ledger.available.get(existing.envelopeId) ?? 0) : 0;
+    if (existing.envelopeId && left > 0) assign(existing.envelopeId, -left);
+    deleteRecurring(existing.id);
+    haptic('success');
+    closeSheet();
+  }
+
+  function confirmDelete() {
+    if (!existing) return;
+    const message = `Its envelope goes too, and anything in it goes back to Ready to assign.`;
+    if (process.env.EXPO_OS === 'web') {
+      if (window.confirm(`Delete ${existing.name}? ${message}`)) remove();
+      return;
+    }
+    Alert.alert(`Delete ${existing.name}?`, message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: remove },
+    ]);
+  }
 
   function save() {
     if (!valid || !amount || !accountId) return;
@@ -119,35 +142,29 @@ export function EditRecurring({ id }: { id?: string }) {
         <DateRow label="Next due" value={nextDue} onChange={setNextDue} last />
       </FormCard>
 
-      <Button title={existing ? 'Save' : 'Add'} size="lg" disabled={!valid} onPress={save} />
+      {existing ? (
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <Button title="Save" size="lg" disabled={!valid} onPress={save} style={{ flex: 1 }} />
+          <Button
+            title={existing.active ? 'Pause' : 'Resume'}
+            variant="secondary"
+            size="lg"
+            style={{ flex: 1 }}
+            onPress={() => updateRecurring(existing.id, { active: !existing.active })}
+          />
+          <Button title="Delete" variant="destructive" size="lg" style={{ flex: 1 }} onPress={confirmDelete} />
+        </View>
+      ) : (
+        <Button title="Add" size="lg" disabled={!valid} onPress={save} />
+      )}
 
-      {existing && (
+      {existing?.active && existing.nextDue <= today() && (
         <ActionList
           actions={[
-            ...(existing.active && existing.nextDue <= today()
-              ? [
-                  {
-                    title: 'Skip this time',
-                    onPress: () => {
-                      skipRecurring(existing.id);
-                      closeSheet();
-                    },
-                  },
-                ]
-              : []),
             {
-              title: existing.active ? 'Pause' : 'Resume',
-              onPress: () => updateRecurring(existing.id, { active: !existing.active }),
-            },
-            {
-              title: confirmDelete ? 'Tap again to delete it and its envelope' : 'Delete',
-              tone: 'negative',
+              title: 'Skip this time',
               onPress: () => {
-                if (!confirmDelete) return setConfirmDelete(true);
-                // Its envelope goes too; whatever it still holds goes back to Ready to assign.
-                const left = existing.envelopeId ? (ledger.available.get(existing.envelopeId) ?? 0) : 0;
-                if (existing.envelopeId && left > 0) assign(existing.envelopeId, -left);
-                deleteRecurring(existing.id);
+                skipRecurring(existing.id);
                 closeSheet();
               },
             },

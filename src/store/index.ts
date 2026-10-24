@@ -101,7 +101,7 @@ type Actions = {
   }) => string;
   updateAccount: (
     id: string,
-    patch: Partial<Pick<Account, 'name' | 'apr' | 'minPayment' | 'dueDay' | 'closed'>>,
+    patch: Partial<Pick<Account, 'name' | 'apr' | 'minPayment' | 'dueDay' | 'closed' | 'paymentTarget'>>,
   ) => void;
   moveAccount: (id: string, direction: -1 | 1) => void;
 

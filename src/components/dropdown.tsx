@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } fr
 import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
 import { haptic } from '@/utils/haptics';
-import { afterKeyboard } from '@/utils/keyboard';
+import { keyboardTop, rememberFocus } from '@/utils/keyboard';
 import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/theme';
 
 import { FieldLabel } from './field';
@@ -104,6 +104,9 @@ export function Dropdown<T extends string>({
   const triggerRef = useRef<React.ComponentRef<typeof View>>(null);
   const [open, setOpen] = useState(false);
   const [frame, setFrame] = useState({ x: 0, y: 0, w: 0, h: 0 });
+  // The keyboard stays up while a menu is open, so the menu fits in the space above it.
+  const [floor, setFloor] = useState(window.height);
+  const restoreFocus = useRef<() => void>(() => {});
   const [query, setQuery] = useState('');
   const selected = options.find((o) => o.value === value);
 
@@ -114,31 +117,41 @@ export function Dropdown<T extends string>({
 
   const openMenu = () => {
     haptic('selection');
-    afterKeyboard(() =>
-      triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
-        setFrame({ x, y, w, h });
-        setQuery('');
-        setOpen(true);
-      }),
-    );
+    restoreFocus.current = rememberFocus();
+    triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) => {
+      setFrame({ x, y, w, h });
+      setFloor(keyboardTop(window.height));
+      setQuery('');
+      setOpen(true);
+    });
+  };
+
+  const close = () => {
+    setOpen(false);
+    // Searching inside the menu moves the cursor; hand it back to the field you were in.
+    setTimeout(() => restoreFocus.current(), 0);
   };
 
   const pick = (o: DropdownOption<T>) => {
     if (o.disabled) return;
     haptic('selection');
-    setOpen(false);
+    close();
     if (o.value !== value) onChange(o.value);
   };
 
-  // Menu placement: under the trigger when it fits, otherwise above it.
+  // Menu placement: under the trigger when it fits above the keyboard, otherwise
+  // whichever side has more room, shrunk to fit.
   const rowHeight = options.some((o) => o.description) ? 48 : 36;
   const sections = new Set(options.map((o) => o.section).filter(Boolean)).size;
   const estimate = Math.min(360, visible.length * rowHeight + sections * 22 + (searchable ? 44 : 0) + 12);
+  const roomBelow = floor - 12 - (frame.y + frame.h + 6);
+  const roomAbove = frame.y - 6 - 54;
   const menuWidth = Math.min(
     window.width - spacing.lg * 2,
     Math.max(variant === 'compact' || variant === 'inline' || variant === 'title' ? 240 : frame.w, 220),
   );
-  const below = frame.y + frame.h + 6 + estimate < window.height - 24;
+  const below = estimate <= roomBelow || roomBelow >= roomAbove;
+  const maxHeight = Math.max(120, Math.min(360, below ? roomBelow : roomAbove));
   const alignRight = variant === 'compact' || frame.x + menuWidth > window.width - spacing.lg;
   const left = alignRight ? Math.max(spacing.lg, frame.x + frame.w - menuWidth) : frame.x;
   const position = below ? { top: frame.y + frame.h + 6 } : { bottom: window.height - frame.y + 6 };
@@ -273,10 +286,10 @@ export function Dropdown<T extends string>({
   return (
     <>
       {trigger}
-      <Modal visible={open} transparent animationType="none" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="none" onRequestClose={close}>
         <Pressable
           accessibilityLabel="Close menu"
-          onPress={() => setOpen(false)}
+          onPress={close}
           style={{ flex: 1, backgroundColor: 'rgba(11,18,32,0.06)' }}
         >
           <Animated.View
@@ -285,7 +298,7 @@ export function Dropdown<T extends string>({
               position: 'absolute',
               left,
               width: menuWidth,
-              maxHeight: 360,
+              maxHeight,
               ...position,
             }}
           >
@@ -293,7 +306,7 @@ export function Dropdown<T extends string>({
               onPress={() => {}}
               accessibilityRole="menu"
               style={{
-                maxHeight: 360,
+                maxHeight,
                 backgroundColor: colors.surface,
                 borderWidth: 1,
                 borderColor: 'rgba(20,40,80,0.14)',

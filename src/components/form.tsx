@@ -4,7 +4,6 @@ import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
 import { FLAG_COLORS, type FlagColor } from '@/domain/types';
 import { flagHues, radius, spacing, type as typeScale, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
-import { dismissKeyboard } from '@/utils/keyboard';
 
 import { Card } from './card';
 import { Icon } from './icon';
@@ -87,16 +86,41 @@ export function InputRow({
   );
 }
 
-/** "85.30" shown as "$85.30"; typing keeps only digits, one point, and a leading minus if allowed. */
+/**
+ * Money is typed the way YNAB does it: digits fill in from the right, so 4 is $0.04 and
+ * 4, 3, 5, 7 is $43.57. Returns plain text like "43.57" (or "" when empty). With
+ * `negative`, typing a minus flips the sign.
+ */
 export function cleanAmount(v: string, negative = false) {
-  const minus = negative && v.trim().startsWith('-') ? '-' : '';
-  const digits = v.replace(/[^0-9.]/g, '');
-  const [whole, ...rest] = digits.split('.');
-  return minus + (rest.length ? `${whole}.${rest.join('').slice(0, 2)}` : whole);
+  const minus = negative && (v.match(/-/g)?.length ?? 0) % 2 === 1 ? '-' : '';
+  const digits = v.replace(/\D/g, '').replace(/^0+/, '').slice(0, 9);
+  if (!digits) return '';
+  return minus + (parseInt(digits, 10) / 100).toFixed(2);
 }
 
-function showAmount(v: string) {
-  return v.startsWith('-') ? `-$${v.slice(1)}` : `$${v}`;
+/** Whole dollars only, for budget amounts like targets: "600". */
+export function cleanDollars(v: string) {
+  return v.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7);
+}
+
+/** "43.57" as "$43.57", "-12.00" as "-$12.00", with thousands commas. */
+export function showAmount(v: string) {
+  const negative = v.startsWith('-');
+  const [whole, cents] = (negative ? v.slice(1) : v).split('.');
+  const text = `$${Number(whole || 0).toLocaleString('en-US')}${cents !== undefined ? `.${cents}` : ''}`;
+  return negative ? `-${text}` : text;
+}
+
+/** Props for a TextInput that takes money typed from the right. */
+export function amountInputProps(value: string, onChange: (v: string) => void, negative = false) {
+  return {
+    value: value ? showAmount(value) : '',
+    onChangeText: (v: string) => onChange(cleanAmount(v, negative)),
+    keyboardType: negative ? ('numbers-and-punctuation' as const) : ('number-pad' as const),
+    inputMode: 'numeric' as const,
+    // Digits always land at the end, so keep the caret there.
+    selection: value ? { start: showAmount(value).length, end: showAmount(value).length } : undefined,
+  };
 }
 
 /** The big amount at the top of a sheet. Editable when given `onChangeText`. */
@@ -132,12 +156,9 @@ export function AmountHero({
       {onChangeText ? (
         <TextInput
           ref={ref}
-          value={value ? showAmount(value) : ''}
-          onChangeText={(v) => onChangeText(cleanAmount(v, allowNegative))}
+          {...amountInputProps(value, onChangeText, allowNegative)}
           placeholder="$0.00"
           placeholderTextColor={colors.placeholder}
-          keyboardType={allowNegative ? 'numbers-and-punctuation' : 'decimal-pad'}
-          inputMode="decimal"
           accessibilityLabel="Amount"
           {...props}
           style={[style, { alignSelf: 'stretch', height: 48, outlineWidth: 0 }]}
@@ -154,7 +175,6 @@ export function FlagRow({ value, onChange }: { value: FlagColor | null; onChange
   const colors = useColors();
   const pick = (flag: FlagColor | null) => {
     haptic('selection');
-    dismissKeyboard();
     onChange(flag);
   };
   const ring = (color: string, on: boolean) =>

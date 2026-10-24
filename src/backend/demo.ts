@@ -11,7 +11,7 @@ const DEMO_USER: SessionUser = { uid: 'demo', email: null };
  * months of history the first time. Nothing here talks to Firebase.
  */
 export function createDemoBackend(): Backend {
-  const fake = createFakeBackend({ persist: true, latencyMs: 250, namespace: 'demo-' });
+  const fake = createFakeBackend({ persist: true, latencyMs: 250, namespace: 'demo-v2-' });
   if (!fake.hasData(DEMO_USER.uid)) fake.seed(DEMO_USER.uid, demoDocs());
 
   return {

@@ -6,7 +6,8 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { InlineAmount } from '@/components/inline-amount';
+import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
+import { debtTarget } from '@/domain/debt';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -39,7 +40,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const showToast = useToast((s) => s.show);
   const { all: openAccounts } = useAccounts();
   // The Assigned amount as it's typed, for the live preview.
-  const [draft, setDraft] = useState<number | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [donorId, setDonorId] = useState<string>();
 
@@ -82,11 +82,10 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
     debtAccount
       ? {
           owed: -(ledger.balance.get(debtAccount.id) ?? 0),
-          minPayment: debtAccount.minPayment,
+          target: debtTarget(debtAccount, -(ledger.balance.get(debtAccount.id) ?? 0)),
         }
       : undefined,
   );
-  const rta = budget.readyToAssign;
   const past = month < currentMonth();
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
@@ -136,9 +135,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 width={90}
                 muted={past}
                 accessibilityLabel={`Assigned to ${envelope.name} in ${formatMonth(month)}`}
-                status={`Ready to assign ${formatDollars(rta - (draft ?? row.assigned) + row.assigned)}`}
-                onDraft={setDraft}
-                onEditingChange={(on) => setDraft(on ? row.assigned : null)}
                 onCommit={(cents) => assign(id, cents - row.assigned, date)}
               />
             </Stat>
@@ -211,6 +207,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
           <Button title="Show older months" variant="ghost" onPress={() => setShowAll(true)} />
         )}
       </Screen>
+      <AmountKeyboardBar />
 
       {!envelope.debtAccountId && (
         <ScreenActions>

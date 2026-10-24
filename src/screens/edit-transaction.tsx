@@ -1,12 +1,11 @@
 import { useMemo, useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Alert, TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { ActionList, AmountHero, FlagRow, FormCard, FormRow, InputRow } from '@/components/form';
-import { Icon } from '@/components/icon';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
@@ -15,7 +14,7 @@ import { isCashAccount, type FlagColor } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
 import { isLocked, useStore } from '@/store';
-import { groupColor, useColors } from '@/theme';
+import { groupColor } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -30,7 +29,6 @@ const TITLES = {
 } as const;
 
 export function EditTransaction({ id }: { id: string }) {
-  const colors = useColors();
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
   const t = useStore((s) => s.transactions.find((x) => x.id === id));
@@ -47,7 +45,6 @@ export function EditTransaction({ id }: { id: string }) {
   const [memo, setMemo] = useState(t?.memo ?? '');
   const [flag, setFlagState] = useState<FlagColor | null>(t?.flagged ? (t.flagColor ?? 'red') : null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [confirmSave, setConfirmSave] = useState(false);
   const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
   const noteRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
@@ -118,9 +115,22 @@ export function EditTransaction({ id }: { id: string }) {
     for (const o of accountOptions) if (!o.section) o.section = 'Accounts';
   }
 
+  /** Reconciled transactions can still be changed, after a yes. */
+  function confirmThenSave() {
+    if (!locked) return save();
+    const message = 'This is a reconciled transaction. Are you sure you want to save it?';
+    if (process.env.EXPO_OS === 'web') {
+      if (window.confirm(message)) save();
+      return;
+    }
+    Alert.alert('Reconciled', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Save', onPress: save },
+    ]);
+  }
+
   function save() {
     if (!t || amount === null || !payee.trim()) return;
-    if (locked && !confirmSave) return setConfirmSave(true);
     const fields = {
       payee: payee.trim(),
       date,
@@ -144,15 +154,6 @@ export function EditTransaction({ id }: { id: string }) {
         onChangeText={setAmountText}
         tone={kind === 'slip' ? 'negative' : signedAmount > 0 ? 'positive' : undefined}
       />
-
-      {locked && (
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <Icon sf="lock.fill" md="lock" size={11} color={colors.orange} />
-          <Text variant="footnote" weight="600" tone="orange">
-            Reconciled
-          </Text>
-        </View>
-      )}
 
       <FormCard>
         <InputRow
@@ -197,10 +198,10 @@ export function EditTransaction({ id }: { id: string }) {
       </FormCard>
 
       <Button
-        title={locked && confirmSave ? 'Save anyway' : 'Save'}
+        title="Save"
         size="lg"
         disabled={amount === null || !payee.trim()}
-        onPress={save}
+        onPress={confirmThenSave}
       />
       <ActionList
         actions={[

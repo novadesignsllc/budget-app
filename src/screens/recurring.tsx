@@ -150,10 +150,7 @@ function Tile({
   const due = item.active && item.nextDue <= day;
   const days = daysBetween(day, item.nextDue);
   const emoji = envelopeEmoji(envelope ?? { name: item.name });
-  const amount =
-    item.kind === 'bill'
-      ? `~${formatMoney(item.amount, { whole: item.amount % 100 === 0 })}`
-      : formatMoney(item.amount);
+  const amount = formatMoney(item.amount);
   const when = !item.active
     ? 'Paused'
     : onCard

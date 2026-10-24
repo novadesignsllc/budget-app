@@ -1,6 +1,11 @@
 import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
+
+/** How long a pause ends dictation. Long enough to think of the next part mid-sentence. */
+const PAUSE_MS = 2200;
+/** How long to wait for the first word before giving up. */
+const FIRST_WORD_MS = 8000;
 
 /**
  * Speech to text for quick-add. Starts listening on `start()`, streams partial text
@@ -21,27 +26,47 @@ export function useVoiceEntry({
   const volume = useSharedValue(0);
   const transcript = useRef('');
   const delivered = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
-  useSpeechRecognitionEvent('start', () => setListening(true));
+  // Listening runs until a pause, not until the first breath.
+  const stopAfter = useCallback((ms: number) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => ExpoSpeechRecognitionModule.stop(), ms);
+  }, []);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  useSpeechRecognitionEvent('start', () => {
+    setListening(true);
+    stopAfter(FIRST_WORD_MS);
+  });
   useSpeechRecognitionEvent('result', (e) => {
     const text = e.results[0]?.transcript ?? '';
     transcript.current = text;
     onPartial(text);
+    if (!e.isFinal) stopAfter(PAUSE_MS);
     if (e.isFinal && !delivered.current) {
       delivered.current = true;
       onFinal(text);
     }
   });
   useSpeechRecognitionEvent('end', () => {
+    clearTimeout(timer.current);
     setListening(false);
     if (!delivered.current && transcript.current) {
       delivered.current = true;
       onFinal(transcript.current);
+    } else if (!delivered.current) {
+      setError('Didn’t catch anything.');
     }
   });
   useSpeechRecognitionEvent('error', (e) => {
+    clearTimeout(timer.current);
     setListening(false);
-    if (e.error === 'aborted' || e.error === 'no-speech') return;
+    if (e.error === 'aborted') return;
+    if (e.error === 'no-speech') {
+      if (!delivered.current) setError('Didn’t catch anything.');
+      return;
+    }
     setError(
       e.error === 'not-allowed'
         ? 'Microphone or speech access is off. Turn it on in Settings, or type instead.'
@@ -70,7 +95,7 @@ export function useVoiceEntry({
     ExpoSpeechRecognitionModule.start({
       lang: 'en-US',
       interimResults: true,
-      continuous: false,
+      continuous: true,
       addsPunctuation: false,
       contextualStrings: hints.slice(0, 100),
       volumeChangeEventOptions: { enabled: true, intervalMillis: 80 },
@@ -79,6 +104,7 @@ export function useVoiceEntry({
 
   const stop = useCallback(() => ExpoSpeechRecognitionModule.stop(), []);
   const abort = useCallback(() => {
+    clearTimeout(timer.current);
     delivered.current = true;
     ExpoSpeechRecognitionModule.abort();
   }, []);

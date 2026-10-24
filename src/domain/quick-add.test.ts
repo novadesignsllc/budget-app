@@ -109,3 +109,35 @@ describe('spoken amounts', () => {
     expect(parseQuickAdd('McDonalds 227', ctx).amount).toBe(22700);
   });
 });
+
+describe('dictating everything', () => {
+  const spoken = { ...ctx, spoken: true };
+  it('hears inflow, the account, and keeps the name clean', () => {
+    expect(parseQuickAdd('Best Buy 4727 inflow checking account', spoken)).toMatchObject({
+      payee: 'Best Buy',
+      amount: 4727,
+      kind: 'income',
+      accountId: 'main',
+      accountMentioned: true,
+    });
+  });
+  it('hears a flag color', () => {
+    expect(parseQuickAdd('Kroger 5420 blue flag', spoken)).toMatchObject({ payee: 'Kroger', flagColor: 'blue' });
+    expect(parseQuickAdd('Kroger 5420 flag it green', spoken)).toMatchObject({ payee: 'Kroger', flagColor: 'green' });
+    expect(parseQuickAdd('Kroger 5420 flag it', spoken).flagColor).toBe('red');
+  });
+  it('takes everything after "note" as the note', () => {
+    const p = parseQuickAdd('Shell 40 Chime note look into this 20 dollars', spoken);
+    expect(p).toMatchObject({ payee: 'Shell', amount: 4000, accountId: 'chime', memo: 'Look into this 20 dollars' });
+  });
+  it('hears an envelope by name', () => {
+    expect(parseQuickAdd('Walmart 2350 fun money envelope', spoken)).toMatchObject({
+      payee: 'Walmart',
+      envelopeId: 'fun',
+      envelopeSource: 'said',
+    });
+  });
+  it('outflow wins over a name that sounds like income', () => {
+    expect(parseQuickAdd('deposit refund 25 outflow', spoken).kind).toBe('spend');
+  });
+});

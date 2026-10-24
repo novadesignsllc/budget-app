@@ -7,7 +7,8 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
-import { InlineAmount } from '@/components/inline-amount';
+import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
+import { debtTarget } from '@/domain/debt';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -16,7 +17,7 @@ import { SwipeRow, useSwipeGuard } from '@/components/swipe-row';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
-import { floorDollars, formatDollars } from '@/domain/money';
+import { ceilDollars, floorDollars, formatDollars } from '@/domain/money';
 import { assignDateFor, formatMonth, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -81,7 +82,6 @@ export function Budget() {
   const [dragging, setDragging] = useState(false);
   const [confirmUnassign, setConfirmUnassign] = useState(false);
   // The row being edited and the amount typed so far, for the live "to assign" preview.
-  const [editing, setEditing] = useState<{ id: string; draft: number } | null>(null);
   // Years are section labels in the menu, so each option only needs the month name.
   const monthOptions = useMonthOptions().map((o) => ({
     ...o,
@@ -104,7 +104,11 @@ export function Budget() {
   const past = month < thisMonth;
   const hueFor = (group: string) => (past ? colors.textTertiary : groupColor(group));
   const date = assignDateFor(month, today());
-  const gaps = targetGaps(envelopes, budget);
+  // Debt payments aim for what each debt's page says: the minimum or a custom amount.
+  const debtTargets = new Map(
+    envelopes.filter((e) => e.debtAccountId).map((e) => [e.id, ceilDollars(debtFor(e)?.target ?? 0)] as const),
+  );
+  const gaps = targetGaps(envelopes, budget, debtTargets);
   const existing = new Set(envelopes.map((e) => e.name.toLowerCase()));
   const spendable = envelopes.filter((e) => !e.debtAccountId);
 
@@ -133,10 +137,8 @@ export function Budget() {
   function debtFor(e: Envelope) {
     if (!e.debtAccountId) return undefined;
     const a = accounts.find((x) => x.id === e.debtAccountId);
-    return {
-      owed: -(ledger.balance.get(e.debtAccountId) ?? 0),
-      minPayment: a?.minPayment,
-    };
+    const owed = -(ledger.balance.get(e.debtAccountId) ?? 0);
+    return { owed, target: a ? debtTarget(a, owed) : 0 };
   }
 
   // Targets in the order the envelopes are listed, so the top of the list fills first.
@@ -325,7 +327,6 @@ export function Budget() {
                 const row = budget.envelopes.get(e.id) ?? EMPTY;
                 const status = envelopeStatus(e, row, month, debtFor(e));
                 const canFill = status.need > 0 && rta >= 100;
-                const change = editing?.id === e.id ? editing.draft - row.assigned : 0;
                 return (
                   <SwipeRow
                     key={e.id}
@@ -344,17 +345,22 @@ export function Budget() {
                           }
                         : undefined
                     }
-                    right={{
-                      label: 'Edit',
-                      sf: 'slider.horizontal.3',
-                      md: 'tune',
-                      color: past ? colors.textTertiary : colors.accent,
-                      onTrigger: () =>
-                        router.push({
-                          pathname: '/envelope/[id]',
-                          params: { id: e.id, month },
-                        }),
-                    }}
+                    right={
+                      // A debt's payment envelope has nothing to edit: its name and target come from the debt.
+                      e.debtAccountId
+                        ? undefined
+                        : {
+                            label: 'Edit',
+                            sf: 'slider.horizontal.3',
+                            md: 'tune',
+                            color: past ? colors.textTertiary : colors.accent,
+                            onTrigger: () =>
+                              router.push({
+                                pathname: '/envelope/[id]',
+                                params: { id: e.id, month },
+                              }),
+                          }
+                    }
                   >
                     <EnvelopeRow
                       envelope={e}
@@ -364,10 +370,7 @@ export function Budget() {
                       overspent={status.overspent}
                       last={i === g.items.length - 1}
                       past={past}
-                      status={`Ready to assign ${formatDollars(rta - change)}`}
-                      onDraft={(draft) => setEditing({ id: e.id, draft })}
                       onEditingChange={(on, view) => {
-                        setEditing(on ? { id: e.id, draft: row.assigned } : null);
                         revealAboveKeyboard(on ? view : null);
                       }}
                       onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
@@ -422,6 +425,7 @@ export function Budget() {
           </Card>
         )}
       </Screen>
+      <AmountKeyboardBar />
 
       <ScreenActions>
         <Dropdown variant="compact" value={month} options={monthOptions} onChange={setMonth} label="Month" />
@@ -448,8 +452,6 @@ function EnvelopeRow({
   overspent,
   last,
   past,
-  status,
-  onDraft,
   onEditingChange,
   onAssign,
   onPress,
@@ -461,8 +463,6 @@ function EnvelopeRow({
   overspent: boolean;
   last: boolean;
   past: boolean;
-  status: string;
-  onDraft: (cents: number) => void;
   onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
   onAssign: (cents: number) => void;
   onPress: () => void;
@@ -515,8 +515,6 @@ function EnvelopeRow({
             width={COL}
             accessibilityLabel={`Assigned to ${envelope.name}`}
             muted={past}
-            status={status}
-            onDraft={onDraft}
             onEditingChange={onEditingChange}
             onCommit={onAssign}
           />

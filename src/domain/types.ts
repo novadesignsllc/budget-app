@@ -26,6 +26,11 @@ export type Account = {
   apr?: number;
   minPayment?: Cents;
   dueDay?: number;
+  /**
+   * What the debt's payment envelope aims for each month. Unset or null means the
+   * minimum payment; a number is a custom amount in whole dollars.
+   */
+  paymentTarget?: Cents | null;
   /** Cash-only: last time the user confirmed the bank balance. */
   lastReconciledOn?: ISODate;
 };

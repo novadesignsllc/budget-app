@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
@@ -13,12 +13,12 @@ import { addDays, fromISODate, toISODate, today } from '@/domain/dates';
 import type { ISODate } from '@/domain/types';
 import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
-import { afterKeyboard } from '@/utils/keyboard';
 
 import { Button } from './button';
 import { FieldLabel } from './field';
 import { Icon } from './icon';
 import { FORM_ROW_HEIGHT } from './form';
+import { useSheetReveal } from './screen';
 import { Text } from './text';
 
 const DAY = 34;
@@ -50,9 +50,13 @@ const shift = ({ y, m }: Month, n: number): Month => {
 const firstOf = ({ y, m }: Month) => toISODate(new Date(y, m, 1));
 const lastOf = ({ y, m }: Month) => toISODate(new Date(y, m + 1, 0));
 
-/** Open/close with a measured height animation; the calendar unmounts once closed. */
-function useExpand() {
+/**
+ * Open/close with a measured height animation; the calendar unmounts once closed. The
+ * keyboard stays up, so once open the sheet scrolls the calendar up above it.
+ */
+function useExpand(container: React.RefObject<React.ComponentRef<typeof View> | null>) {
   const reduceMotion = useReducedMotion();
+  const reveal = useSheetReveal();
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const height = useSharedValue(0);
@@ -61,11 +65,9 @@ function useExpand() {
 
   const set = (next: boolean) => {
     if (next) {
-      // Open once the keyboard is down, so the calendar doesn't grow while the sheet slides.
-      afterKeyboard(() => {
-        setOpen(true);
-        setMounted(true);
-      });
+      setOpen(true);
+      setMounted(true);
+      setTimeout(() => reveal(container.current), duration + 40);
       return;
     }
     setOpen(false);
@@ -231,8 +233,8 @@ type PickerProps = {
 };
 
 /** Shared state for the row and the field: open/close, the month on screen, picking. */
-function usePicker({ value, onChange }: PickerProps) {
-  const expand = useExpand();
+function usePicker({ value, onChange }: PickerProps, container: React.RefObject<React.ComponentRef<typeof View> | null>) {
+  const expand = useExpand(container);
   const [month, setMonth] = useState<Month>(() => monthOfISO(value));
   const toggle = () => {
     haptic('selection');
@@ -268,9 +270,10 @@ function Chevron({ open, color }: { open: boolean; color: string }) {
 export function DateRow(props: PickerProps & { last?: boolean }) {
   const { label, value, min, max, last } = props;
   const colors = useColors();
-  const p = usePicker(props);
+  const container = useRef<React.ComponentRef<typeof View>>(null);
+  const p = usePicker(props, container);
   return (
-    <View style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.hairline }}>
+    <View ref={container} collapsable={false} style={{ borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.hairline }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}, ${formatPickedDate(value)}`}
@@ -308,9 +311,10 @@ export function DateRow(props: PickerProps & { last?: boolean }) {
 export function DateField(props: PickerProps & { optional?: boolean; note?: string }) {
   const { label, value, min, max, optional, note } = props;
   const colors = useColors();
-  const p = usePicker(props);
+  const container = useRef<React.ComponentRef<typeof View>>(null);
+  const p = usePicker(props, container);
   return (
-    <View style={{ gap: 5 }}>
+    <View ref={container} collapsable={false} style={{ gap: 5 }}>
       <FieldLabel label={label} optional={optional} note={note} />
       <View
         style={{

@@ -1,6 +1,6 @@
 import { addDays, fromISODate, toISODate } from './dates';
-import type { Account, Cents, Envelope, ISODate } from './types';
-import { isCashAccount } from './types';
+import type { Account, Cents, Envelope, FlagColor, ISODate } from './types';
+import { FLAG_COLORS, isCashAccount } from './types';
 
 export type ParseContext = {
   accounts: Account[];
@@ -16,7 +16,7 @@ export type ParseContext = {
   spoken?: boolean;
 };
 
-export type EnvelopeSource = 'remembered' | 'guessed' | 'none';
+export type EnvelopeSource = 'said' | 'remembered' | 'guessed' | 'none';
 
 export type ParsedEntry = {
   amount: Cents | null;
@@ -28,6 +28,10 @@ export type ParsedEntry = {
   kind: 'spend' | 'income' | 'slip';
   envelopeId: string | null;
   envelopeSource: EnvelopeSource;
+  /** "note look into this" */
+  memo?: string;
+  /** "blue flag" */
+  flagColor?: FlagColor;
 };
 
 const AMOUNT_RE = /(^|[\s(])([+-]?)\$?\s?((?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?)(?![\d%/])/g;
@@ -136,11 +140,11 @@ function findAccount(text: string, accounts: Account[]): { account: Account; mat
     const m = text.match(re);
     if (m) return { account: owners[0], matched: m[0] };
   }
-  // Finally the kind itself ("savings", "cash") when there's exactly one of it.
-  for (const kind of ['savings', 'cash'] as const) {
-    const ofKind = open.filter((a) => a.kind === kind);
+  // Finally the kind itself ("checking", "savings", "cash"): the first one in your order.
+  for (const kind of ['checking', 'savings', 'cash'] as const) {
+    const ofKind = open.filter((a) => a.kind === kind).sort((a, b) => a.order - b.order);
     const m = text.match(new RegExp(`\\b${kind}\\b`, 'i'));
-    if (m && ofKind.length === 1) return { account: ofKind[0], matched: m[0] };
+    if (m && ofKind.length) return { account: ofKind[0], matched: m[0] };
   }
   return null;
 }
@@ -233,8 +237,50 @@ export function normalizeSpoken(input: string): string {
     .replace(/(\d+(?:\.\d{1,2})?)\s*(?:dollars?|bucks)\b/gi, '$1');
 }
 
+const FLAG_WORDS = FLAG_COLORS.join('|');
+const FLAG_RE = new RegExp(
+  `\\b(?:(${FLAG_WORDS})\\s+flag(?:ged)?|flag(?:ged)?(?:\\s+(?:it|this))?(?:\\s+(?:as\\s+)?(${FLAG_WORDS}))?)\\b`,
+  'i',
+);
+
+/** "note look into this" (or "memo ...") runs to the end of what was said. */
+function findNote(text: string): { memo: string; index: number } | null {
+  const m = text.match(/(?:^|\s)(?:note|memo)\b[:,]?\s*(.*)$/i);
+  if (!m || m.index === undefined) return null;
+  const memo = m[1].trim().replace(/[.\s]+$/, '');
+  return { memo: memo.charAt(0).toUpperCase() + memo.slice(1), index: m.index };
+}
+
+/** "from the groceries envelope", "groceries envelope", "envelope groceries". */
+function findEnvelope(text: string, envelopes: Envelope[]): { id: string; matched: string } | null {
+  const usable = envelopes.filter((e) => !e.hidden && !e.debtAccountId).sort((a, b) => b.name.length - a.name.length);
+  for (const e of usable) {
+    const name = escapeRe(e.name.toLowerCase());
+    const re = new RegExp(`(?:\\b(?:from|in|into|out of)\\s+)?(?:\\b(?:the|my)\\s+)?\\b${name}\\s+envelope\\b|\\benvelope\\s+${name}\\b`, 'i');
+    const m = text.match(re);
+    if (m) return { id: e.id, matched: m[0] };
+  }
+  return null;
+}
+
 export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
-  let rest = ` ${normalizeSpoken(input.trim())} `;
+  // The note goes first: anything after "note" is the note, numbers and all.
+  const note = findNote(input.trim());
+  const said = note ? input.trim().slice(0, note.index) : input.trim();
+  let rest = ` ${normalizeSpoken(said)} `;
+
+  let flagColor: FlagColor | undefined;
+  const flag = rest.match(FLAG_RE);
+  if (flag) {
+    flagColor = ((flag[1] ?? flag[2])?.toLowerCase() as FlagColor | undefined) ?? 'red';
+    rest = rest.replace(flag[0], ' ');
+  }
+
+  const direction = rest.match(/\b(inflow|outflow)\b/i);
+  if (direction) rest = rest.replace(direction[0], ' ');
+
+  const saidEnvelope = findEnvelope(rest, ctx.envelopes);
+  if (saidEnvelope) rest = rest.replace(saidEnvelope.matched, ' ');
 
   const date = findDate(rest, ctx.today);
   if (date) rest = rest.replace(new RegExp(escapeRe(date.matched), 'i'), ' ');
@@ -247,19 +293,20 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
     [...candidates].reverse().find((c) => /\$|\./.test(c[0])) ?? candidates[candidates.length - 1];
   if (best) {
     sign = best[2];
-    const said = best[3];
-    const wholeDollars = /\$|\b(dollars?|bucks)\b/i.test(input) || /[.,]/.test(said);
+    const digits = best[3];
+    const wholeDollars = /\$|\b(dollars?|bucks)\b/i.test(said) || /[.,]/.test(digits);
     amount =
-      ctx.spoken && !wholeDollars && said.length >= 3
-        ? parseInt(said, 10)
-        : Math.round(parseFloat(said.replace(/,/g, '')) * 100);
+      ctx.spoken && !wholeDollars && digits.length >= 3
+        ? parseInt(digits, 10)
+        : Math.round(parseFloat(digits.replace(/,/g, '')) * 100);
     rest = rest.replace(best[0], best[1] + ' ');
   }
 
   const found = findAccount(rest, ctx.accounts);
-  if (found) rest = rest.replace(new RegExp(escapeRe(found.matched), 'i'), ' ');
+  // "checking account", "chase card": the trailing word goes with the account.
+  if (found) rest = rest.replace(new RegExp(`${escapeRe(found.matched)}(?:\\s+(?:account|card))?`, 'i'), ' ');
 
-  const isIncome = sign === '+' || INCOME_RE.test(input);
+  const isIncome = direction ? direction[1].toLowerCase() === 'inflow' : sign === '+' || INCOME_RE.test(said);
   const account = found?.account ?? defaultAccount(ctx.accounts) ?? null;
 
   const payee = titleCase(stripFiller(rest));
@@ -270,7 +317,12 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
       ? 'slip'
       : 'spend';
 
-  const { envelopeId, envelopeSource } = kind === 'income' ? NO_ENVELOPE : envelopeFor(payee, ctx);
+  const { envelopeId, envelopeSource } =
+    kind === 'income'
+      ? NO_ENVELOPE
+      : saidEnvelope
+        ? { envelopeId: saidEnvelope.id, envelopeSource: 'said' as EnvelopeSource }
+        : envelopeFor(payee, ctx);
 
   return {
     amount,
@@ -281,5 +333,7 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
     kind,
     envelopeId,
     envelopeSource,
+    ...(note?.memo ? { memo: note.memo } : {}),
+    ...(flagColor ? { flagColor } : {}),
   };
 }

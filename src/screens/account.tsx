@@ -14,6 +14,7 @@ import { TransactionRow, TXN_COLUMNS } from '@/components/transaction-row';
 import { formatShortDate, today } from '@/domain/dates';
 import { canReconcile, reconciledBalance } from '@/domain/reconcile';
 import { useLedger } from '@/hooks/use-ledger';
+import { isDebtAccount } from '@/domain/types';
 import { newestFirst, TableCardRow, TableCardTop } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { gutter, maxContentWidth, spacing, useColors } from '@/theme';
@@ -28,9 +29,10 @@ const SINGLE_COLUMNS = [
 
 /**
  * One account's register. Reconciling happens here: tap Reconcile, check off what the
- * bank shows as posted, tap again, and those transactions lock.
+ * bank shows as posted, tap again, and those transactions are marked reconciled. Debts
+ * use the same page with their own cards on top (`header`).
  */
-export function AccountDetail({ id }: { id: string }) {
+export function AccountDetail({ id, header }: { id: string; header?: React.ReactNode }) {
   const colors = useColors();
   const { contentBottom } = useDock();
   const ledger = useLedger();
@@ -69,6 +71,7 @@ export function AccountDetail({ id }: { id: string }) {
   const after = reconciled + picked.reduce((a, t) => a + t.amount, 0);
   const lastLockedDate = locked.length ? locked[0].date : null;
   const rows = reconciling ? (showLocked ? [...open, ...locked] : open) : mine;
+  const debt = isDebtAccount(account);
 
   function start() {
     const day = today();
@@ -83,7 +86,7 @@ export function AccountDetail({ id }: { id: string }) {
     haptic('success');
     showToast({
       message: ids.length
-        ? `Reconciled ${ids.length} ${ids.length === 1 ? 'transaction' : 'transactions'}. They’re locked now.`
+        ? `Reconciled ${ids.length} ${ids.length === 1 ? 'transaction' : 'transactions'}.`
         : `${account!.name} is reconciled.`,
     });
     setReconciling(false);
@@ -148,7 +151,7 @@ export function AccountDetail({ id }: { id: string }) {
             paddingHorizontal: 6,
           }}
         >
-          <Icon sf="lock.fill" md="lock" size={11} color={colors.textTertiary} />
+          <Icon sf="checkmark" md="check" size={11} color={colors.textTertiary} />
           <Text variant="footnote" tone="textSecondary" style={{ flex: 1 }}>
             {locked.length} reconciled through {formatShortDate(lastLockedDate!)}
           </Text>
@@ -207,6 +210,8 @@ export function AccountDetail({ id }: { id: string }) {
         data={rows}
         keyExtractor={(t) => t.id}
         contentInsetAdjustmentBehavior="automatic"
+        automaticallyAdjustKeyboardInsets
+        keyboardShouldPersistTaps="handled"
         initialNumToRender={20}
         contentContainerStyle={{
           paddingHorizontal: gutter,
@@ -218,7 +223,7 @@ export function AccountDetail({ id }: { id: string }) {
         }}
         ListHeaderComponent={
           <View style={{ gap: spacing.md - 2 }}>
-            {summary}
+            {header && !reconciling ? header : summary}
             {rows.length > 0 && <TableCardTop columns={SINGLE_COLUMNS} leading={reconciling ? TXN_COLUMNS.check : 0} />}
           </View>
         }
@@ -260,7 +265,7 @@ export function AccountDetail({ id }: { id: string }) {
           <>
             <ActionButton label="Cancel" onPress={() => setReconciling(false)} />
             <ActionButton
-              icon={{ sf: 'lock.fill', md: 'lock' }}
+              icon={{ sf: 'checkmark', md: 'check' }}
               label={picked.length ? `Reconcile ${picked.length}` : 'Mark reconciled'}
               variant="accent"
               onPress={finish}
@@ -268,12 +273,16 @@ export function AccountDetail({ id }: { id: string }) {
           </>
         ) : (
           <>
-            <ActionButton
-              label="Transfer"
-              icon={{ sf: 'arrow.left.arrow.right', md: 'swap_horiz' }}
-              onPress={() => router.push({ pathname: '/transfer', params: { from: id } })}
-            />
-            <ActionButton icon={{ sf: 'lock.fill', md: 'lock' }} label="Reconcile" variant="accent" onPress={start} />
+            {debt ? (
+              <ActionButton label="Make a payment" onPress={() => router.push({ pathname: '/transfer', params: { to: id } })} />
+            ) : (
+              <ActionButton
+                label="Transfer"
+                icon={{ sf: 'arrow.left.arrow.right', md: 'swap_horiz' }}
+                onPress={() => router.push({ pathname: '/transfer', params: { from: id } })}
+              />
+            )}
+            <ActionButton icon={{ sf: 'checkmark', md: 'check' }} label="Reconcile" variant="accent" onPress={start} />
           </>
         )}
       </ScreenActions>

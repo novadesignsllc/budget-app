@@ -27,7 +27,7 @@ export function envelopeStatus(
   e: Envelope,
   row: EnvelopeMonth,
   month: MonthKey,
-  debt?: { owed: Cents; minPayment?: Cents },
+  debt?: { owed: Cents; target: Cents },
 ): EnvelopeStatus {
   const { available, assigned, spent } = row;
 
@@ -43,7 +43,7 @@ export function envelopeStatus(
   }
 
   if (e.debtAccountId && debt) {
-    const need = ceilDollars(Math.max(0, (debt.minPayment ?? 0) - assigned));
+    const need = ceilDollars(Math.max(0, debt.target - assigned));
     return {
       subtitle:
         debt.owed <= 0

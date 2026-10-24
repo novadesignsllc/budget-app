@@ -41,10 +41,11 @@ function rng(seed: number) {
 type DebtDef = { name: string; kind: AccountKind; owed: Cents; apr: number; min: Cents; due: number; statement: number };
 
 const DEBTS: DebtDef[] = [
-  { name: 'Chase Freedom', kind: 'credit_card', owed: 486000, apr: 2499, min: 14600, due: 14, statement: 25 },
-  { name: 'Capital One', kind: 'credit_card', owed: 296000, apr: 2999, min: 6500, due: 3, statement: 12 },
-  { name: 'Car Loan', kind: 'auto_loan', owed: 1590000, apr: 690, min: 38900, due: 20, statement: 20 },
-  { name: 'Student Loan', kind: 'student_loan', owed: 2340000, apr: 550, min: 26000, due: 1, statement: 1 },
+  // Rates are picked so snowball (smallest first) and avalanche (highest rate first) give different orders.
+  { name: 'Chase Freedom', kind: 'credit_card', owed: 486000, apr: 2999, min: 14600, due: 14, statement: 25 },
+  { name: 'Capital One', kind: 'credit_card', owed: 296000, apr: 2199, min: 6500, due: 3, statement: 12 },
+  { name: 'Car Loan', kind: 'auto_loan', owed: 1590000, apr: 590, min: 38900, due: 20, statement: 20 },
+  { name: 'Student Loan', kind: 'student_loan', owed: 2340000, apr: 680, min: 26000, due: 1, statement: 1 },
 ];
 
 const ENVELOPES: { name: string; group: string; target: Cents }[] = [

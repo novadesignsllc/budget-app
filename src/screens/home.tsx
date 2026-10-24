@@ -12,9 +12,9 @@ import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
 import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
-import { DateBlock } from '@/components/transaction-row';
+import { DateBlock, TransactionRow } from '@/components/transaction-row';
 import { useToast } from '@/components/toast';
-import { daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
+import { addDays, daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetHealth } from '@/domain/health';
 import { balanceHistory } from '@/domain/history';
 import { formatDollars, formatMoney } from '@/domain/money';
@@ -22,6 +22,7 @@ import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
+import { isListed, newestFirst } from '@/screens/transactions';
 import { loadSampleData } from '@/store/sample-data';
 import { chartCash, chartDebt, spacing, useColors } from '@/theme';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
@@ -65,6 +66,9 @@ export function Home() {
   const accountById = new Map(all.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
   const title = todayTitle(fromISODate(day));
+  // The last 7 days, today included.
+  const weekAgo = addDays(day, -6);
+  const recent = transactions.filter((t) => isListed(t) && t.date >= weekAgo && t.date <= day).sort(newestFirst);
 
   if (all.length === 0) {
     return (
@@ -215,8 +219,7 @@ export function Home() {
             const isDue = r.nextDue <= day;
             const days = daysBetween(day, r.nextDue);
             const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
-            const amount =
-              r.kind === 'bill' ? `~${formatMoney(r.amount, { whole: r.amount % 100 === 0 })}` : formatMoney(r.amount);
+            const amount = formatMoney(r.amount);
             const when =
               days < 0 ? `Due ${formatDay(r.nextDue, day).toLowerCase()}` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
             const sub = onCard ? `Slip on ${account?.name ?? 'a card'}` : when;
@@ -346,6 +349,37 @@ export function Home() {
           </Text>
         </Pressable>
       </Card>
+
+      {recent.length > 0 && (
+        <Card>
+          <CardHeader title="Recent" detail="Last 7 days" />
+          {recent.map((t) => (
+            <TransactionRow
+              key={t.id}
+              t={t}
+              account={accountById.get(t.accountId)}
+              envelope={t.envelopeId ? envelopeById.get(t.envelopeId) : undefined}
+              columns="single"
+              showAccount
+            />
+          ))}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.navigate('/transactions')}
+            style={({ pressed }) => ({
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md - 2,
+              borderTopWidth: 1,
+              borderTopColor: colors.separator,
+              backgroundColor: pressed ? colors.control : colors.surface,
+            })}
+          >
+            <Text variant="callout" weight="600" tone="accent">
+              All transactions ›
+            </Text>
+          </Pressable>
+        </Card>
+      )}
 
       {/* Settings lives at the bottom of Home instead of in the tab bar. */}
       <Card>

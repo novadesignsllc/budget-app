@@ -148,12 +148,19 @@ export function computeMonth(
   return { month, envelopes: rows, cash, readyToAssign: cash - total - assignedLater };
 }
 
-/** How much each envelope still needs this month to reach that month's target. */
-export function targetGaps(envelopes: Envelope[], budget: BudgetMonth): { envelopeId: string; need: Cents }[] {
+/**
+ * How much each envelope still needs this month to reach that month's target. Debt
+ * payment envelopes use `debtTargets` (by envelope id), which come from their debt.
+ */
+export function targetGaps(
+  envelopes: Envelope[],
+  budget: BudgetMonth,
+  debtTargets: Map<string, Cents> = new Map(),
+): { envelopeId: string; need: Cents }[] {
   return envelopes
-    .filter((e) => !e.hidden && !e.debtAccountId)
+    .filter((e) => !e.hidden && (!e.debtAccountId || debtTargets.has(e.id)))
     .sort((a, b) => a.order - b.order)
-    .map((e) => ({ e, target: targetFor(e, budget.month) }))
+    .map((e) => ({ e, target: e.debtAccountId ? (debtTargets.get(e.id) ?? null) : targetFor(e, budget.month) }))
     .filter(({ target }) => target !== null && target > 0)
     .map(({ e, target }) => ({ envelopeId: e.id, need: target! - (budget.envelopes.get(e.id)?.assigned ?? 0) }))
     .filter((g) => g.need > 0);

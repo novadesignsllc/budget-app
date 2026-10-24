@@ -4,7 +4,7 @@ import { Pressable, Text as RNText, TextInput, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
-import { ActionList, FormCard, FormRow, InputRow } from '@/components/form';
+import { ActionList, cleanDollars, FormCard, FormRow, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
@@ -140,11 +140,11 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
           <InputRow
             ref={targetRef}
             label={targetLabel(group)}
-            value={target}
-            onChangeText={setTarget}
-            placeholder="0.00"
-            keyboardType="decimal-pad"
-            inputMode="decimal"
+            value={target ? `$${Number(target).toLocaleString('en-US')}` : ''}
+            onChangeText={(v) => setTarget(cleanDollars(v))}
+            placeholder="$0"
+            keyboardType="number-pad"
+            inputMode="numeric"
             returnKeyType="done"
           />
         )}

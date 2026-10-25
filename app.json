@@ -63,6 +63,9 @@
         {
           "ios": {
             "useFrameworks": "dynamic"
+          },
+          "android": {
+            "kotlinVersion": "2.3.0"
           }
         }
       ],

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "16770367567",
+    "project_id": "zero-budget-adfe6",
+    "storage_bucket": "zero-budget-adfe6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:16770367567:android:6cb70dd3eff4e25c356a3a",
+        "android_client_info": {
+          "package_name": "com.davewilson.zerobudget"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArWzunhweff6J-pSxdFOgVKUxUpTkTqz0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -24,7 +24,7 @@ import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import { envelopeStatus } from '@/utils/envelope-status';
+import { envelopeStatus, targetBar } from '@/utils/envelope-status';
 import { haptic } from '@/utils/haptics';
 
 export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: MonthKey }) {
@@ -78,18 +78,22 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
     available: 0,
   };
   const debtAccount = accounts.find((a) => a.id === envelope.debtAccountId);
-  const status = envelopeStatus(
-    envelope,
-    row,
-    month,
-    debtAccount
-      ? {
-          owed: -(ledger.balance.get(debtAccount.id) ?? 0),
-          target: debtTarget(debtAccount, -(ledger.balance.get(debtAccount.id) ?? 0)),
-        }
-      : undefined,
-  );
+  const debt = debtAccount
+    ? {
+        owed: -(ledger.balance.get(debtAccount.id) ?? 0),
+        target: debtTarget(debtAccount, -(ledger.balance.get(debtAccount.id) ?? 0)),
+      }
+    : undefined;
+  const status = envelopeStatus(envelope, row, month, debt);
   const past = month < currentMonth();
+  const bar = targetBar(envelope, row, month, debt);
+  const barColor = past
+    ? colors.textTertiary
+    : bar
+      ? { short: colors.cautionDot, funded: colors.positive, empty: colors.fill, over: colors.negativeStrong }[bar.state]
+      : status.overspent
+        ? colors.negativeStrong
+        : groupColor(envelope.group);
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
   // The last three months; older ones load on request so the page opens quickly.
@@ -123,11 +127,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 {status.subtitle}
               </Text>
             </View>
-            <ProgressBar
-              value={status.progress}
-              color={past ? colors.textTertiary : status.overspent ? colors.negativeStrong : groupColor(envelope.group)}
-              height={3}
-            />
+            <ProgressBar value={bar ? bar.progress : status.progress} color={barColor} height={3} />
           </View>
           <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.separator }}>
             <Stat label="Carried in">{formatDollars(row.carriedIn)}</Stat>

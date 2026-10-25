@@ -15,6 +15,34 @@ export type EnvelopeStatus = {
   fillLabel: 'Fill' | 'Cover';
 };
 
+/**
+ * The bar under an envelope with a target. Yellow while it's short of the target (filled
+ * as far as the money in it goes), green once it's funded (shrinking as you spend), grey
+ * when funded and spent to zero, red when overspent. `null` means no target: draw the
+ * plain bar.
+ */
+export type TargetBar = { state: 'short' | 'funded' | 'empty' | 'over'; progress: number };
+
+export function targetBar(
+  e: Envelope,
+  row: EnvelopeMonth,
+  month: MonthKey,
+  debt?: { owed: Cents; target: Cents },
+): TargetBar | null {
+  const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
+  if (target <= 0) return null;
+  if (row.available < 0) return { state: 'over', progress: 1 };
+  const need = e.debtAccountId ? Math.max(0, target - row.assigned) : targetNeed(e, target, row);
+  if (need >= 100) {
+    // How much of the target is in: a spending limit counts what's in the envelope.
+    const have = target - need;
+    return { state: 'short', progress: Math.min(1, Math.max(0, have / target)) };
+  }
+  if (row.available < 100) return { state: 'empty', progress: 0 };
+  const month$ = row.available + row.spent;
+  return { state: 'funded', progress: month$ > 0 ? row.available / month$ : 1 };
+}
+
 // The budget shows whole dollars: amounts round down, spending rounds up.
 const m = (c: Cents) => formatDollars(c);
 const up = (c: Cents) => formatDollars(c, 'up');

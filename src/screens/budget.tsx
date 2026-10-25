@@ -26,7 +26,7 @@ import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
-import { envelopeStatus, groupSummary } from '@/utils/envelope-status';
+import { envelopeStatus, groupSummary, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -377,6 +377,7 @@ export function Budget() {
                       color={hue}
                       progress={status.progress}
                       overspent={status.overspent}
+                      bar={targetBar(e, row, month, debtFor(e))}
                       last={i === g.items.length - 1}
                       past={past}
                       onEditingChange={(on, view) => {
@@ -449,6 +450,14 @@ export function Budget() {
   );
 }
 
+/** Target bar colors: yellow short of the target, green funded, red over. Empty shows only the grey track. */
+const BAR_COLOR: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => string> = {
+  short: (c) => c.cautionDot,
+  funded: (c) => c.positive,
+  empty: (c) => c.fill,
+  over: (c) => c.negativeStrong,
+};
+
 /**
  * One envelope: name, then Assigned (tap to edit), Spent and Left in equal columns, and
  * a 3px bar in the group color (red and full when overspent). Greys only in a past month.
@@ -459,6 +468,7 @@ function EnvelopeRow({
   color,
   progress,
   overspent,
+  bar,
   last,
   past,
   onEditingChange,
@@ -470,6 +480,8 @@ function EnvelopeRow({
   color: string;
   progress: number;
   overspent: boolean;
+  /** Set when the envelope has a target: the bar shows how funded it is. */
+  bar: TargetBar | null;
   last: boolean;
   past: boolean;
   onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
@@ -543,22 +555,22 @@ function EnvelopeRow({
             {formatDollars(row.available)}
           </Text>
         </View>
-        {!savings && (
+        {(bar || !savings) && (
           <View
             style={{
               height: 3,
               borderRadius: 2,
-              backgroundColor: overspent ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
+              backgroundColor: !bar && overspent ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
             }}
           >
-            {!overspent && progress > 0 && (
+            {(bar ? bar.progress : overspent ? 0 : progress) > 0 && (
               <Animated.View
                 style={{
-                  width: `${Math.min(1, progress) * 100}%`,
+                  width: `${Math.min(1, bar ? bar.progress : progress) * 100}%`,
                   height: 3,
                   borderRadius: 2,
-                  backgroundColor: color,
-                  transitionProperty: 'width',
+                  backgroundColor: bar ? (past ? colors.textTertiary : BAR_COLOR[bar.state](colors)) : color,
+                  transitionProperty: ['width', 'backgroundColor'],
                   transitionDuration: 300,
                 }}
               />

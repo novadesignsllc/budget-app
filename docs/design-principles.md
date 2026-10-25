@@ -92,3 +92,4 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-25 | Each Daily or Savings envelope has a target type: Spending (a monthly limit that refills up to the target, leftovers count) or Goal (the full amount every month, building over time). Defaults: Daily is spending, Savings is a goal | User request |
 | 2026-10-25 | Starter envelope suggestions stay until you tap Done or add them all | They vanished after the first one |
 | 2026-10-25 | Accounts can be renamed from the account page (Rename, next to Move up and Move down) | User request |
+| 2026-10-25 | Envelopes with a target show funding on their bar: yellow while short (filled as far as the money goes), green once funded (shrinks as you spend), grey track when spent to zero, red when over. No target keeps the plain group-color bar | User request |

@@ -1,8 +1,11 @@
 import { initializeApp } from 'firebase/app';
 import {
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
   getAuth,
   onAuthStateChanged,
+  reauthenticateWithCredential,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
@@ -50,6 +53,15 @@ function createWebBackend(): Backend {
     appleSignInAvailable: false,
     signInWithApple: () => Promise.reject(new Error('Sign in with Apple is only on iPhone.')),
     signOut: () => signOut(auth),
+    signInMethod: () => (auth.currentUser?.providerData.some((p) => p.providerId === 'password') ? 'password' : null),
+    reauthenticate: async (password) => {
+      const user = auth.currentUser;
+      if (!user) throw Object.assign(new Error('Not signed in'), { code: 'auth/no-current-user' });
+      await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email ?? '', password ?? ''));
+    },
+    deleteSignIn: async () => {
+      if (auth.currentUser) await deleteUser(auth.currentUser);
+    },
 
     listen: (uid, name, onDocs, onError) =>
       onSnapshot(

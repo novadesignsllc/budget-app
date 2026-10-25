@@ -113,6 +113,13 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean;
     async sendPasswordReset() {},
     appleSignInAvailable: false,
     async signInWithApple() {},
+    signInMethod: () => (user ? 'password' : null),
+    async reauthenticate(password) {
+      if (password === '') throw Object.assign(new Error('bad'), { code: 'auth/invalid-credential' });
+    },
+    async deleteSignIn() {
+      return api.signOut();
+    },
     async signOut() {
       user = null;
       storage?.removeItem(USER);

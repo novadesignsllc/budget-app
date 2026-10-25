@@ -1,8 +1,12 @@
 import {
   AppleAuthProvider,
   createUserWithEmailAndPassword,
+  deleteUser,
+  EmailAuthProvider,
   getAuth,
   onAuthStateChanged,
+  reauthenticateWithCredential,
+  revokeToken,
   sendPasswordResetEmail,
   signInWithCredential,
   signInWithEmailAndPassword,
@@ -25,9 +29,23 @@ import { chunks, clean } from './firestore-shared';
 import { isDemoMode } from './mode';
 import type { Backend } from './types';
 
+/** Apple sign-in with a nonce: Apple gets its hash, Firebase gets the raw value to check it. */
+async function appleCredential() {
+  const rawNonce = Crypto.randomUUID();
+  const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
+  const result = await AppleAuthentication.signInAsync({
+    requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
+    nonce: hashedNonce,
+  });
+  if (!result.identityToken) throw Object.assign(new Error('No identity token'), { code: 'apple/no-token' });
+  return { credential: AppleAuthProvider.credential(result.identityToken, rawNonce), code: result.authorizationCode };
+}
+
 function createNativeBackend(): Backend {
   const auth = getAuth();
   const db = getFirestore();
+  // Apple's code from the last re-check, needed to revoke the app's access when the account is deleted.
+  let appleCode: string | null = null;
 
   return {
     onAuth: (cb) => onAuthStateChanged(auth, (u) => cb(u ? { uid: u.uid, email: u.email } : null)),
@@ -40,17 +58,35 @@ function createNativeBackend(): Backend {
     sendPasswordReset: (email) => sendPasswordResetEmail(auth, email.trim()),
     appleSignInAvailable: process.env.EXPO_OS === 'ios',
     signInWithApple: async () => {
-      // Apple gets a hash of the nonce; Firebase gets the raw value to check it.
-      const rawNonce = Crypto.randomUUID();
-      const hashedNonce = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, rawNonce);
-      const result = await AppleAuthentication.signInAsync({
-        requestedScopes: [AppleAuthentication.AppleAuthenticationScope.EMAIL],
-        nonce: hashedNonce,
-      });
-      if (!result.identityToken) throw Object.assign(new Error('No identity token'), { code: 'apple/no-token' });
-      await signInWithCredential(auth, AppleAuthProvider.credential(result.identityToken, rawNonce));
+      const { credential } = await appleCredential();
+      await signInWithCredential(auth, credential);
     },
     signOut: () => signOut(auth),
+    signInMethod: () => {
+      const providers = auth.currentUser?.providerData.map((p) => p.providerId) ?? [];
+      return providers.includes('password') ? 'password' : providers.includes('apple.com') ? 'apple' : null;
+    },
+    reauthenticate: async (password) => {
+      const user = auth.currentUser;
+      if (!user) throw Object.assign(new Error('Not signed in'), { code: 'auth/no-current-user' });
+      if (password !== undefined) {
+        await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email ?? '', password));
+        return;
+      }
+      const { credential, code } = await appleCredential();
+      await reauthenticateWithCredential(user, credential);
+      appleCode = code;
+    },
+    deleteSignIn: async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+      if (appleCode) {
+        // Apple asks apps to revoke their access when an account is deleted.
+        await revokeToken(auth, appleCode).catch(() => {});
+        appleCode = null;
+      }
+      await deleteUser(user);
+    },
 
     listen: (uid, name, onDocs, onError) => {
       let delivered = false;

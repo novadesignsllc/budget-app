@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable } from 'react-native';
 
@@ -84,6 +85,19 @@ export function Settings() {
                 last
               />
             </>
+          )}
+        </Card>
+
+        <Card>
+          <ActionRow
+            title="Reset account"
+            detail="Start over empty"
+            tone="negative"
+            onPress={() => router.push('/reset-account')}
+            last={inDemo}
+          />
+          {!inDemo && (
+            <ActionRow title="Delete account" tone="negative" onPress={() => router.push('/delete-account')} last />
           )}
         </Card>
       </Screen>

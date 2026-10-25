@@ -25,6 +25,12 @@ export type Backend = {
   appleSignInAvailable: boolean;
   signInWithApple(): Promise<void>;
   signOut(): Promise<void>;
+  /** How the signed-in person signs in, so deleting the account knows what to ask for. */
+  signInMethod(): 'password' | 'apple' | null;
+  /** Proves it's really them before deleting the account: their password, or Sign in with Apple again. */
+  reauthenticate(password?: string): Promise<void>;
+  /** Deletes the sign-in itself (and revokes Apple's token). Call after their data is gone. */
+  deleteSignIn(): Promise<void>;
 
   listen(
     uid: string,

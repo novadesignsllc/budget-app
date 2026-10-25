@@ -85,3 +85,5 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-24 | Envelope names always end in "…" before reaching the Assigned column, with a gap before the chip | Long names ran into the numbers |
 | 2026-10-24 | Dictation hears an envelope by its name alone ("Chipotle 14.50 eating out") | Requiring the word "envelope" missed it |
 | 2026-10-24 | Bank accounts have Error adjustment: type the correct balance and the difference posts with no envelope | Fix a wrong balance without reconciling |
+| 2026-10-24 | Menus and the calendar size themselves from the keyboard's height and the sheet's height, not window positions | Inside a sheet, window positions were off and menus ran under the keyboard |
+| 2026-10-24 | Compact calendar: 30pt days, Today and Yesterday in the month row | So it fits above the keyboard |

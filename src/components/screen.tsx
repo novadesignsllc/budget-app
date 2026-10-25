@@ -1,7 +1,7 @@
 import { createContext, use, useRef } from 'react';
-import { ScrollView, useWindowDimensions, type ScrollViewProps, type View } from 'react-native';
+import { ScrollView, View, type ScrollViewProps } from 'react-native';
 
-import { keyboardTop } from '@/utils/keyboard';
+import { keyboardTopIn } from '@/utils/keyboard';
 
 import { gutter, maxContentWidth, spacing } from '@/theme';
 
@@ -55,44 +55,45 @@ export function useSheetReveal() {
  * the sheet makes room under it and anything that opens below the keyboard scrolls up.
  */
 export function SheetScreen({ children, contentContainerStyle, onScroll, ...props }: ScrollViewProps) {
-  const window = useWindowDimensions();
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const frameRef = useRef<React.ComponentRef<typeof View>>(null);
   const offset = useRef(0);
+  // Measured against the sheet itself, so the sheet's own offset on screen cancels out.
   const reveal: Reveal = (view) =>
-    view?.measureInWindow((_x: number, y: number, _w: number, h: number) => {
-      const over = y + h + spacing.md - keyboardTop(window.height);
-      if (over > 0)
-        scrollRef.current?.scrollTo({
-          y: offset.current + over,
-          animated: true,
-        });
-    });
+    frameRef.current?.measureInWindow((_sx: number, sheetY: number, _sw: number, sheetH: number) =>
+      view?.measureInWindow((_x: number, y: number, _w: number, h: number) => {
+        const over = y - sheetY + h + spacing.md - keyboardTopIn(sheetH);
+        if (over > 0) scrollRef.current?.scrollTo({ y: offset.current + over, animated: true });
+      }),
+    );
   return (
     <SheetReveal value={reveal}>
-      <MenuHost>
-        <ScrollView
-          ref={scrollRef}
-          keyboardShouldPersistTaps="handled"
-          automaticallyAdjustKeyboardInsets
-          scrollEventThrottle={32}
-          onScroll={(e) => {
-            offset.current = e.nativeEvent.contentOffset.y;
-            onScroll?.(e);
-          }}
-          contentContainerStyle={[
-            {
-              padding: gutter,
-              paddingTop: spacing.lg,
-              gap: spacing.md + 2,
-              paddingBottom: spacing.xxxl,
-            },
-            contentContainerStyle,
-          ]}
-          {...props}
-        >
-          {children}
-        </ScrollView>
-      </MenuHost>
+      <View ref={frameRef} collapsable={false} style={{ flex: 1 }}>
+        <MenuHost>
+          <ScrollView
+            ref={scrollRef}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+            scrollEventThrottle={32}
+            onScroll={(e) => {
+              offset.current = e.nativeEvent.contentOffset.y;
+              onScroll?.(e);
+            }}
+            contentContainerStyle={[
+              {
+                padding: gutter,
+                paddingTop: spacing.lg,
+                gap: spacing.md + 2,
+                paddingBottom: spacing.xxxl,
+              },
+              contentContainerStyle,
+            ]}
+            {...props}
+          >
+            {children}
+          </ScrollView>
+        </MenuHost>
+      </View>
     </SheetReveal>
   );
 }

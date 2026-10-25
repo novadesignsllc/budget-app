@@ -11,11 +11,30 @@ export function dismissKeyboard() {
   }
 }
 
-/** Where the top of the keyboard is on screen, or the bottom of the window when it's down. */
-export function keyboardTop(windowHeight: number): number {
-  if (!Keyboard.isVisible()) return windowHeight;
+// Keyboard height, kept from its own events so it's right even when `Keyboard.metrics()` lags.
+let keyboardHeight = 0;
+for (const name of ['keyboardWillShow', 'keyboardDidShow'] as const) {
+  Keyboard.addListener(name, (e) => (keyboardHeight = e.endCoordinates.height));
+}
+for (const name of ['keyboardWillHide', 'keyboardDidHide'] as const) {
+  Keyboard.addListener(name, () => (keyboardHeight = 0));
+}
+
+/** How tall the keyboard is right now; 0 when it's down. */
+export function currentKeyboardHeight(): number {
+  if (keyboardHeight > 0) return keyboardHeight;
+  if (!Keyboard.isVisible()) return 0;
   const metrics = typeof Keyboard.metrics === 'function' ? Keyboard.metrics() : undefined;
-  return metrics?.screenY ?? windowHeight;
+  return metrics?.height ?? 0;
+}
+
+/**
+ * Where the keyboard starts inside a container of height `containerHeight` that reaches
+ * the bottom of the screen (a sheet, or the whole window). Uses only heights, because
+ * window positions inside a sheet can be off by the sheet's own offset.
+ */
+export function keyboardTopIn(containerHeight: number): number {
+  return containerHeight - currentKeyboardHeight();
 }
 
 /**

@@ -14,14 +14,14 @@ import type { ISODate } from '@/domain/types';
 import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
-import { Button } from './button';
 import { FieldLabel } from './field';
 import { Icon } from './icon';
 import { FORM_ROW_HEIGHT } from './form';
 import { useSheetReveal } from './screen';
 import { Text } from './text';
 
-const DAY = 34;
+/** Compact, so the calendar fits above the keyboard with the date row still showing. */
+const DAY = 30;
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const MUTED = '#B8C0CE';
 const monthTitle = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
@@ -112,6 +112,19 @@ function Calendar({
   for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   const yesterday = addDays(now, -1);
+  const shortcut = (label: string, day: ISODate) => (
+    <Pressable
+      accessibilityRole="button"
+      disabled={!inRange(day)}
+      hitSlop={6}
+      onPress={() => onPick(day)}
+      style={({ pressed }) => ({ opacity: !inRange(day) ? 0.4 : pressed ? 0.5 : 1 })}
+    >
+      <Text variant="callout" weight="600" tone={value === day ? 'text' : 'accent'}>
+        {label}
+      </Text>
+    </Pressable>
+  );
   const nav = (dir: -1 | 1, enabled: boolean) => (
     <Pressable
       accessibilityRole="button"
@@ -143,11 +156,13 @@ function Calendar({
   );
 
   return (
-    <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs, paddingBottom: spacing.md, gap: 6 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 2 }}>
-        <Text variant="body" weight="600" style={{ flex: 1 }} accessibilityRole="header">
+    <View style={{ paddingHorizontal: spacing.md, paddingTop: 2, paddingBottom: spacing.sm, gap: 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: 2 }}>
+        <Text variant="body" weight="600" style={{ flex: 1 }} numberOfLines={1} accessibilityRole="header">
           {monthTitle.format(new Date(month.y, month.m, 1))}
         </Text>
+        {shortcut('Today', now)}
+        {shortcut('Yesterday', yesterday)}
         {nav(-1, canPrev)}
         {nav(1, canNext)}
       </View>
@@ -158,16 +173,16 @@ function Calendar({
           </Text>
         ))}
       </View>
-      <View style={{ gap: 2 }}>
+      <View>
         {weeks.map((week, wi) => (
           <View key={wi} style={{ flexDirection: 'row' }}>
             {week.map((d, di) => {
-              if (!d) return <View key={di} style={{ flex: 1, height: DAY + 2 }} />;
+              if (!d) return <View key={di} style={{ flex: 1, height: DAY + 1 }} />;
               const selected = d === value;
               const isToday = d === now;
               const enabled = inRange(d);
               return (
-                <View key={d} style={{ flex: 1, height: DAY + 2, alignItems: 'center', justifyContent: 'center' }}>
+                <View key={d} style={{ flex: 1, height: DAY + 1, alignItems: 'center', justifyContent: 'center' }}>
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`${fullDay.format(fromISODate(d))}${isToday ? ', today' : ''}`}
@@ -199,25 +214,6 @@ function Calendar({
             })}
           </View>
         ))}
-      </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: 6,
-          borderTopWidth: 1,
-          borderTopColor: colors.hairline,
-          paddingTop: spacing.sm,
-          marginTop: 2,
-        }}
-      >
-        <Button title="Today" variant="secondary" size="sm" disabled={!inRange(now)} onPress={() => onPick(now)} />
-        <Button
-          title="Yesterday"
-          variant="secondary"
-          size="sm"
-          disabled={!inRange(yesterday)}
-          onPress={() => onPick(yesterday)}
-        />
       </View>
     </View>
   );

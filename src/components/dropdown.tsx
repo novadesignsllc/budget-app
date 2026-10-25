@@ -4,7 +4,7 @@ import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } fr
 import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
 import { haptic } from '@/utils/haptics';
-import { keyboardTop, rememberFocus } from '@/utils/keyboard';
+import { keyboardTopIn, rememberFocus } from '@/utils/keyboard';
 import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/theme';
 
 import { FieldLabel } from './field';
@@ -133,7 +133,7 @@ export function Dropdown<T extends string>({
       inContainer((c) => {
         setFrame({ x: x - c.x, y: y - c.y, w, h });
         setContainerHeight(c.h);
-        setFloor(Math.min(c.h, keyboardTop(window.height) - c.y));
+        setFloor(keyboardTopIn(c.h));
         setQuery('');
         setOpen(true);
       }),
@@ -158,14 +158,14 @@ export function Dropdown<T extends string>({
   const rowHeight = options.some((o) => o.description) ? 48 : 36;
   const sections = new Set(options.map((o) => o.section).filter(Boolean)).size;
   const estimate = Math.min(360, visible.length * rowHeight + sections * 22 + (searchable ? 44 : 0) + 12);
-  const roomBelow = floor - 12 - (frame.y + frame.h + 6);
+  const roomBelow = floor - 16 - (frame.y + frame.h + 6);
   const roomAbove = frame.y - 6 - 54;
   const menuWidth = Math.min(
     window.width - spacing.lg * 2,
     Math.max(variant === 'compact' || variant === 'inline' || variant === 'title' ? 240 : frame.w, 220),
   );
   const below = estimate <= roomBelow || roomBelow >= roomAbove;
-  const maxHeight = Math.max(120, Math.min(360, below ? roomBelow : roomAbove));
+  const maxHeight = Math.max(96, Math.min(360, below ? roomBelow : roomAbove));
   const alignRight = variant === 'compact' || frame.x + menuWidth > window.width - spacing.lg;
   const left = alignRight ? Math.max(spacing.lg, frame.x + frame.w - menuWidth) : frame.x;
   const position = below ? { top: frame.y + frame.h + 6 } : { bottom: containerHeight - frame.y + 6 };

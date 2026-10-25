@@ -9,6 +9,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { formatMoney, parseMoney } from '@/domain/money';
 import { canReconcile, reconciledBalance } from '@/domain/reconcile';
+import { isDebtAccount } from '@/domain/types';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
 import { closeSheet } from '@/utils/close-sheet';
@@ -44,7 +45,10 @@ export function Reconcile({ id, ids }: { id: string; ids: string[] }) {
     (t) => ids.includes(t.id) && t.accountId === id && !t.reconciled && canReconcile(t),
   );
   const expected = reconciledBalance(account, transactions) + picked.reduce((a, t) => a + t.amount, 0);
-  const bank = parseMoney(bankText);
+  // A debt's statement shows what you owe as a positive number; the app keeps debts negative.
+  const debt = isDebtAccount(account);
+  const typed = parseMoney(bankText);
+  const bank = typed === null ? null : debt ? -Math.abs(typed) : typed;
   const diff = bank === null ? null : bank - expected;
 
   function save() {
@@ -66,14 +70,14 @@ export function Reconcile({ id, ids }: { id: string; ids: string[] }) {
 
   return (
     <SheetScreen>
-      <SheetHeader title="Bank shows something else" />
+      <SheetHeader title={debt ? 'Statement shows something else' : 'Bank shows something else'} />
 
       <AmountHero
-        caption="Bank balance"
+        caption={debt ? 'Amount owed' : 'Bank balance'}
         value={bankText}
         onChangeText={setBankText}
-        placeholder={formatMoney(expected)}
-        allowNegative
+        placeholder={formatMoney(debt ? -expected : expected)}
+        allowNegative={!debt}
         autoFocus
       />
 

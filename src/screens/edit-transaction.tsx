@@ -31,7 +31,8 @@ const TITLES = {
 export function EditTransaction({ id }: { id: string }) {
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
-  const t = useStore((s) => s.transactions.find((x) => x.id === id));
+  const allTransactions = useStore((s) => s.transactions);
+  const t = allTransactions.find((x) => x.id === id);
   const envelopes = useStore((s) => s.envelopes);
   const update = useStore((s) => s.updateTransaction);
   const remove = useStore((s) => s.deleteTransaction);
@@ -86,7 +87,9 @@ export function EditTransaction({ id }: { id: string }) {
   }
 
   const amount = parseMoney(amountText);
-  const locked = isLocked(t);
+  // A transfer is reconciled if either side is: editing one side changes the other.
+  const pair = t.transferPairId ? allTransactions.find((x) => x.transferPairId === t.transferPairId && x.id !== t.id) : undefined;
+  const locked = isLocked(t) || (!!pair && isLocked(pair));
   const spending = t.kind === 'spend' || t.kind === 'slip';
   const account = [...cash, ...debts].find((a) => a.id === accountId);
   const onCard = !!account && !isCashAccount(account);

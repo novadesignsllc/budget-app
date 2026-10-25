@@ -6,6 +6,7 @@ import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { ActionList, AmountHero, FormCard, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
+import { Text } from '@/components/text';
 import { spacing } from '@/theme';
 import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
@@ -39,6 +40,7 @@ export function EditRecurring({ id }: { id?: string }) {
   const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   const amount = parseMoney(amountText);
+  const deleted = !!id && !existing;
   const account = accounts.find((a) => a.id === accountId);
   const onCard = !!account && !isCashAccount(account);
   const valid = name.trim() && amount && amount > 0 && accountId;
@@ -63,7 +65,8 @@ export function EditRecurring({ id }: { id?: string }) {
     if (!existing) return;
     // Its envelope goes too; whatever it still holds goes back to Ready to assign.
     const left = existing.envelopeId ? (ledger.available.get(existing.envelopeId) ?? 0) : 0;
-    if (existing.envelopeId && left > 0) assign(existing.envelopeId, -left);
+    // Any balance, overspent too, so nothing hides in an envelope you can't see anymore.
+    if (existing.envelopeId && left !== 0) assign(existing.envelopeId, -left);
     deleteRecurring(existing.id);
     haptic('success');
     closeSheet();
@@ -96,6 +99,17 @@ export function EditRecurring({ id }: { id?: string }) {
     else addRecurring(data);
     haptic('success');
     closeSheet();
+  }
+
+  if (deleted) {
+    return (
+      <SheetScreen>
+        <SheetHeader title="Recurring" />
+        <Text variant="callout" tone="textSecondary" align="center">
+          This was deleted.
+        </Text>
+      </SheetScreen>
+    );
   }
 
   return (

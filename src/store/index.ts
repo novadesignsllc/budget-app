@@ -72,6 +72,8 @@ export type NewTransaction = {
   envelopeId?: string;
   memo?: string;
   recurringId?: string;
+  /** Only for approved bills: the same bill on the same day always gets the same id. */
+  id?: string;
 };
 
 /** Everything that syncs to Firebase. */
@@ -352,10 +354,14 @@ export const useStore = create<Store>()((set, get) => ({
     return rows.map((r) => r.id);
   },
 
-  removeAllocations: (ids) => set((s) => ({ allocations: s.allocations.filter((a) => !ids.includes(a.id)) })),
+  removeAllocations: (ids) =>
+    set((s) => {
+      const gone = new Set(ids);
+      return { allocations: s.allocations.filter((a) => !gone.has(a.id)) };
+    }),
 
   addTransaction: (t) => {
-    const id = newId();
+    const id = t.id ?? newId();
     const row: Transaction = {
       id,
       date: t.date,
@@ -431,9 +437,10 @@ export const useStore = create<Store>()((set, get) => ({
 
   reconcileTransactions: (accountId, ids) => {
     const skipped: string[] = [];
+    const picked = new Set(ids);
     set((s) => ({
       transactions: s.transactions.map((t) => {
-        if (t.accountId !== accountId || !ids.includes(t.id)) return t;
+        if (t.accountId !== accountId || !picked.has(t.id)) return t;
         if (!canReconcile(t)) {
           skipped.push(t.id);
           return t;
@@ -611,7 +618,14 @@ export const useStore = create<Store>()((set, get) => ({
     const r = get().recurring.find((x) => x.id === id);
     if (!r) return;
     const account = get().accounts.find((a) => a.id === r.accountId);
+    // One id per bill per due date, so approving it twice (or on two phones) can't post it twice.
+    const txnId = `${r.id}-${r.nextDue}`;
+    if (get().transactions.some((t) => t.id === txnId)) {
+      get().updateRecurring(r.id, { nextDue: advance(r) });
+      return;
+    }
     get().addTransaction({
+      id: txnId,
       date: r.nextDue,
       accountId: r.accountId,
       amount: amount ?? r.amount,
@@ -653,8 +667,16 @@ export const useStore = create<Store>()((set, get) => ({
       // when nothing else has claimed it.
       const owner = new Map<string, string>();
       for (const e of s.envelopes) if (e.recurringId && s.recurring.some((r) => r.id === e.recurringId)) owner.set(e.id, e.recurringId);
+      // Only an envelope already in Bills or Subscriptions, so an ordinary one is never renamed.
+      const groupOf = new Map(s.envelopes.map((e) => [e.id, e.group]));
       for (const r of s.recurring) {
-        if (r.envelopeId && !owner.has(r.envelopeId) && ![...owner.values()].includes(r.id)) owner.set(r.envelopeId, r.id);
+        if (
+          r.envelopeId &&
+          isManagedGroup(groupOf.get(r.envelopeId) ?? '') &&
+          !owner.has(r.envelopeId) &&
+          ![...owner.values()].includes(r.id)
+        )
+          owner.set(r.envelopeId, r.id);
       }
       const byId = new Map(s.recurring.map((r) => [r.id, r]));
       const place = (e: Envelope): Envelope => {
@@ -704,6 +726,8 @@ export const useStore = create<Store>()((set, get) => ({
       for (const t of s.transactions) names.set(normalizePayee(t.payee), t.payee);
       return {
         payees: entries.map(([key, envelopeId]) => ({ id: newId(), name: names.get(key) ?? key, envelopeId })),
+        // Done with it: otherwise deleting every payee would bring these back on the next launch.
+        merchantMemory: {},
       };
     }),
 

@@ -1,5 +1,5 @@
 import { Children, isValidElement } from 'react';
-import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import { Platform, Pressable, TextInput, View, type TextInputProps } from 'react-native';
 
 import { FLAG_COLORS, type FlagColor } from '@/domain/types';
 import { flagHues, radius, spacing, type as typeScale, useColors } from '@/theme';
@@ -94,7 +94,8 @@ export function InputRow({
 export function cleanAmount(v: string, negative = false) {
   const minus = negative && (v.match(/-/g)?.length ?? 0) % 2 === 1 ? '-' : '';
   const digits = v.replace(/\D/g, '').replace(/^0+/, '').slice(0, 9);
-  if (!digits) return '';
+  // A lone minus waits for digits, so an overdrawn balance can be typed minus-first.
+  if (!digits) return minus;
   return minus + (parseInt(digits, 10) / 100).toFixed(2);
 }
 
@@ -105,6 +106,7 @@ export function cleanDollars(v: string) {
 
 /** "43.57" as "$43.57", "-12.00" as "-$12.00", with thousands commas. */
 export function showAmount(v: string) {
+  if (v === '-') return '-$';
   const negative = v.startsWith('-');
   const [whole, cents] = (negative ? v.slice(1) : v).split('.');
   const text = `$${Number(whole || 0).toLocaleString('en-US')}${cents !== undefined ? `.${cents}` : ''}`;
@@ -115,9 +117,16 @@ export function showAmount(v: string) {
 export function amountInputProps(value: string, onChange: (v: string) => void, negative = false) {
   return {
     value: value ? showAmount(value) : '',
-    onChangeText: (v: string) => onChange(cleanAmount(v, negative)),
-    keyboardType: negative ? ('numbers-and-punctuation' as const) : ('number-pad' as const),
-    inputMode: 'numeric' as const,
+    onChangeText: (v: string) => {
+      const next = cleanAmount(v, negative);
+      // Typing 0 into an empty field means $0.00 (a paid-off card, an empty account).
+      if (!next.replace('-', '') && value === '' && /0/.test(v)) onChange('0.00');
+      else onChange(next);
+    },
+    // inputMode wins over keyboardType and its number pad has no minus, so leave it out when one is needed.
+    ...(negative
+      ? { keyboardType: Platform.select({ ios: 'numbers-and-punctuation', default: 'numeric' } as const) }
+      : { keyboardType: 'number-pad' as const, inputMode: 'numeric' as const }),
     // Digits always land at the end, so keep the caret there.
     selection: value ? { start: showAmount(value).length, end: showAmount(value).length } : undefined,
   };

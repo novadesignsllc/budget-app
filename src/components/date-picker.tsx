@@ -60,6 +60,8 @@ function useExpand(container: React.RefObject<React.ComponentRef<typeof View> | 
   const [open, setOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const height = useSharedValue(0);
+  /** Last measured calendar height, for reopening before the close animation has finished. */
+  const measured = useRef(0);
   const duration = reduceMotion ? 0 : 220;
   const easing = Easing.out(Easing.cubic);
 
@@ -67,6 +69,7 @@ function useExpand(container: React.RefObject<React.ComponentRef<typeof View> | 
     if (next) {
       setOpen(true);
       setMounted(true);
+      if (measured.current) height.value = withTiming(measured.current, { duration, easing });
       setTimeout(() => reveal(container.current), duration + 40);
       return;
     }
@@ -76,7 +79,8 @@ function useExpand(container: React.RefObject<React.ComponentRef<typeof View> | 
     });
   };
   const onContentLayout = (e: LayoutChangeEvent) => {
-    if (open) height.value = withTiming(e.nativeEvent.layout.height, { duration, easing });
+    measured.current = e.nativeEvent.layout.height;
+    if (open) height.value = withTiming(measured.current, { duration, easing });
   };
   const style = useAnimatedStyle(() => ({ height: height.value, overflow: 'hidden' }));
   return { open, mounted, set, onContentLayout, style };

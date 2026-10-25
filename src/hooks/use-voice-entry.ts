@@ -27,27 +27,38 @@ export function useVoiceEntry({
   const transcript = useRef('');
   const delivered = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** Finished pieces so far. With continuous listening each pause can start a new piece. */
+  const finals = useRef('');
+  /** Set when the sheet closes, so a start still waiting on permission never turns the mic on. */
+  const cancelled = useRef(false);
 
   // Listening runs until a pause, not until the first breath.
   const stopAfter = useCallback((ms: number) => {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => ExpoSpeechRecognitionModule.stop(), ms);
   }, []);
-  useEffect(() => () => clearTimeout(timer.current), []);
+  useEffect(
+    () => () => {
+      cancelled.current = true;
+      clearTimeout(timer.current);
+    },
+    [],
+  );
 
   useSpeechRecognitionEvent('start', () => {
     setListening(true);
     stopAfter(FIRST_WORD_MS);
   });
   useSpeechRecognitionEvent('result', (e) => {
-    const text = e.results[0]?.transcript ?? '';
+    const piece = e.results[0]?.transcript ?? '';
+    // Some results repeat everything so far, others only the newest piece: join only the latter.
+    const done = finals.current;
+    const text = done && !piece.toLowerCase().startsWith(done.toLowerCase()) ? `${done} ${piece}` : piece;
     transcript.current = text;
     onPartial(text);
-    if (!e.isFinal) stopAfter(PAUSE_MS);
-    if (e.isFinal && !delivered.current) {
-      delivered.current = true;
-      onFinal(text);
-    }
+    if (e.isFinal) finals.current = text;
+    // The whole sentence is delivered when listening ends, after a pause.
+    stopAfter(PAUSE_MS);
   });
   useSpeechRecognitionEvent('end', () => {
     clearTimeout(timer.current);
@@ -82,12 +93,15 @@ export function useVoiceEntry({
   const start = useCallback(async () => {
     setError('');
     transcript.current = '';
+    finals.current = '';
     delivered.current = false;
+    cancelled.current = false;
     if (!ExpoSpeechRecognitionModule.isRecognitionAvailable()) {
       setError('Voice isn’t available on this device. Type it instead.');
       return;
     }
     const permission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+    if (cancelled.current) return;
     if (!permission.granted) {
       setError('Microphone or speech access is off. Turn it on in Settings, or type instead.');
       return;
@@ -104,6 +118,7 @@ export function useVoiceEntry({
 
   const stop = useCallback(() => ExpoSpeechRecognitionModule.stop(), []);
   const abort = useCallback(() => {
+    cancelled.current = true;
     clearTimeout(timer.current);
     delivered.current = true;
     ExpoSpeechRecognitionModule.abort();

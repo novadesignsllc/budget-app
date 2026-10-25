@@ -6,7 +6,7 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
+import { AmountKeyboardBar, DETAIL_BAR_ID, InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
@@ -21,6 +21,7 @@ import { addMonthKey, assignDateFor, formatMonth, monthOf, type MonthKey } from 
 import type { Transaction } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
 import { envelopeStatus } from '@/utils/envelope-status';
@@ -47,11 +48,13 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const months = useMemo(() => {
     const rows = transactions
       .filter((t) => t.envelopeId === id)
-      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+      .sort(newestFirst);
     const byMonth = new Map<MonthKey, Transaction[]>();
     for (const t of rows) {
       const k = monthOf(t.date);
-      byMonth.set(k, [...(byMonth.get(k) ?? []), t]);
+      const list = byMonth.get(k);
+      if (list) list.push(t);
+      else byMonth.set(k, [t]);
     }
     return [...byMonth.entries()];
   }, [transactions, id]);
@@ -89,11 +92,12 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const past = month < currentMonth();
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
-  const cutoff = addMonthKey(currentMonth(), -11);
+  // The last three months; older ones load on request so the page opens quickly.
+  const cutoff = addMonthKey(currentMonth(), -2);
   const visibleMonths = showAll ? months : months.filter(([k]) => k >= cutoff);
 
   const donors = envelopes
-    .filter((e) => e.id !== id && !e.hidden && (budget.envelopes.get(e.id)?.available ?? 0) > 0)
+    .filter((e) => e.id !== id && !e.hidden && floorDollars(budget.envelopes.get(e.id)?.available ?? 0) >= 100)
     .sort((a, b) => (budget.envelopes.get(b.id)?.available ?? 0) - (budget.envelopes.get(a.id)?.available ?? 0));
   const donor = donors.find((d) => d.id === donorId) ?? donors[0];
   const take = donor ? Math.min(floorDollars(budget.envelopes.get(donor.id)?.available ?? 0), ceilDollars(-row.available)) : 0;
@@ -135,6 +139,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 width={90}
                 muted={past}
                 accessibilityLabel={`Assigned to ${envelope.name} in ${formatMonth(month)}`}
+                barId={DETAIL_BAR_ID}
                 onCommit={(cents) => assign(id, cents - row.assigned, date)}
               />
             </Stat>
@@ -159,6 +164,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
             />
             <Button
               title={`Move ${formatDollars(take)}`}
+              disabled={take < 100}
               onPress={() => {
                 moveMoney(donor.id, id, take, date);
                 haptic('success');
@@ -207,7 +213,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
           <Button title="Show older months" variant="ghost" onPress={() => setShowAll(true)} />
         )}
       </Screen>
-      <AmountKeyboardBar />
+      <AmountKeyboardBar id={DETAIL_BAR_ID} />
 
       {!envelope.debtAccountId && (
         <ScreenActions>

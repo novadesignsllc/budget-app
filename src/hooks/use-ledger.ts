@@ -1,10 +1,31 @@
 import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { comparePlan, estimateMinPayment, type DebtInput } from '@/domain/debt';
-import { computeLedger } from '@/domain/ledger';
+import { comparePlan, estimateMinPayment, type DebtInput, type Strategy } from '@/domain/debt';
+import { computeLedger, type Ledger, type LedgerInput } from '@/domain/ledger';
 import { isCashAccount, isDebtAccount, type Account } from '@/domain/types';
 import { useStore } from '@/store';
+
+/**
+ * One ledger shared by every screen: Home, Budget, Debt and the sheets all ask for it,
+ * and tabs stay mounted, so without this each one recomputed it on every change.
+ */
+let lastLedger: { input: LedgerInput; ledger: Ledger } | null = null;
+function sharedLedger(input: LedgerInput): Ledger {
+  const last = lastLedger?.input;
+  if (
+    last &&
+    last.accounts === input.accounts &&
+    last.envelopes === input.envelopes &&
+    last.transactions === input.transactions &&
+    last.allocations === input.allocations
+  ) {
+    return lastLedger!.ledger;
+  }
+  const ledger = computeLedger(input);
+  lastLedger = { input, ledger };
+  return ledger;
+}
 
 export function useLedger() {
   const input = useStore(
@@ -15,7 +36,7 @@ export function useLedger() {
       allocations: s.allocations,
     })),
   );
-  return useMemo(() => computeLedger(input), [input]);
+  return useMemo(() => sharedLedger(input), [input]);
 }
 
 export function useAccounts() {
@@ -40,6 +61,17 @@ export function toDebtInput(account: Account, owed: number): DebtInput {
   };
 }
 
+/** The last plan, reused while the debts, the monthly amount and the strategy are the same. */
+let lastPlan: { key: string; comparison: ReturnType<typeof comparePlan> | null } | null = null;
+function sharedPlan(inputs: DebtInput[], monthly: number, strategy: Strategy) {
+  // Projections run up to 600 months per debt; assigning money elsewhere shouldn't redo them.
+  const key = JSON.stringify([inputs, monthly, strategy]);
+  if (lastPlan?.key !== key) {
+    lastPlan = { key, comparison: inputs.length ? comparePlan(inputs, monthly, strategy) : null };
+  }
+  return lastPlan.comparison;
+}
+
 /** The payoff plan for every open debt, using the user's strategy and monthly amount. */
 export function useDebtPlan() {
   const ledger = useLedger();
@@ -51,11 +83,6 @@ export function useDebtPlan() {
       .filter((d) => d.balance > 0);
     const minimums = inputs.reduce((a, d) => a + d.minPayment, 0);
     const monthly = Math.max(settings.monthlyDebtPayment, minimums);
-    return {
-      inputs,
-      minimums,
-      monthly,
-      comparison: inputs.length ? comparePlan(inputs, monthly, settings.debtStrategy) : null,
-    };
+    return { inputs, minimums, monthly, comparison: sharedPlan(inputs, monthly, settings.debtStrategy) };
   }, [debts, ledger, settings]);
 }

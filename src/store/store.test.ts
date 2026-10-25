@@ -167,11 +167,13 @@ describe('fixed groups', () => {
     useStore.getState().normalizeGroups();
     const s = useStore.getState();
     expect(s.envelopes.find((e) => e.id === 'rent')).toMatchObject({ group: 'Bills', recurringId: 'r1' });
-    expect(s.envelopes.find((e) => e.id === 'tv')).toMatchObject({ group: 'Subscriptions', recurringId: 'r2' });
-    // Hulu shared Netflix's envelope, so it gets its own.
-    const hulu = s.recurring.find((r) => r.id === 'r3')!;
-    expect(hulu.envelopeId).not.toBe('tv');
-    expect(s.envelopes.find((e) => e.id === hulu.envelopeId)).toMatchObject({ name: 'Hulu', group: 'Subscriptions', recurringId: 'r3' });
+    // An ordinary envelope is never taken over and renamed: Netflix and Hulu each get their own.
+    expect(s.envelopes.find((e) => e.id === 'tv')).toMatchObject({ name: 'Streaming', group: 'Daily' });
+    for (const [rid, name] of [['r2', 'Netflix'], ['r3', 'Hulu']]) {
+      const r = s.recurring.find((x) => x.id === rid)!;
+      expect(r.envelopeId).not.toBe('tv');
+      expect(s.envelopes.find((e) => e.id === r.envelopeId)).toMatchObject({ name, group: 'Subscriptions', recurringId: rid });
+    }
   });
 
   it('does nothing when every group is already valid', () => {

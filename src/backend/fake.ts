@@ -141,7 +141,10 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean;
 
     setOnline(value) {
       online = value;
-      if (online) void flush();
+      if (!online) return;
+      // Reconnecting brings a fresh server snapshot to every listener, like Firestore.
+      for (const l of listeners) emit(l.uid, l.collection);
+      void flush();
     },
     isOnline: () => online,
     serverDocs: (uid, collection) => [...(server.get(key(uid, collection))?.values() ?? [])],

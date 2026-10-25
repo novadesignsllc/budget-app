@@ -20,6 +20,20 @@ export function stable(value: unknown): string {
   );
 }
 
+/**
+ * `stable()` for a doc, remembered per object. Store docs are never mutated (every change
+ * makes a new object), so an unchanged doc costs a lookup instead of a full stringify.
+ */
+const docJson = new WeakMap<object, string>();
+function stableDoc(d: DocData): string {
+  let json = docJson.get(d);
+  if (json === undefined) {
+    json = stable(d);
+    docJson.set(d, json);
+  }
+  return json;
+}
+
 function localDocs(state: State, name: string): DocData[] {
   if (name === META) {
     return [{ id: META_ID, settings: state.settings, merchantMemory: state.merchantMemory }];
@@ -67,6 +81,7 @@ export function startSync({
   status: Status;
   onReady?: () => void;
 }) {
+  const fromCache: Record<string, boolean> = {};
   const remote: Record<string, Map<string, string>> = {};
   const remoteDocs: Record<string, DocData[]> = {};
   const hadPending: Record<string, boolean> = {};
@@ -80,6 +95,9 @@ export function startSync({
   let applying = false;
   let stopped = false;
   let pushScheduled = false;
+  /** The store array each collection had at the last push, and whether Firestore's side moved since. */
+  const pushedRef: Record<string, unknown> = {};
+  const remoteMoved: Record<string, boolean> = {};
 
   /** Changes made in the same moment (one tap can change several things) go up as one batch. */
   function schedulePush() {
@@ -118,7 +136,9 @@ export function startSync({
     }
     const docs = [...byId.values()];
     const current = localDocs(store.getState(), name);
-    if (stable([...current].sort(byIdOrder)) === stable([...docs].sort(byIdOrder))) return;
+    // Same docs already in the store? Compare per id with remembered JSON, no sorting.
+    const known = view(name);
+    if (current.length === known.size && current.every((d) => known.get(d.id) === stableDoc(d))) return;
     applying = true;
     store.setState(toState(name, docs));
     applying = false;
@@ -129,11 +149,16 @@ export function startSync({
     const state = store.getState();
     const ops: WriteOp[] = [];
     for (const name of ALL) {
+      const local = localDocs(state, name);
+      // Untouched since the last push on both sides: nothing to diff.
+      if (name !== META && local === pushedRef[name] && !remoteMoved[name]) continue;
+      pushedRef[name] = local;
+      remoteMoved[name] = false;
       const known = view(name);
       const seen = new Set<string>();
-      for (const d of localDocs(state, name)) {
+      for (const d of local) {
         seen.add(d.id);
-        if (known.get(d.id) !== stable(d)) ops.push({ collection: name, id: d.id, data: d });
+        if (known.get(d.id) !== stableDoc(d)) ops.push({ collection: name, id: d.id, data: d });
       }
       for (const id of known.keys()) {
         if (!seen.has(id)) ops.push({ collection: name, id, data: null });
@@ -142,18 +167,28 @@ export function startSync({
     if (!ops.length) return;
 
     for (const op of ops) {
-      inflight[op.collection].set(op.id, { json: op.data ? stable(op.data) : null, data: op.data });
+      inflight[op.collection].set(op.id, { json: op.data ? stableDoc(op.data) : null, data: op.data });
     }
     status.begin();
     backend.commit(uid, ops).then(
       () => {
         for (const op of ops) {
           const w = inflight[op.collection].get(op.id);
-          if (w && w.json === (op.data ? stable(op.data) : null)) inflight[op.collection].delete(op.id);
+          if (w && w.json === (op.data ? stableDoc(op.data) : null)) inflight[op.collection].delete(op.id);
         }
         status.end();
       },
-      (error) => status.fail(error),
+      (error) => {
+        // Firestore said no: forget these writes and show what's really saved, instead of
+        // keeping a change on screen that will never upload.
+        const touched = new Set<string>();
+        for (const op of ops) {
+          inflight[op.collection].delete(op.id);
+          touched.add(op.collection);
+        }
+        for (const name of touched) if (remoteDocs[name]) apply(name);
+        status.fail(error);
+      },
     );
   }
 
@@ -176,10 +211,18 @@ export function startSync({
       (docs, meta) => {
         if (stopped) return;
         remoteDocs[name] = docs;
-        remote[name] = new Map(docs.map((d) => [d.id, stable(d)]));
+        remote[name] = new Map(docs.map((d) => [d.id, stableDoc(d)]));
+        remoteMoved[name] = true;
         hadPending[name] = meta.hasPendingWrites;
+        fromCache[name] = meta.fromCache;
         if (!ready) {
-          if (ALL.every((n) => remoteDocs[n])) becomeReady();
+          if (!ALL.every((n) => remoteDocs[n])) return;
+          // An empty cache isn't an empty account (a reinstall, or a new phone with no
+          // signal). Wait for the server before writing anything, or the defaults would
+          // overwrite real settings once it reconnects.
+          const nothingCached = ALL.every((n) => remoteDocs[n].length === 0 && fromCache[n]);
+          if (nothingCached) return;
+          becomeReady();
           return;
         }
         apply(name);
@@ -197,8 +240,4 @@ export function startSync({
     unsubs.forEach((u) => u());
     unsubStore();
   };
-}
-
-function byIdOrder(a: DocData, b: DocData) {
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

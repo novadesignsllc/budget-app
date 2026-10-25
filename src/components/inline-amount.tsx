@@ -13,6 +13,8 @@ const ios = process.env.EXPO_OS === 'ios';
 /** Inner padding of the box; the box reaches this far past the column so the digits line up. */
 const PAD = 6;
 const BAR_ID = 'amount-bar';
+/** The envelope page has its own bar, so leaving it never takes Budget's bar with it. */
+export const DETAIL_BAR_ID = 'amount-bar-detail';
 
 /** The amount being edited right now, so the keyboard bar's buttons reach it. */
 let active: { done: () => void; cancel: () => void } | null = null;
@@ -21,11 +23,11 @@ let active: { done: () => void; cancel: () => void } | null = null;
  * Cancel and Done above the number pad. Mount it once on any screen with InlineAmounts.
  * It stays mounted, so iOS attaches it to the keyboard every time instead of sometimes.
  */
-export function AmountKeyboardBar() {
+export function AmountKeyboardBar({ id = BAR_ID }: { id?: string }) {
   const colors = useColors();
   if (!ios) return null;
   return (
-    <InputAccessoryView nativeID={BAR_ID}>
+    <InputAccessoryView nativeID={id}>
       <View
         style={{
           flexDirection: 'row',
@@ -85,6 +87,7 @@ export function InlineAmount({
   onEditingChange,
   onDraft,
   accessibilityLabel,
+  barId = BAR_ID,
   width = 76,
   align = 'right',
   variant = 'row',
@@ -96,6 +99,8 @@ export function InlineAmount({
   onEditingChange?: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
   /** The amount as it's typed, for live previews. */
   onDraft?: (cents: Cents) => void;
+  /** Which keyboard bar to use; the envelope page passes DETAIL_BAR_ID. */
+  barId?: string;
   accessibilityLabel: string;
   width?: number;
   /** Right for table columns; left for a stat under a label. */
@@ -112,7 +117,8 @@ export function InlineAmount({
   const confirmed = useRef(false);
   const needsFocus = useRef(false);
 
-  const whole = Math.max(0, Math.floor(cents / 100));
+  // Can be negative when money was taken back out this month.
+  const whole = Math.floor(cents / 100);
   const draftCents = (parseInt(draft || '0', 10) || 0) * 100;
 
   function start() {
@@ -129,9 +135,9 @@ export function InlineAmount({
         input.current?.blur();
       },
     };
-    setDraft(String(whole));
+    setDraft(String(Math.max(0, whole)));
     setEditing(true);
-    onDraft?.(whole * 100);
+    onDraft?.(Math.max(0, whole) * 100);
     onEditingChange?.(true, box.current);
   }
 
@@ -143,7 +149,7 @@ export function InlineAmount({
       onDraft?.(whole * 100);
       return;
     }
-    if (draftCents !== whole * 100) {
+    if (draftCents !== cents) {
       haptic('success');
       onCommit(draftCents);
     }
@@ -203,7 +209,7 @@ export function InlineAmount({
             keyboardType="number-pad"
             returnKeyType="done"
             selectTextOnFocus
-            inputAccessoryViewID={ios ? BAR_ID : undefined}
+            inputAccessoryViewID={ios ? barId : undefined}
             accessibilityLabel={accessibilityLabel}
             style={[textStyle, { flex: 1, padding: 0, margin: 0, lineHeight: undefined }]}
           />
@@ -220,7 +226,7 @@ export function InlineAmount({
           ]}
         >
           <Text numberOfLines={1} style={textStyle}>
-            {'$' + whole.toLocaleString('en-US')}
+            {(whole < 0 ? '-$' : '$') + Math.abs(whole).toLocaleString('en-US')}
           </Text>
         </Pressable>
       )}

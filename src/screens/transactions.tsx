@@ -24,8 +24,9 @@ export function isListed(t: Transaction): boolean {
   return !(t.kind === 'transfer' && t.amount > 0);
 }
 
+/** ISO dates sort as plain strings; localeCompare is much slower on thousands of rows. */
 export function newestFirst(a: Transaction, b: Transaction) {
-  return b.date.localeCompare(a.date) || b.createdAt - a.createdAt;
+  return a.date < b.date ? 1 : a.date > b.date ? -1 : b.createdAt - a.createdAt;
 }
 
 /**

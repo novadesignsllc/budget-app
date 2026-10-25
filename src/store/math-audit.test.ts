@@ -199,3 +199,23 @@ describe('debt math', () => {
     expect(debtTarget({ minPayment: 3500 }, 0)).toBe(0);
   });
 });
+
+describe('bills and odd amounts', () => {
+  beforeEach(() => resetStore());
+  it('approving the same bill twice posts it once', () => {
+    const s = useStore.getState();
+    const checking = s.addAccount({ name: 'Checking', kind: 'checking', balance: 100000 });
+    s.addRecurring({ name: 'Netflix', kind: 'subscription', amount: 1549, accountId: checking, frequency: 'monthly', nextDue: '2026-10-20' });
+    const r = useStore.getState().recurring[0];
+    useStore.getState().approveRecurring(r.id);
+    // A second phone that hadn't seen the first approval yet.
+    useStore.setState((st) => ({ recurring: st.recurring.map((x) => ({ ...x, nextDue: '2026-10-20' })) }));
+    useStore.getState().approveRecurring(r.id);
+    expect(useStore.getState().transactions.filter((t) => t.recurringId === r.id)).toHaveLength(1);
+  });
+  it('money fields take a lone minus first', () => {
+    expect(cleanAmount('-', true)).toBe('-');
+    expect(cleanAmount('-$5', true)).toBe('-0.05');
+    expect(showAmount('-')).toBe('-$');
+  });
+});

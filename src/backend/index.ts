@@ -52,17 +52,24 @@ function createNativeBackend(): Backend {
     },
     signOut: () => signOut(auth),
 
-    listen: (uid, name, onDocs, onError) =>
-      onSnapshot(
+    listen: (uid, name, onDocs, onError) => {
+      let delivered = false;
+      return onSnapshot(
         collection(db, 'users', uid, name),
         { includeMetadataChanges: true },
-        (snap) =>
+        (snap) => {
+          // After the first one, skip snapshots where only the metadata changed (a write
+          // being confirmed): the docs are the same, and re-reading thousands is slow.
+          if (delivered && snap.docChanges().length === 0) return;
+          delivered = true;
           onDocs(
             snap.docs.map((d) => ({ ...(d.data() as object), id: d.id })),
             { fromCache: snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites },
-          ),
+          );
+        },
         onError,
-      ),
+      );
+    },
     commit: async (uid, ops) => {
       await Promise.all(
         chunks(ops).map((group) => {

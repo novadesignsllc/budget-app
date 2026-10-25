@@ -181,3 +181,34 @@ describe('startSync', () => {
     expect(useStore.getState().accounts).toEqual(initialState.accounts);
   });
 });
+
+describe('safety', () => {
+  it('waits for the server when nothing is cached, instead of writing defaults over real settings', async () => {
+    const backend = createFakeBackend({ latencyMs: 50 });
+    backend.setOnline(false);
+    let ready = false;
+    const status = { begin: () => {}, end: () => {}, fail: () => {} };
+    const stop = startSync({ backend, uid: UID, store: useStore, status, onReady: () => (ready = true) });
+    await tick(500);
+    expect(ready).toBe(false);
+    expect(backend.serverDocs(UID, 'meta')).toEqual([]);
+    backend.setOnline(true);
+    await tick(10);
+    expect(ready).toBe(true);
+    stop();
+  });
+
+  it('drops a write Firestore rejects, so the screen shows what is really saved', async () => {
+    const backend = createFakeBackend({ latencyMs: 50 });
+    const failing = { ...backend, commit: () => Promise.reject(new Error('permission-denied')) };
+    let failed = 0;
+    const status = { begin: () => {}, end: () => {}, fail: () => failed++ };
+    const stop = startSync({ backend: failing, uid: UID, store: useStore, status });
+    await tick(10);
+    useStore.getState().addAccount({ name: 'Checking', kind: 'checking', balance: 10000 });
+    await tick(10);
+    expect(failed).toBeGreaterThan(0);
+    expect(useStore.getState().accounts).toEqual([]);
+    stop();
+  });
+});

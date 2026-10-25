@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { AppState, Pressable, View } from 'react-native';
 import Animated, { useReducedMotion } from 'react-native-reanimated';
 
 import { haptic } from '@/utils/haptics';
@@ -24,15 +24,21 @@ function useCyclingExample() {
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   useEffect(() => {
+    let swap: ReturnType<typeof setTimeout> | undefined;
     const id = setInterval(() => {
+      // Nothing to show while the app is in the background.
+      if (AppState.currentState !== 'active') return;
       if (reduceMotion) return setIndex((i) => (i + 1) % EXAMPLES.length);
       setVisible(false);
-      setTimeout(() => {
+      swap = setTimeout(() => {
         setIndex((i) => (i + 1) % EXAMPLES.length);
         setVisible(true);
       }, 280);
     }, 3200);
-    return () => clearInterval(id);
+    return () => {
+      clearInterval(id);
+      clearTimeout(swap);
+    };
   }, [reduceMotion]);
   return { text: EXAMPLES[index], visible };
 }

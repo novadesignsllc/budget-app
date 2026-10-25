@@ -93,3 +93,6 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-25 | Starter envelope suggestions stay until you tap Done or add them all | They vanished after the first one |
 | 2026-10-25 | Accounts can be renamed from the account page (Rename, next to Move up and Move down) | User request |
 | 2026-10-25 | Envelopes with a target show funding on their bar: yellow while short (filled as far as the money goes), green once funded (shrinks as you spend), grey track when spent to zero, red when over. No target keeps the plain group-color bar | User request |
+| 2026-10-25 | (Replaces the funding bar.) A target shows as the row's tint: yellow short, green funded, grey spent down, red over. The bar is the same for every envelope: money left this month, shrinking as you spend, red when a spending envelope hits zero or any envelope goes over (paid bills stay grey) | User wants targets visible at a glance and one meaning for the bar |
+| 2026-10-25 | Auto-assign and Sort sit side by side under the left-to-assign card; Unassign all stays at the bottom | Easier to reach |
+| 2026-10-25 | The Cancel / Done bar for assigning is drawn by the app on top of the keyboard (iPhone and Android), not iOS's accessory view | The accessory view sometimes didn't appear |

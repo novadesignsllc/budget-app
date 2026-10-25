@@ -16,10 +16,24 @@ export type EnvelopeStatus = {
 };
 
 /**
- * The bar under an envelope with a target. Yellow while it's short of the target (filled
- * as far as the money in it goes), green once it's funded (shrinking as you spend), grey
- * when funded and spent to zero, red when overspent. `null` means no target: draw the
- * plain bar.
+ * The bar under every envelope: how much of this month's money is left (it shrinks as you
+ * spend). Red once it's spent to zero or over; an envelope that never had money shows
+ * just the grey track.
+ */
+export function moneyLeftBar(
+  row: Pick<EnvelopeMonth, 'available' | 'spent'>,
+  envelope?: Pick<Envelope, 'recurringId' | 'debtAccountId'>,
+): { progress: number; red: boolean } {
+  // A bill or debt payment at zero has been paid, which is good; only going over is red.
+  const paidDown = !!envelope && !!(envelope.recurringId || envelope.debtAccountId);
+  if (row.available < 100) return { progress: 0, red: row.available < 0 || (row.spent > 0 && !paidDown) };
+  return { progress: row.available / (row.available + row.spent), red: false };
+}
+
+/**
+ * Where an envelope with a target stands, shown as its row's tint: yellow while short of
+ * the target, green once funded, grey when funded and spent to zero, red when overspent.
+ * `null` means no target, so the row stays white.
  */
 export type TargetBar = { state: 'short' | 'funded' | 'empty' | 'over'; progress: number };
 

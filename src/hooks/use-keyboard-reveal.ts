@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Keyboard, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView, type View } from 'react-native';
 
-const GAP = 40;
+// Room for the Cancel / Done bar that sits on the keyboard, plus a little air.
+const GAP = 96;
 
 /**
  * Keeps a row you're typing in just above the keyboard, even when the list is short.

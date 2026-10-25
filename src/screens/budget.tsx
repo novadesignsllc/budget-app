@@ -9,7 +9,6 @@ import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
-import { targetKindOf } from '@/domain/targets';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -26,7 +25,7 @@ import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
-import { envelopeStatus, groupSummary, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { envelopeStatus, groupSummary, moneyLeftBar, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -249,6 +248,30 @@ export function Budget() {
 
         <LeftToAssign cents={rta} past={past} />
 
+        {groups.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <TopControl
+              icon={{ sf: 'bolt.fill', md: 'bolt' }}
+              title="Auto-assign"
+              tint={past ? colors.textSecondary : colors.accent}
+              disabled={gaps.length === 0 || rta < 100}
+              onPress={() => {
+                haptic('light');
+                fill(
+                  orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
+                  `Auto-assigned ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
+                );
+              }}
+            />
+            <TopControl
+              icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
+              title="Sort"
+              tint={colors.textSecondary}
+              onPress={startSorting}
+            />
+          </View>
+        )}
+
         {starters.length > 0 && (
           <Card>
             <CardHeader
@@ -375,7 +398,6 @@ export function Budget() {
                       envelope={e}
                       row={row}
                       color={hue}
-                      progress={status.progress}
                       overspent={status.overspent}
                       bar={targetBar(e, row, month, debtFor(e))}
                       last={i === g.items.length - 1}
@@ -401,27 +423,6 @@ export function Budget() {
         {spendable.length > 0 && (
           <Card>
             <CardHeader title={formatMonth(month)} detail={`${formatDollars(rta)} to assign`} />
-            <ControlRow
-              icon={{ sf: 'bolt.fill', md: 'bolt' }}
-              tint={past ? colors.textSecondary : colors.accent}
-              soft={past ? colors.control : colors.accentSoft}
-              title="Auto-assign"
-              disabled={gaps.length === 0 || rta < 100}
-              onPress={() => {
-                haptic('light');
-                fill(
-                  orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
-                  `Auto-assigned ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
-                );
-              }}
-            />
-            <ControlRow
-              icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
-              tint={colors.textSecondary}
-              soft={colors.control}
-              title="Sort envelopes"
-              onPress={startSorting}
-            />
             <ControlRow
               icon={{ sf: 'arrow.uturn.backward', md: 'undo' }}
               tint={colors.negative}
@@ -450,12 +451,12 @@ export function Budget() {
   );
 }
 
-/** Target bar colors: yellow short of the target, green funded, red over. Empty shows only the grey track. */
-const BAR_COLOR: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => string> = {
-  short: (c) => c.cautionDot,
-  funded: (c) => c.positive,
-  empty: (c) => c.fill,
-  over: (c) => c.negativeStrong,
+/** Row tints for envelopes with a target: yellow short, green funded, grey spent down, red over. */
+const ROW_TINT: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => string> = {
+  short: (c) => c.cautionSoft,
+  funded: (c) => c.positiveSoft,
+  empty: (c) => c.control,
+  over: (c) => c.negativeSoft,
 };
 
 /**
@@ -466,7 +467,6 @@ function EnvelopeRow({
   envelope,
   row,
   color,
-  progress,
   overspent,
   bar,
   last,
@@ -478,7 +478,6 @@ function EnvelopeRow({
   envelope: Envelope;
   row: EnvelopeMonth;
   color: string;
-  progress: number;
   overspent: boolean;
   /** Set when the envelope has a target: the bar shows how funded it is. */
   bar: TargetBar | null;
@@ -490,7 +489,7 @@ function EnvelopeRow({
 }) {
   const colors = useColors();
   const swiping = useSwipeGuard();
-  const savings = targetKindOf(envelope) === 'goal' && !envelope.debtAccountId;
+  const left = moneyLeftBar(row, envelope);
   const red = overspent && !past;
   const leftTone = red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text';
   return (
@@ -501,7 +500,8 @@ function EnvelopeRow({
         paddingVertical: 9,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
-        backgroundColor: colors.surface,
+        // A target shows as the row's tint, so you can tell at a glance which envelopes have one.
+        backgroundColor: bar && !past ? ROW_TINT[bar.state](colors) : colors.surface,
       }}
     >
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -555,29 +555,71 @@ function EnvelopeRow({
             {formatDollars(row.available)}
           </Text>
         </View>
-        {(bar || !savings) && (
-          <View
-            style={{
-              height: 3,
-              borderRadius: 2,
-              backgroundColor: !bar && overspent ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
-            }}
-          >
-            {(bar ? bar.progress : overspent ? 0 : progress) > 0 && (
-              <Animated.View
-                style={{
-                  width: `${Math.min(1, bar ? bar.progress : progress) * 100}%`,
-                  height: 3,
-                  borderRadius: 2,
-                  backgroundColor: bar ? (past ? colors.textTertiary : BAR_COLOR[bar.state](colors)) : color,
-                  transitionProperty: ['width', 'backgroundColor'],
-                  transitionDuration: 300,
-                }}
-              />
-            )}
-          </View>
-        )}
+        <View
+          style={{
+            height: 3,
+            borderRadius: 2,
+            backgroundColor: left.red ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
+          }}
+        >
+          {left.progress > 0 && (
+            <Animated.View
+              style={{
+                width: `${Math.min(1, left.progress) * 100}%`,
+                height: 3,
+                borderRadius: 2,
+                backgroundColor: color,
+                transitionProperty: 'width',
+                transitionDuration: 300,
+              }}
+            />
+          )}
+        </View>
     </View>
+  );
+}
+
+/** Auto-assign and Sort, side by side at the top of the budget. */
+function TopControl({
+  icon,
+  title,
+  tint,
+  disabled,
+  onPress,
+}: {
+  icon: { sf: Parameters<typeof Icon>[0]['sf']; md: Parameters<typeof Icon>[0]['md'] };
+  title: string;
+  tint: string;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        flex: 1,
+        height: 40,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 7,
+        borderRadius: radius.control,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: pressed ? colors.control : colors.surface,
+        opacity: disabled ? 0.45 : 1,
+      })}
+    >
+      <Icon sf={icon.sf} md={icon.md} size={13} color={tint} weight="semibold" />
+      <Text variant="callout" weight="600" color={disabled ? colors.textSecondary : colors.text}>
+        {title}
+      </Text>
+    </Pressable>
   );
 }
 

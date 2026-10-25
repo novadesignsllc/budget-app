@@ -6,7 +6,7 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { AmountKeyboardBar, DETAIL_BAR_ID, InlineAmount } from '@/components/inline-amount';
+import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
@@ -24,7 +24,7 @@ import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import { envelopeStatus, targetBar } from '@/utils/envelope-status';
+import { envelopeStatus, moneyLeftBar } from '@/utils/envelope-status';
 import { haptic } from '@/utils/haptics';
 
 export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: MonthKey }) {
@@ -86,14 +86,8 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
     : undefined;
   const status = envelopeStatus(envelope, row, month, debt);
   const past = month < currentMonth();
-  const bar = targetBar(envelope, row, month, debt);
-  const barColor = past
-    ? colors.textTertiary
-    : bar
-      ? { short: colors.cautionDot, funded: colors.positive, empty: colors.fill, over: colors.negativeStrong }[bar.state]
-      : status.overspent
-        ? colors.negativeStrong
-        : groupColor(envelope.group);
+  const left = moneyLeftBar(row, envelope);
+  const barColor = past ? colors.textTertiary : groupColor(envelope.group);
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
   // The last three months; older ones load on request so the page opens quickly.
@@ -127,7 +121,11 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 {status.subtitle}
               </Text>
             </View>
-            <ProgressBar value={bar ? bar.progress : status.progress} color={barColor} height={3} />
+            <ProgressBar
+              value={left.red ? 1 : left.progress}
+              color={left.red ? (past ? colors.textSecondary : colors.negativeStrong) : barColor}
+              height={3}
+            />
           </View>
           <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.separator }}>
             <Stat label="Carried in">{formatDollars(row.carriedIn)}</Stat>
@@ -139,7 +137,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 width={90}
                 muted={past}
                 accessibilityLabel={`Assigned to ${envelope.name} in ${formatMonth(month)}`}
-                barId={DETAIL_BAR_ID}
                 onCommit={(cents) => assign(id, cents - row.assigned, date)}
               />
             </Stat>
@@ -213,7 +210,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
           <Button title="Show older months" variant="ghost" onPress={() => setShowAll(true)} />
         )}
       </Screen>
-      <AmountKeyboardBar id={DETAIL_BAR_ID} />
+      <AmountKeyboardBar />
 
       {!envelope.debtAccountId && (
         <ScreenActions>

@@ -3,7 +3,7 @@ import { describe, expect, it } from '@jest/globals';
 import type { EnvelopeMonth } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 
-import { targetBar } from './envelope-status';
+import { moneyLeftBar, targetBar } from './envelope-status';
 
 const MONTH = '2026-10';
 const groceries: Envelope = { id: 'g', name: 'Groceries', group: 'Daily', order: 0, targets: { [MONTH]: 40000 } };
@@ -34,5 +34,18 @@ describe('targetBar', () => {
   it('wants the full amount each month for a goal', () => {
     const goal = { ...groceries, targetKind: 'goal' as const };
     expect(targetBar(goal, row({ carriedIn: 40000, available: 40000 }), MONTH)?.state).toBe('short');
+  });
+});
+
+describe('moneyLeftBar', () => {
+  it('shrinks as you spend and turns red when spent to zero', () => {
+    expect(moneyLeftBar(row({ available: 10000, spent: 30000 }))).toEqual({ progress: 0.25, red: false });
+    expect(moneyLeftBar(row({ available: 0, spent: 40000 }))).toEqual({ progress: 0, red: true });
+    expect(moneyLeftBar(row({}))).toEqual({ progress: 0, red: false });
+  });
+  it('treats a paid bill at zero as fine, but not one that went over', () => {
+    const bill = { recurringId: 'r1' };
+    expect(moneyLeftBar(row({ available: 0, spent: 15000 }), bill).red).toBe(false);
+    expect(moneyLeftBar(row({ available: -500, spent: 15500 }), bill).red).toBe(true);
   });
 });

@@ -1,5 +1,6 @@
-import { useRef, useState } from 'react';
-import { InputAccessoryView, Pressable, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Keyboard, Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
+import Animated from 'react-native-reanimated';
 
 import { formatDollars } from '@/domain/money';
 import type { Cents } from '@/domain/types';
@@ -9,70 +10,121 @@ import { haptic } from '@/utils/haptics';
 import { Icon } from './icon';
 import { Text } from './text';
 
-const ios = process.env.EXPO_OS === 'ios';
+/** On a phone only Done saves; the web has no bar, so Return or clicking away saves there. */
+const native = process.env.EXPO_OS !== 'web';
 /** Inner padding of the box; the box reaches this far past the column so the digits line up. */
 const PAD = 6;
-const BAR_ID = 'amount-bar';
-/** The envelope page has its own bar, so leaving it never takes Budget's bar with it. */
-export const DETAIL_BAR_ID = 'amount-bar-detail';
+/** Height of the Cancel / Done bar, so the row being edited can sit above it. */
+export const AMOUNT_BAR_HEIGHT = 48;
 
-/** The amount being edited right now, so the keyboard bar's buttons reach it. */
+/** The amount being edited right now, so the bar's buttons reach it, and who's listening. */
 let active: { done: () => void; cancel: () => void } | null = null;
+const listeners = new Set<() => void>();
+function setActive(next: typeof active) {
+  active = next;
+  listeners.forEach((l) => l());
+}
+const subscribe = (l: () => void) => {
+  listeners.add(l);
+  return () => listeners.delete(l);
+};
+const isEditing = () => active !== null;
+
+/** The keyboard's height, from its own show and hide events. */
+function useKeyboardHeight() {
+  const [height, setHeight] = useState(0);
+  useEffect(() => {
+    const ios = process.env.EXPO_OS === 'ios';
+    const show = Keyboard.addListener(ios ? 'keyboardWillShow' : 'keyboardDidShow', (e) => setHeight(e.endCoordinates.height));
+    const hide = Keyboard.addListener(ios ? 'keyboardWillHide' : 'keyboardDidHide', () => setHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+  return height;
+}
 
 /**
- * Cancel and Done above the number pad. Mount it once on any screen with InlineAmounts.
- * It stays mounted, so iOS attaches it to the keyboard every time instead of sometimes.
+ * Cancel and Done, drawn by the app right on top of the keyboard while an amount is being
+ * edited. Mount it once on any screen with InlineAmounts. It follows the keyboard itself
+ * instead of relying on iOS's accessory bar, which sometimes didn't show up.
  */
-export function AmountKeyboardBar({ id = BAR_ID }: { id?: string }) {
+export function AmountKeyboardBar() {
   const colors = useColors();
-  if (!ios) return null;
+  const window = useWindowDimensions();
+  const editing = useSyncExternalStore(subscribe, isEditing, isEditing);
+  const keyboard = useKeyboardHeight();
+  const frame = useRef<React.ComponentRef<typeof View>>(null);
+  // How far this screen's bottom edge sits above the bottom of the window (a tab bar, say).
+  const [inset, setInset] = useState(0);
+  const lift = Math.max(0, keyboard - inset);
+  if (!native) return null;
   return (
-    <InputAccessoryView nativeID={id}>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          paddingHorizontal: spacing.md,
-          paddingVertical: 6,
-          backgroundColor: '#F7F7F9',
-          borderTopWidth: 1,
-          borderTopColor: colors.separator,
-        }}
-      >
-        <Pressable
-          accessibilityRole="button"
-          hitSlop={8}
-          onPress={() => active?.cancel()}
-          style={{ paddingHorizontal: spacing.xs, height: 34, justifyContent: 'center' }}
+    <View
+      ref={frame}
+      pointerEvents="box-none"
+      style={StyleSheet.absoluteFill}
+      onLayout={() =>
+        frame.current?.measureInWindow((_x: number, y: number, _w: number, h: number) =>
+          setInset(Math.max(0, window.height - (y + h))),
+        )
+      }
+    >
+      {editing && (
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: AMOUNT_BAR_HEIGHT,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              paddingHorizontal: spacing.md,
+              backgroundColor: '#F7F7F9',
+              borderTopWidth: 1,
+              borderTopColor: colors.separator,
+            },
+            { transform: [{ translateY: -lift }], transitionProperty: 'transform', transitionDuration: 250 },
+          ]}
         >
-          <Text variant="body" tone="textSecondary">
-            Cancel
-          </Text>
-        </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Done"
-          hitSlop={8}
-          onPress={() => active?.done()}
-          style={({ pressed }) => ({
-            height: 34,
-            paddingHorizontal: 14,
-            borderRadius: radius.button,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            backgroundColor: colors.accent,
-            opacity: pressed ? 0.8 : 1,
-          })}
-        >
-          <Icon sf="checkmark" md="check" size={13} color={colors.onInk} weight="bold" />
-          <Text variant="body" weight="600" tone="onInk">
-            Done
-          </Text>
-        </Pressable>
-      </View>
-    </InputAccessoryView>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => active?.cancel()}
+            style={{ paddingHorizontal: spacing.xs, height: 36, justifyContent: 'center' }}
+          >
+            <Text variant="body" tone="textSecondary">
+              Cancel
+            </Text>
+          </Pressable>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Done"
+            hitSlop={8}
+            onPress={() => active?.done()}
+            style={({ pressed }) => ({
+              height: 36,
+              paddingHorizontal: 16,
+              borderRadius: radius.button,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: colors.accent,
+              opacity: pressed ? 0.8 : 1,
+            })}
+          >
+            <Icon sf="checkmark" md="check" size={13} color={colors.onInk} weight="bold" />
+            <Text variant="body" weight="600" tone="onInk">
+              Done
+            </Text>
+          </Pressable>
+        </Animated.View>
+      )}
+    </View>
   );
 }
 
@@ -87,7 +139,6 @@ export function InlineAmount({
   onEditingChange,
   onDraft,
   accessibilityLabel,
-  barId = BAR_ID,
   width = 76,
   align = 'right',
   variant = 'row',
@@ -99,8 +150,6 @@ export function InlineAmount({
   onEditingChange?: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
   /** The amount as it's typed, for live previews. */
   onDraft?: (cents: Cents) => void;
-  /** Which keyboard bar to use; the envelope page passes DETAIL_BAR_ID. */
-  barId?: string;
   accessibilityLabel: string;
   width?: number;
   /** Right for table columns; left for a stat under a label. */
@@ -116,6 +165,7 @@ export function InlineAmount({
   const input = useRef<React.ComponentRef<typeof TextInput>>(null);
   const confirmed = useRef(false);
   const needsFocus = useRef(false);
+  const editor = useRef<typeof active>(null);
 
   // Can be negative when money was taken back out this month.
   const whole = Math.floor(cents / 100);
@@ -123,9 +173,9 @@ export function InlineAmount({
 
   function start() {
     haptic('selection');
-    confirmed.current = !ios;
+    confirmed.current = !native;
     needsFocus.current = true;
-    active = {
+    const mine = {
       done: () => {
         confirmed.current = true;
         input.current?.blur();
@@ -135,6 +185,8 @@ export function InlineAmount({
         input.current?.blur();
       },
     };
+    editor.current = mine;
+    setActive(mine);
     setDraft(String(Math.max(0, whole)));
     setEditing(true);
     onDraft?.(Math.max(0, whole) * 100);
@@ -143,6 +195,8 @@ export function InlineAmount({
 
   function finish() {
     if (!editing) return;
+    // Only hide the bar if another amount hasn't already taken over.
+    if (active === editor.current) setActive(null);
     setEditing(false);
     onEditingChange?.(false, null);
     if (!confirmed.current) {
@@ -209,7 +263,6 @@ export function InlineAmount({
             keyboardType="number-pad"
             returnKeyType="done"
             selectTextOnFocus
-            inputAccessoryViewID={ios ? barId : undefined}
             accessibilityLabel={accessibilityLabel}
             style={[textStyle, { flex: 1, padding: 0, margin: 0, lineHeight: undefined }]}
           />

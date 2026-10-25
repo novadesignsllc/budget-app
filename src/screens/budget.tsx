@@ -9,6 +9,7 @@ import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
+import { targetKindOf } from '@/domain/targets';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -69,6 +70,8 @@ export function Budget() {
   const ledger = useLedger();
   const envelopes = useStore((s) => s.envelopes);
   const groupOrder = useStore((s) => s.settings.groupOrder);
+  const startersDone = useStore((s) => !!s.settings.startersDone);
+  const updateSettings = useStore((s) => s.updateSettings);
   const reorderEnvelopes = useStore((s) => s.reorderEnvelopes);
   const accounts = useStore((s) => s.accounts);
   const addEnvelope = useStore((s) => s.addEnvelope);
@@ -109,7 +112,9 @@ export function Budget() {
     envelopes.filter((e) => e.debtAccountId).map((e) => [e.id, ceilDollars(debtFor(e)?.target ?? 0)] as const),
   );
   const gaps = targetGaps(envelopes, budget, debtTargets);
-  const existing = new Set(envelopes.map((e) => e.name.toLowerCase()));
+  const existing = new Set(envelopes.filter((e) => !e.hidden).map((e) => e.name.toLowerCase()));
+  // Suggestions stay until you tap Done or have added them all, so you can add several.
+  const starters = startersDone || past ? [] : STARTERS.filter((s) => !existing.has(s.name.toLowerCase()));
   const spendable = envelopes.filter((e) => !e.debtAccountId);
 
   function fill(entries: { envelopeId: string; amount: number }[], message: string) {
@@ -244,9 +249,12 @@ export function Budget() {
 
         <LeftToAssign cents={rta} past={past} />
 
-        {spendable.length === 0 && (
+        {starters.length > 0 && (
           <Card>
-            <CardHeader title="Make your envelopes" detail="Tap to add" />
+            <CardHeader
+              title="Make your envelopes"
+              action={{ label: 'Done', onPress: () => updateSettings({ startersDone: true }) }}
+            />
             <Text
               variant="callout"
               tone="textSecondary"
@@ -258,7 +266,7 @@ export function Budget() {
               Bills and Daily are money you spend each month. Savings is money you add each month and leave alone.
             </Text>
             <View style={{ paddingTop: spacing.xs }}>
-              {STARTERS.filter((s) => !existing.has(s.name.toLowerCase())).map((s, i, list) => (
+              {starters.map((s, i, list) => (
                 <Pressable
                   key={s.name}
                   accessibilityRole="button"
@@ -470,7 +478,7 @@ function EnvelopeRow({
 }) {
   const colors = useColors();
   const swiping = useSwipeGuard();
-  const savings = envelope.group === 'Savings' && !envelope.debtAccountId;
+  const savings = targetKindOf(envelope) === 'goal' && !envelope.debtAccountId;
   const red = overspent && !past;
   const leftTone = red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text';
   return (

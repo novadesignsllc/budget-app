@@ -1,5 +1,24 @@
 import type { MonthKey } from './months';
-import type { Cents, Envelope } from './types';
+import type { Cents, Envelope, TargetKind } from './types';
+
+/** Spending (a monthly limit) or goal (set aside every month), defaulting by group. */
+export function targetKindOf(envelope: Pick<Envelope, 'targetKind' | 'group'>): TargetKind {
+  return envelope.targetKind ?? (envelope.group === 'Savings' ? 'goal' : 'spending');
+}
+
+/**
+ * What an envelope still needs this month to meet its target. A spending target refills
+ * the envelope up to the limit (money carried in counts); a goal wants the full amount
+ * assigned every month so it keeps building.
+ */
+export function targetNeed(
+  envelope: Pick<Envelope, 'targetKind' | 'group'>,
+  target: Cents,
+  row: { assigned: Cents; carriedIn: Cents },
+): Cents {
+  const have = targetKindOf(envelope) === 'goal' ? row.assigned : row.carriedIn + row.assigned;
+  return Math.max(0, target - have);
+}
 
 /**
  * The monthly target in effect for `month`: the latest `targets` entry at or before it.

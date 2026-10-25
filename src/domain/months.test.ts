@@ -64,7 +64,12 @@ describe('computeMonth', () => {
 
   it('lists what each envelope still needs to reach its target', () => {
     const nov = computeMonth(input, '2026-11');
-    expect(targetGaps(envelopes, nov)).toEqual([
+    // Groceries is a spending limit: the $430 left over already covers November's $400.
+    // Emergency is a goal: it wants its $100 every month.
+    expect(targetGaps(envelopes, nov)).toEqual([{ envelopeId: 'save', need: 10000 }]);
+    // As a goal, groceries would want its full $400 again.
+    const asGoal = envelopes.map((e) => (e.id === 'groc' ? { ...e, targetKind: 'goal' as const } : e));
+    expect(targetGaps(asGoal, computeMonth({ ...input, envelopes: asGoal }, '2026-11'))).toEqual([
       { envelopeId: 'groc', need: 40000 },
       { envelopeId: 'save', need: 10000 },
     ]);
@@ -88,9 +93,10 @@ describe('targets by month', () => {
     expect(targetGaps(changed, computeMonth({ ...input, envelopes: changed }, '2026-10'))).toEqual([
       { envelopeId: 'save', need: 10000 },
     ]);
+    // November's limit is $450 and $430 carried in, so it only needs $20.
     expect(targetGaps(changed, computeMonth({ ...input, envelopes: changed }, '2026-11'))[0]).toEqual({
       envelopeId: 'groc',
-      need: 45000,
+      need: 2000,
     });
   });
 });

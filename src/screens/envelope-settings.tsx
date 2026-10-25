@@ -4,14 +4,14 @@ import { Pressable, Text as RNText, TextInput, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
-import { ActionList, cleanDollars, FormCard, FormRow, InputRow } from '@/components/form';
+import { ActionList, cleanDollars, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
-import { targetFor } from '@/domain/targets';
-import { GROUPS, type BudgetGroup } from '@/domain/types';
+import { targetFor, targetKindOf } from '@/domain/targets';
+import { GROUPS, type BudgetGroup, type TargetKind } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
 import { router } from 'expo-router';
@@ -76,8 +76,26 @@ export function EmojiHeader({ emoji, onChange }: { emoji: string; onChange: (emo
 }
 
 /** Savings targets are what goes in each month; Bills and Daily targets are the month's budget. */
-export function targetLabel(group: string) {
-  return group === 'Savings' ? 'Put in each month' : 'Monthly budget';
+export function targetLabel(kind: TargetKind) {
+  return kind === 'goal' ? 'Each month' : 'Monthly limit';
+}
+
+/**
+ * Spending: the target is the most to spend each month, and it refills up to that.
+ * Goal: the target goes in every month and keeps building.
+ */
+export function TargetKindRow({ value, onChange }: { value: TargetKind; onChange: (kind: TargetKind) => void }) {
+  return (
+    <SegmentRow<TargetKind>
+      label="Target"
+      value={value}
+      options={[
+        { value: 'spending', label: 'Spending' },
+        { value: 'goal', label: 'Goal' },
+      ]}
+      onChange={onChange}
+    />
+  );
 }
 
 export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?: MonthKey }) {
@@ -92,6 +110,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const current = envelope ? targetFor(envelope, month) : null;
   const [target, setTarget] = useState(current ? String(Math.ceil(current / 100)) : '');
   const [confirmHide, setConfirmHide] = useState(false);
+  const [kind, setKind] = useState<TargetKind>(envelope ? targetKindOf(envelope) : 'spending');
   // Only set once the user picks one; until then the name decides.
   const [emoji, setEmoji] = useState<string | undefined>(envelope?.emoji);
 
@@ -136,10 +155,11 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
           />
         )}
         {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
+        {!fixed && <TargetKindRow value={kind} onChange={setKind} />}
         {!isDebt && (
           <InputRow
             ref={targetRef}
-            label={targetLabel(group)}
+            label={targetLabel(fixed ? 'spending' : kind)}
             value={target ? `$${Number(target).toLocaleString('en-US')}` : ''}
             onChangeText={(v) => setTarget(cleanDollars(v))}
             placeholder="$0"
@@ -158,6 +178,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             name: fixed ? envelope.name : name.trim(),
             group: fixed ? envelope.group : group,
             ...(emoji && emoji !== envelope.emoji ? { emoji } : {}),
+            ...(!fixed && kind !== targetKindOf(envelope) ? { targetKind: kind } : {}),
           });
           const next = parseMoney(target);
           if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);

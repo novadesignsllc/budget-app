@@ -187,6 +187,15 @@ export function AccountDetail({ id, header }: { id: string; header?: React.React
             paddingHorizontal: 6,
           }}
         >
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={() => router.push({ pathname: '/edit-account', params: { id } })}
+          >
+            <Text variant="footnote" weight="600" tone="accent">
+              Rename
+            </Text>
+          </Pressable>
           <View style={{ flex: 1 }} />
           <Pressable accessibilityRole="button" hitSlop={8} onPress={() => moveAccount(id, -1)}>
             <Text variant="footnote" weight="600" tone="accent">

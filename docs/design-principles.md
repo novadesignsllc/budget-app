@@ -89,3 +89,6 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-24 | Compact calendar: 30pt days, Today and Yesterday in the month row | So it fits above the keyboard |
 | 2026-10-25 | Light mode only at the native level too (userInterfaceStyle light), splash in the app background color | iOS dark mode was tinting the keyboard and alerts |
 | 2026-10-25 | The app is called Slip. Icon: a folded paper strip forming an S, purple on deep indigo, flat (no glass) | The point of the app is no slips; user picked option C |
+| 2026-10-25 | Each Daily or Savings envelope has a target type: Spending (a monthly limit that refills up to the target, leftovers count) or Goal (the full amount every month, building over time). Defaults: Daily is spending, Savings is a goal | User request |
+| 2026-10-25 | Starter envelope suggestions stay until you tap Done or add them all | They vanished after the first one |
+| 2026-10-25 | Accounts can be renamed from the account page (Rename, next to Move up and Move down) | User request |

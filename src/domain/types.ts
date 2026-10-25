@@ -44,6 +44,8 @@ export type Account = {
 export const GROUPS = ['Daily', 'Savings'] as const;
 export type BudgetGroup = (typeof GROUPS)[number];
 
+export type TargetKind = 'spending' | 'goal';
+
 export type Envelope = {
   id: string;
   name: string;
@@ -59,6 +61,12 @@ export type Envelope = {
    * `monthlyTarget`, which applies to months before any entry.
    */
   targets?: Record<string, Cents | null>;
+  /**
+   * What the target means. Spending: the most to spend each month, so it refills up to
+   * the target. Goal: put the target in every month and let it build. Unset follows the
+   * group: Savings is a goal, everything else is spending.
+   */
+  targetKind?: TargetKind;
   /** Legacy single target, used before any `targets` entry. */
   monthlyTarget?: Cents;
   hidden?: boolean;

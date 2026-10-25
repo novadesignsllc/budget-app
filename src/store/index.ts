@@ -21,6 +21,7 @@ import type {
   Recurring,
   Transaction,
   TransactionKind,
+  TargetKind,
 } from '@/domain/types';
 import { GROUPS, isCashAccount } from '@/domain/types';
 
@@ -60,6 +61,8 @@ export type Settings = {
   monthlyDebtPayment: Cents;
   /** Budget groups top to bottom, as sorted by the user. Groups not listed follow. */
   groupOrder?: string[];
+  /** The starter envelope suggestions were dismissed. */
+  startersDone?: boolean;
 };
 
 export type NewTransaction = {
@@ -114,12 +117,13 @@ type Actions = {
     monthlyTarget?: Cents;
     month?: MonthKey;
     emoji?: string;
+    targetKind?: TargetKind;
   }) => string;
   /** Sets the target from `month` on. Earlier months keep the target they had. */
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
   updateEnvelope: (
     id: string,
-    patch: Partial<Pick<Envelope, 'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji'>>,
+    patch: Partial<Pick<Envelope, 'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji' | 'targetKind'>>,
   ) => void;
   /**
    * Saves a new order from sort mode: groups top to bottom, each with its envelopes in
@@ -282,7 +286,7 @@ export const useStore = create<Store>()((set, get) => ({
       return { accounts: sorted.map((a, order) => ({ ...a, order })) };
     }),
 
-  addEnvelope: ({ name, group, monthlyTarget, month, emoji }) => {
+  addEnvelope: ({ name, group, monthlyTarget, month, emoji, targetKind }) => {
     const id = newId();
     const from = month ?? today().slice(0, 7);
     set((s) => ({
@@ -295,6 +299,7 @@ export const useStore = create<Store>()((set, get) => ({
           order: s.envelopes.length,
           ...(monthlyTarget ? { targets: { [from]: monthlyTarget } } : {}),
           ...(emoji ? { emoji } : {}),
+          ...(targetKind ? { targetKind } : {}),
         },
       ],
     }));

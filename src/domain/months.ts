@@ -1,4 +1,4 @@
-import { targetFor } from './targets';
+import { targetFor, targetNeed } from './targets';
 import { isCashAccount, type Account, type Allocation, type Cents, type Envelope, type ISODate, type Transaction } from './types';
 
 /** `YYYY-MM` */
@@ -162,7 +162,12 @@ export function targetGaps(
     .sort((a, b) => a.order - b.order)
     .map((e) => ({ e, target: e.debtAccountId ? (debtTargets.get(e.id) ?? null) : targetFor(e, budget.month) }))
     .filter(({ target }) => target !== null && target > 0)
-    .map(({ e, target }) => ({ envelopeId: e.id, need: target! - (budget.envelopes.get(e.id)?.assigned ?? 0) }))
+    .map(({ e, target }) => {
+      const row = budget.envelopes.get(e.id) ?? { assigned: 0, carriedIn: 0 };
+      // Debt payments always want the full amount this month.
+      const need = e.debtAccountId ? target! - row.assigned : targetNeed(e, target!, row);
+      return { envelopeId: e.id, need };
+    })
     .filter((g) => g.need > 0);
 }
 

@@ -12,8 +12,10 @@ import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 
-import { EmojiHeader, GroupPicker, targetLabel } from './envelope-settings';
+import { EmojiHeader, GroupPicker, TargetKindRow, targetLabel } from './envelope-settings';
 import { SheetHeader } from '@/components/sheet-header';
+import { targetKindOf } from '@/domain/targets';
+import type { TargetKind } from '@/domain/types';
 
 export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   const month = monthParam ?? monthOf(today());
@@ -22,6 +24,9 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   const [name, setName] = useState('');
   const [group, setGroup] = useState<string>('Daily');
   const [target, setTarget] = useState('');
+  // Follows the group (Savings is a goal) until picked.
+  const [pickedKind, setPickedKind] = useState<TargetKind>();
+  const kind = pickedKind ?? targetKindOf({ group });
   // Only set once the user picks one; until then the name decides.
   const [emoji, setEmoji] = useState<string>();
   const shown = envelopeEmoji({ name, emoji });
@@ -45,9 +50,10 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
           onSubmitEditing={() => targetRef.current?.focus()}
         />
         <GroupPicker group={group} onGroup={setGroup} />
+        <TargetKindRow value={kind} onChange={setPickedKind} />
         <InputRow
           ref={targetRef}
-          label={targetLabel(group)}
+          label={targetLabel(kind)}
           value={target ? `$${Number(target).toLocaleString('en-US')}` : ''}
           onChangeText={(v) => setTarget(cleanDollars(v))}
           placeholder="$0"
@@ -67,6 +73,7 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
             monthlyTarget: parseMoney(target) ?? undefined,
             month,
             emoji,
+            targetKind: kind,
           });
           haptic('success');
           closeSheet();

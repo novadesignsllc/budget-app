@@ -1,6 +1,6 @@
 import { ceilDollars, formatDollars } from '@/domain/money';
 import type { EnvelopeMonth, MonthKey } from '@/domain/months';
-import { targetFor } from '@/domain/targets';
+import { targetFor, targetKindOf, targetNeed } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
 import { DEBT_GROUP } from '@/store';
 
@@ -60,9 +60,9 @@ export function envelopeStatus(
   }
 
   const target = targetFor(e, month) ?? 0;
-  const need = ceilDollars(Math.max(0, target - assigned));
+  const need = ceilDollars(targetNeed(e, target, row));
 
-  if (e.group === 'Savings') {
+  if (targetKindOf(e) === 'goal') {
     return {
       subtitle: target ? `+${m(assigned)} of ${m(target)} this month` : `+${m(assigned)} this month`,
       tone: target && assigned >= target ? 'positive' : 'textSecondary',

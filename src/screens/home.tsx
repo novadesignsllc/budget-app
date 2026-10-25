@@ -15,11 +15,13 @@ import { Text } from '@/components/text';
 import { DateBlock, TransactionRow } from '@/components/transaction-row';
 import { useToast } from '@/components/toast';
 import { addDays, daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
+import { budgetStatus, type BudgetStatus } from '@/domain/budget-status';
 import { budgetHealth } from '@/domain/health';
 import { balanceHistory } from '@/domain/history';
 import { formatDollars, formatMoney } from '@/domain/money';
 import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
+import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
 import { isListed, newestFirst } from '@/screens/transactions';
@@ -57,11 +59,15 @@ export function Home() {
   const envelopes = useStore((s) => s.envelopes);
   const approve = useStore((s) => s.approveRecurring);
   const showToast = useToast((s) => s.show);
+  const thisMonth = useBudgetMonth(currentMonth());
 
   const day = today();
   // Anything waiting for approval, then the next week of bills and subscriptions.
   const soon = [...dueForApproval(recurring, day), ...upcoming(recurring, day, 7)];
   const health = budgetHealth(ledger);
+  const now = fromISODate(day);
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const status = budgetStatus(envelopes, thisMonth.envelopes, now.getDate(), daysInMonth);
   const history = balanceHistory({ accounts, transactions }, 12, day);
   const accountById = new Map(all.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
@@ -209,6 +215,8 @@ export function Home() {
           </Text>
         </Pressable>
       </Card>
+
+      <BudgetStatusCard status={status} day={now.getDate()} daysInMonth={daysInMonth} />
 
       {soon.length > 0 && (
         <Card>
@@ -415,5 +423,104 @@ export function Home() {
         </Pressable>
       </Card>
     </Screen>
+  );
+}
+
+const STATUS_LOOK = {
+  ok: { label: 'On track', ink: 'positive', dot: 'positive', soft: 'positiveSoft' },
+  close: { label: 'Getting close', ink: 'caution', dot: 'cautionDot', soft: 'cautionSoft' },
+  over: { label: 'Overspent', ink: 'negative', dot: 'negativeStrong', soft: 'negativeSoft' },
+} as const;
+
+/**
+ * Everyday money at a glance: what's left in the Daily envelopes this month and whether
+ * spending is keeping pace with the calendar. The tick on the bar is today.
+ */
+function BudgetStatusCard({ status, day, daysInMonth }: { status: BudgetStatus; day: number; daysInMonth: number }) {
+  const colors = useColors();
+  const look = STATUS_LOOK[status.level];
+  const total = status.spent + Math.max(status.left, 0);
+  const used = total > 0 ? Math.min(1, status.spent / total) : 0;
+  const reason =
+    status.level === 'over'
+      ? status.overspent.length === 1
+        ? `${status.overspent[0].envelope.name} is over by ${formatDollars(status.overspent[0].by)}`
+        : `${status.overspent.length} envelopes are overspent`
+      : status.level === 'close'
+        ? `Spending is ahead of the month · day ${day} of ${daysInMonth}`
+        : `${formatDollars(status.spent)} spent of ${formatDollars(total)} · day ${day} of ${daysInMonth}`;
+  return (
+    <Card>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`Budget status: ${look.label}. ${formatDollars(status.left)} left to spend. ${reason}`}
+        onPress={() => router.navigate('/budget')}
+        style={({ pressed }) => ({
+          paddingHorizontal: spacing.lg,
+          paddingVertical: spacing.md,
+          gap: spacing.sm,
+          backgroundColor: pressed ? colors.control : colors.surface,
+        })}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text variant="footnote" tone="textSecondary" style={{ flex: 1 }}>
+            Budget status
+          </Text>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: 8,
+              height: 24,
+              borderRadius: 6,
+              backgroundColor: colors[look.soft],
+            }}
+          >
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors[look.dot] }} />
+            <Text variant="footnote" weight="600" color={colors[look.ink]}>
+              {look.label}
+            </Text>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+          <AnimatedNumber
+            variant="title"
+            weight="600"
+            tone={status.left < 0 ? 'negative' : 'text'}
+            value={status.left}
+            format={formatDollars}
+          />
+          <Text variant="callout" tone="textSecondary">
+            left to spend
+          </Text>
+        </View>
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.fill }}>
+          <View
+            style={{
+              width: `${used * 100}%`,
+              height: 6,
+              borderRadius: 3,
+              backgroundColor: colors[look.dot],
+            }}
+          />
+          <View
+            style={{
+              position: 'absolute',
+              left: `${status.elapsed * 100}%`,
+              top: -3,
+              width: 2,
+              height: 12,
+              marginLeft: -1,
+              borderRadius: 1,
+              backgroundColor: colors.text,
+            }}
+          />
+        </View>
+        <Text variant="footnote" color={status.level === 'ok' ? colors.textSecondary : colors[look.ink]} numberOfLines={1}>
+          {reason}
+        </Text>
+      </Pressable>
+    </Card>
   );
 }

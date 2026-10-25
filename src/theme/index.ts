@@ -49,6 +49,10 @@ const light = {
   negativeTint: '#FFF6F5',
   warning: '#C2560F',
   warningSoft: '#FFF0E6',
+  /** "Getting close": a yellow that still reads as text. */
+  caution: '#946200',
+  cautionDot: '#F5B700',
+  cautionSoft: '#FFF6D6',
   /** Sheets dim the page behind them. */
   scrim: '#C9CFD9',
   floating: '#FFFFFF',

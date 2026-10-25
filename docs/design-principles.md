@@ -88,3 +88,4 @@ Every UI change gets checked against these principles. When we decide something 
 | 2026-10-24 | Menus and the calendar size themselves from the keyboard's height and the sheet's height, not window positions | Inside a sheet, window positions were off and menus ran under the keyboard |
 | 2026-10-24 | Compact calendar: 30pt days, Today and Yesterday in the month row | So it fits above the keyboard |
 | 2026-10-25 | Light mode only at the native level too (userInterfaceStyle light), splash in the app background color | iOS dark mode was tinting the keyboard and alerts |
+| 2026-10-25 | The app is called Slip. Icon: a folded paper strip forming an S, purple on deep indigo, flat (no glass) | The point of the app is no slips; user picked option C |

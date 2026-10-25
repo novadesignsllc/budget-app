@@ -67,7 +67,7 @@ export function SignIn() {
       >
         <View style={{ gap: 4, alignItems: 'center', paddingBottom: spacing.sm }}>
           <Text variant="number" align="center" accessibilityRole="header">
-            Zero Budget
+            Slip
           </Text>
           <Text variant="callout" tone="textSecondary" align="center">
             {mode === 'create'

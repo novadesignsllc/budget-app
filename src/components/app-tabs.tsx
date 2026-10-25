@@ -95,7 +95,7 @@ function Sidebar() {
     <View style={{ width: 260, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl }}>
         <Text variant="title" style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
-          Zero Budget
+          Slip
         </Text>
         <Pressable
           accessibilityRole="button"

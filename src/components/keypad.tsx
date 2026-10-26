@@ -52,6 +52,8 @@ type Session = {
   /** The pad closed for this field, however it closed, with the field's final text. */
   onClose?: (text: string) => void;
   actions?: KeypadAction[];
+  /** A line above the keys saying what the number is for. */
+  title?: string;
 };
 
 const useKeypadStore = create<{ session: Session | null }>()(() => ({ session: null }));
@@ -232,8 +234,19 @@ function KeypadPanel({ session }: { session: Session }) {
           ))}
         </View>
       ) : null}
-      {/* The answer while doing math: "= $53.57". */}
-      <View style={{ height: 18, paddingHorizontal: spacing.md, alignItems: 'flex-end', justifyContent: 'center' }}>
+      {/* What the number is for on the left, and the answer while doing math on the right. */}
+      <View
+        style={{
+          height: 18,
+          paddingHorizontal: spacing.md,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
+          {session.title ?? ''}
+        </Text>
         {math ? (
           <Text variant="footnote" weight="600" tone="accent" style={{ fontVariant: ['tabular-nums'] }}>
             = {keypadDisplay(press(session.expr, '=', session.mode), session.mode, session.unit)}
@@ -329,6 +342,7 @@ export function useKeypadField({
   onDone,
   onClose,
   actions,
+  title,
   ref,
   autoFocus,
 }: {
@@ -342,6 +356,7 @@ export function useKeypadField({
   onDone?: (cents: Cents | null) => void;
   onClose?: (text: string) => void;
   actions?: KeypadAction[];
+  title?: string;
   ref?: React.Ref<KeypadFieldHandle>;
   autoFocus?: boolean;
 }) {
@@ -373,6 +388,7 @@ export function useKeypadField({
         onDone: (c) => latest.current.onDone?.(c),
         onClose: (t) => latest.current.onClose?.(t),
         actions,
+        title,
       },
     });
   };

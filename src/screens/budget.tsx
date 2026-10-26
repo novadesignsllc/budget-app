@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 
@@ -8,7 +8,7 @@ import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
-import { closeKeypad } from '@/components/keypad';
+import { Caret, closeKeypad, useKeypadField } from '@/components/keypad';
 import { debtTarget } from '@/domain/debt';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -417,6 +417,14 @@ export function Budget() {
                         revealAboveKeyboard(on ? view : null);
                       }}
                       onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
+                      onMoveBack={(cents) => {
+                        const ids = assignMany([{ envelopeId: e.id, amount: -cents, date }]);
+                        showToast({
+                          message: `Moved ${formatDollars(cents)} back to Ready to assign`,
+                          actionLabel: 'Undo',
+                          onAction: () => removeAllocations(ids),
+                        });
+                      }}
                       onPress={() =>
                         router.push({
                           pathname: '/budget/[id]',
@@ -462,6 +470,96 @@ export function Budget() {
 }
 
 /**
+ * The Left amount: a colored pill when the envelope has a target, a plain number when it
+ * doesn't. Tapping it moves money back to Ready to assign: the pad opens on everything
+ * that's left, and Done sends it back (or type less).
+ */
+function LeftCell({
+  row,
+  bar,
+  past,
+  tone,
+  onEditingChange,
+  onMoveBack,
+}: {
+  row: EnvelopeMonth;
+  bar: TargetBar | null;
+  past: boolean;
+  tone: 'negative' | 'textTertiary' | 'text';
+  onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
+  onMoveBack: (cents: number) => void;
+}) {
+  const colors = useColors();
+  const cell = useRef<React.ComponentRef<typeof View>>(null);
+  // Whole dollars only, like the rest of the budget: the cents stay put.
+  const max = floorDollars(row.available);
+  const movable = !past && max >= 100;
+  const pad = useKeypadField({
+    value: String(max / 100),
+    mode: 'whole',
+    live: false,
+    title: 'Move back to Ready to assign',
+    actions: [
+      {
+        label: `Move all ${formatDollars(max)}`,
+        icon: { sf: 'arrow.uturn.backward', md: 'undo' },
+        onPress: () => {
+          closeKeypad();
+          onMoveBack(max);
+        },
+      },
+    ],
+    onDone: (cents) => {
+      const amount = Math.min(max, Math.max(0, cents ?? 0));
+      if (amount > 0) onMoveBack(amount);
+    },
+    onClose: () => onEditingChange(false, null),
+  });
+  const pill = bar && !past ? LEFT_PILL[bar.state](colors) : null;
+  return (
+    <View ref={cell} collapsable={false} style={{ width: COL, marginLeft: COL_GAP, alignItems: 'flex-end' }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${formatDollars(row.available)} left. Move back to Ready to assign`}
+        disabled={!movable}
+        hitSlop={8}
+        onPress={() => {
+          pad.open();
+          onEditingChange(true, cell.current);
+        }}
+        style={{
+          // The same box as the Assigned chip: same width in every row, digits on the column edge.
+          width: COL + 6,
+          height: 24,
+          marginRight: -6,
+          paddingHorizontal: 4.5,
+          borderRadius: 6,
+          borderWidth: 1.5,
+          borderColor: pad.active ? colors.accent : 'transparent',
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'flex-end',
+          backgroundColor: pad.active ? colors.surface : (pill?.bg ?? 'transparent'),
+        }}
+      >
+        <Text
+          variant="row"
+          weight="600"
+          tone={pill || pad.active ? undefined : tone}
+          color={pad.active ? colors.text : pill?.fg}
+          style={{ fontVariant: ['tabular-nums'], flexShrink: 1 }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {pad.active ? pad.text || '$0' : formatDollars(row.available)}
+        </Text>
+        {pad.active && <Caret height={15} />}
+      </Pressable>
+    </View>
+  );
+}
+
+/**
  * The Left pill for an envelope with a target: green funded, yellow short, grey at zero,
  * red over. Envelopes without a target show a plain number, so a pill means "has a target".
  */
@@ -482,6 +580,7 @@ function EnvelopeRow({
   overspent,
   bar,
   need,
+  onMoveBack,
   last,
   past,
   onEditingChange,
@@ -495,6 +594,8 @@ function EnvelopeRow({
   bar: TargetBar | null;
   /** What Fill target on the number pad adds. */
   need: number;
+  /** Sends some of what's left back to Ready to assign. */
+  onMoveBack: (cents: number) => void;
   last: boolean;
   past: boolean;
   onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
@@ -584,44 +685,14 @@ function EnvelopeRow({
           >
             {formatDollars(row.spent, 'up')}
           </Text>
-          {bar && !past ? (
-            <View style={{ width: COL, marginLeft: COL_GAP, alignItems: 'flex-end' }}>
-              <View
-                style={{
-                  // The same box as the Assigned chip: same width in every row, digits on the column edge.
-                  width: COL + 6,
-                  height: 24,
-                  marginRight: -6,
-                  paddingHorizontal: 6,
-                  borderRadius: 6,
-                  justifyContent: 'center',
-                  backgroundColor: LEFT_PILL[bar.state](colors).bg,
-                }}
-              >
-                <Text
-                  variant="row"
-                  weight="600"
-                  align="right"
-                  color={LEFT_PILL[bar.state](colors).fg}
-                  style={{ fontVariant: ['tabular-nums'] }}
-                  numberOfLines={1}
-                >
-                  {formatDollars(row.available)}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <Text
-              variant="row"
-              weight="600"
-              tone={leftTone}
-              align="right"
-              numberOfLines={1}
-              style={{ width: COL, marginLeft: COL_GAP, fontVariant: ['tabular-nums'] }}
-            >
-              {formatDollars(row.available)}
-            </Text>
-          )}
+          <LeftCell
+            row={row}
+            bar={bar}
+            past={past}
+            tone={leftTone}
+            onEditingChange={onEditingChange}
+            onMoveBack={onMoveBack}
+          />
         </View>
         <View
           style={{

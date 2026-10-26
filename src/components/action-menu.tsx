@@ -14,6 +14,7 @@ export type MenuItem = {
   detail?: string;
   icon?: { sf: Parameters<typeof Icon>[0]['sf']; md: Parameters<typeof Icon>[0]['md'] };
   onPress: () => void;
+  disabled?: boolean;
 };
 
 const menuIn = (fromY: number) =>
@@ -28,6 +29,7 @@ const menuIn = (fromY: number) =>
  */
 export function ActionMenu({
   items,
+  header,
   children,
   style,
   disabled,
@@ -35,6 +37,8 @@ export function ActionMenu({
   hitSlop,
 }: {
   items: MenuItem[];
+  /** Shown above the items, like how a number adds up. */
+  header?: React.ReactNode;
   children: React.ReactNode;
   style: (state: { pressed: boolean; open: boolean }) => React.ComponentProps<typeof View>['style'];
   disabled?: boolean;
@@ -54,7 +58,7 @@ export function ActionMenu({
   const close = () => setFrame(null);
 
   const width = 240;
-  const estimate = items.length * 44 + 12;
+  const estimate = items.length * 44 + 12 + (header ? 110 : 0);
   const below = frame ? frame.y + frame.h + 6 + estimate < window.height - 120 : true;
   const left = frame ? Math.min(Math.max(spacing.md, frame.x + frame.w - width), window.width - width - spacing.md) : 0;
   const position = frame
@@ -94,10 +98,12 @@ export function ActionMenu({
                 padding: 5,
               }}
             >
+              {header}
               {items.map((item) => (
                 <Pressable
                   key={item.label}
                   accessibilityRole="menuitem"
+                  disabled={item.disabled}
                   onPress={() => {
                     haptic('selection');
                     close();
@@ -111,6 +117,7 @@ export function ActionMenu({
                     paddingHorizontal: 9,
                     borderRadius: radius.button,
                     backgroundColor: pressed ? colors.control : 'transparent',
+                    opacity: item.disabled ? 0.4 : 1,
                   })}
                 >
                   {item.icon && <Icon sf={item.icon.sf} md={item.icon.md} size={13} color={colors.accent} weight="semibold" />}

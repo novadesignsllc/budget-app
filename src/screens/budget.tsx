@@ -19,7 +19,7 @@ import { SwipeRow, useSwipeGuard } from '@/components/swipe-row';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
-import { ceilDollars, floorDollars, formatDollars } from '@/domain/money';
+import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
 import { assignDateFor, formatMonth, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -48,7 +48,9 @@ const STARTERS: { name: string; group: string }[] = [
  * and a four-digit amount like $5,082 fits with room to spare. Names get "…" first.
  */
 const COL = 64;
-const COL_GAP = 4;
+const COL_GAP = 6;
+/** Inside each box, digits sit this far from its right edge. */
+const COL_PAD = 6;
 const EMPTY: EnvelopeMonth = {
   assigned: 0,
   activity: 0,
@@ -346,16 +348,13 @@ export function Budget() {
             <Text variant="label" tone="textTertiary" style={{ flex: 1 }}>
               ENVELOPE
             </Text>
-            {['ASSIGNED', 'SPENT', 'LEFT'].map((l, i) => (
-              <Text
-                key={l}
-                variant="label"
-                tone="textTertiary"
-                align="right"
-                style={{ width: COL, marginLeft: i ? COL_GAP : 0 }}
-              >
-                {l}
-              </Text>
+            {['ASSIGNED', 'SPENT', 'LEFT'].map((l) => (
+              // Sized to its text so ASSIGNED never wraps or cuts off; its right edge lines up with the digits below.
+              <View key={l} style={{ width: COL, marginLeft: COL_GAP, alignSelf: 'stretch' }}>
+                <Text variant="label" tone="textTertiary" style={{ position: 'absolute', right: COL_PAD, top: 0 }}>
+                  {l}
+                </Text>
+              </View>
             ))}
           </View>
         )}
@@ -509,33 +508,34 @@ function LeftCell({
   });
   const pill = bar && !past ? LEFT_PILL[bar.state](colors) : null;
   return (
-    <View ref={cell} collapsable={false} style={{ width: COL, marginLeft: COL_GAP, alignItems: 'flex-end' }}>
+    <View ref={cell} collapsable={false} style={{ width: COL, marginLeft: COL_GAP }}>
       <ActionMenu
+        header={<LeftMath row={row} />}
         items={[
           {
             label: 'Move all back',
             detail: formatDollars(max),
             icon: { sf: 'arrow.uturn.backward', md: 'undo' },
+            disabled: !movable,
             onPress: () => onMoveBack(max),
           },
           {
             label: 'Move a custom amount',
             icon: { sf: 'number', md: 'dialpad' },
+            disabled: !movable,
             onPress: () => {
               pad.open();
               onEditingChange(true, cell.current);
             },
           },
         ]}
-        accessibilityLabel={`${formatDollars(row.available)} left. Move back to Ready to assign`}
-        disabled={!movable}
+        accessibilityLabel={`${formatDollars(row.available)} left. See how it adds up or move it back to Ready to assign`}
         hitSlop={8}
         style={({ pressed, open }) => ({
-          // The same box as the Assigned chip: same width in every row, digits on the column edge.
-          width: COL + 6,
+          // The same box as the Assigned chip: same width and padding in every row.
+          width: COL,
           height: 24,
-          marginRight: -6,
-          paddingHorizontal: 6,
+          paddingHorizontal: COL_PAD,
           borderRadius: 6,
           justifyContent: 'center',
           backgroundColor: pill?.bg ?? (open || pressed ? colors.control : 'transparent'),
@@ -555,6 +555,40 @@ function LeftCell({
           {formatDollars(row.available)}
         </Text>
       </ActionMenu>
+    </View>
+  );
+}
+
+/**
+ * How Left adds up, at the top of its menu: everything left from earlier months, plus
+ * what was assigned this month, minus what was spent. Exact cents, so it checks out.
+ */
+function LeftMath({ row }: { row: EnvelopeMonth }) {
+  const colors = useColors();
+  const line = (label: string, cents: number, opts: { sign?: boolean; bold?: boolean } = {}) => (
+    <View style={{ flexDirection: 'row', alignItems: 'center', height: 22 }}>
+      <Text variant="footnote" tone={opts.bold ? 'text' : 'textSecondary'} weight={opts.bold ? '600' : '400'} style={{ flex: 1 }}>
+        {label}
+      </Text>
+      <Text
+        variant="footnote"
+        weight={opts.bold ? '600' : '400'}
+        tone={opts.bold && cents < 0 ? 'negative' : opts.bold ? 'text' : 'textSecondary'}
+        style={{ fontVariant: ['tabular-nums'] }}
+      >
+        {formatMoney(cents, { signed: opts.sign })}
+      </Text>
+    </View>
+  );
+  // Money in and out besides spending (a refund, a slip's payment) also counts.
+  const other = row.activity + row.spent;
+  return (
+    <View style={{ paddingHorizontal: 9, paddingTop: 6, paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
+      {line('From earlier months', row.carriedIn, { sign: true })}
+      {line('Assigned this month', row.assigned, { sign: true })}
+      {line('Spent this month', -row.spent, { sign: true })}
+      {other !== 0 && line('Other money in', other, { sign: true })}
+      {line('Left', row.available, { bold: true })}
     </View>
   );
 }
@@ -629,7 +663,7 @@ function EnvelopeRow({
               flex: 1,
               minWidth: 0,
               // Room between a long name's "…" and the Assigned chip.
-              paddingRight: spacing.sm,
+              paddingRight: 2,
               opacity: pressed ? 0.5 : 1,
             })}
           >
@@ -649,7 +683,9 @@ function EnvelopeRow({
               </Text>
             </View>
           </Pressable>
+          <View style={{ marginLeft: COL_GAP }}>
           <InlineAmount
+            exact
             cents={row.assigned}
             width={COL}
             accessibilityLabel={`Assigned to ${envelope.name}`}
@@ -676,12 +712,13 @@ function EnvelopeRow({
               },
             ]}
           />
+          </View>
           <Text
             variant="row"
             tone="textSecondary"
             align="right"
             numberOfLines={1}
-            style={{ width: COL, marginLeft: COL_GAP, fontVariant: ['tabular-nums'] }}
+            style={{ width: COL, marginLeft: COL_GAP, paddingRight: COL_PAD, fontVariant: ['tabular-nums'] }}
           >
             {formatDollars(row.spent, 'up')}
           </Text>

@@ -26,6 +26,7 @@ export function InlineAmount({
   variant = 'row',
   muted,
   actions,
+  exact,
 }: {
   cents: Cents;
   onCommit: (cents: Cents) => void;
@@ -40,6 +41,8 @@ export function InlineAmount({
   muted?: boolean;
   /** Shortcuts above the keys, like Fill target. */
   actions?: KeypadAction[];
+  /** The box is exactly `width` (a table cell), instead of reaching past it to line digits up with a label. */
+  exact?: boolean;
 }) {
   const colors = useColors();
   const box = useRef<React.ComponentRef<typeof View>>(null);
@@ -60,9 +63,9 @@ export function InlineAmount({
   // One fixed box in both states, so tapping changes nothing but the border and caret.
   // The text lines up with the column edge.
   const boxStyle = {
-    width: width + PAD,
+    width: exact ? width : width + PAD,
     height: 24,
-    ...(align === 'right' ? { marginRight: -PAD } : { marginLeft: -PAD }),
+    ...(exact ? {} : align === 'right' ? { marginRight: -PAD } : { marginLeft: -PAD }),
     paddingHorizontal: PAD - 1.5,
     borderRadius: 6,
     borderWidth: 1.5,

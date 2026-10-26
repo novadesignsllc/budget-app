@@ -122,8 +122,8 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
               </Text>
             </View>
             <ProgressBar
-              value={left.red ? 1 : left.progress}
-              color={left.red ? (past ? colors.textSecondary : colors.negativeStrong) : barColor}
+              value={row.available < 0 ? 1 : left.progress}
+              color={row.available < 0 ? (past ? colors.textSecondary : colors.negativeStrong) : barColor}
               height={3}
             />
           </View>

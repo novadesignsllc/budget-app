@@ -451,12 +451,15 @@ export function Budget() {
   );
 }
 
-/** Row tints for envelopes with a target: yellow short, green funded, grey spent down, red over. */
-const ROW_TINT: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => string> = {
-  short: (c) => c.cautionSoft,
-  funded: (c) => c.positiveSoft,
-  empty: (c) => c.control,
-  over: (c) => c.negativeSoft,
+/**
+ * The Left pill for an envelope with a target: green funded, yellow short, grey at zero,
+ * red over. Envelopes without a target show a plain number, so a pill means "has a target".
+ */
+const LEFT_PILL: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => { bg: string; fg: string }> = {
+  funded: (c) => ({ bg: c.positiveSoft, fg: c.positive }),
+  short: (c) => ({ bg: c.cautionSoft, fg: c.caution }),
+  empty: (c) => ({ bg: c.control, fg: c.textTertiary }),
+  over: (c) => ({ bg: c.negativeSoft, fg: c.negative }),
 };
 
 /**
@@ -500,8 +503,7 @@ function EnvelopeRow({
         paddingVertical: 9,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
-        // A target shows as the row's tint, so you can tell at a glance which envelopes have one.
-        backgroundColor: bar && !past ? ROW_TINT[bar.state](colors) : colors.surface,
+        backgroundColor: colors.surface,
       }}
     >
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -545,21 +547,51 @@ function EnvelopeRow({
           <Text variant="row" tone="textSecondary" align="right" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
             {formatDollars(row.spent, 'up')}
           </Text>
-          <Text
-            variant="row"
-            weight="600"
-            tone={leftTone}
-            align="right"
-            style={{ width: COL, fontVariant: ['tabular-nums'] }}
-          >
-            {formatDollars(row.available)}
-          </Text>
+          {bar && !past ? (
+            <View style={{ width: COL, alignItems: 'flex-end' }}>
+              <View
+                style={{
+                  // A little narrower than the column, so it never touches the Spent number;
+                  // its digits still end on the column edge like the rows without a pill.
+                  maxWidth: COL - 2,
+                  minWidth: 44,
+                  height: 24,
+                  marginRight: -4,
+                  paddingHorizontal: 8,
+                  borderRadius: 6,
+                  justifyContent: 'center',
+                  backgroundColor: LEFT_PILL[bar.state](colors).bg,
+                }}
+              >
+                <Text
+                  variant="row"
+                  weight="600"
+                  align="right"
+                  color={LEFT_PILL[bar.state](colors).fg}
+                  style={{ fontVariant: ['tabular-nums'] }}
+                  numberOfLines={1}
+                >
+                  {formatDollars(row.available)}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text
+              variant="row"
+              weight="600"
+              tone={leftTone}
+              align="right"
+              style={{ width: COL, fontVariant: ['tabular-nums'] }}
+            >
+              {formatDollars(row.available)}
+            </Text>
+          )}
         </View>
         <View
           style={{
             height: 3,
             borderRadius: 2,
-            backgroundColor: left.red ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
+            backgroundColor: row.available < 0 ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
           }}
         >
           {left.progress > 0 && (

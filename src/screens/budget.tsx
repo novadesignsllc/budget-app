@@ -26,7 +26,7 @@ import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
-import { envelopeStatus, groupSummary, moneyLeftBar, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { barLevel, envelopeStatus, groupSummary, moneyLeftBar, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -46,8 +46,8 @@ const STARTERS: { name: string; group: string }[] = [
  * Assigned, Spent and Left share one width and one gap, so every row and section lines up
  * and a four-digit amount like $5,082 fits with room to spare. Names get "…" first.
  */
-const COL = 72;
-const COL_GAP = 6;
+const COL = 64;
+const COL_GAP = 4;
 const EMPTY: EnvelopeMonth = {
   assigned: 0,
   activity: 0,
@@ -408,7 +408,6 @@ export function Budget() {
                     <EnvelopeRow
                       envelope={e}
                       row={row}
-                      color={hue}
                       overspent={status.overspent}
                       bar={targetBar(e, row, month, debtFor(e))}
                       need={past ? 0 : status.need}
@@ -480,7 +479,6 @@ const LEFT_PILL: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) =>
 function EnvelopeRow({
   envelope,
   row,
-  color,
   overspent,
   bar,
   need,
@@ -492,7 +490,6 @@ function EnvelopeRow({
 }: {
   envelope: Envelope;
   row: EnvelopeMonth;
-  color: string;
   overspent: boolean;
   /** Set when the envelope has a target: the bar shows how funded it is. */
   bar: TargetBar | null;
@@ -507,6 +504,7 @@ function EnvelopeRow({
   const colors = useColors();
   const swiping = useSwipeGuard();
   const left = moneyLeftBar(row, envelope);
+  const level = barLevel(row);
   const red = overspent && !past;
   const leftTone = red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text';
   return (
@@ -629,7 +627,7 @@ function EnvelopeRow({
           style={{
             height: 3,
             borderRadius: 2,
-            backgroundColor: row.available < 0 ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
+            backgroundColor: level === 'over' ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
           }}
         >
           {left.progress > 0 && (
@@ -638,7 +636,8 @@ function EnvelopeRow({
                 width: `${Math.min(1, left.progress) * 100}%`,
                 height: 3,
                 borderRadius: 2,
-                backgroundColor: color,
+                // Green over half left, yellow half or less. Purple stays for things you tap.
+                backgroundColor: past ? colors.textTertiary : level === 'plenty' ? colors.positive : colors.cautionDot,
                 transitionProperty: 'width',
                 transitionDuration: 300,
               }}

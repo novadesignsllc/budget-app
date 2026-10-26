@@ -24,7 +24,7 @@ import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import { envelopeStatus, moneyLeftBar } from '@/utils/envelope-status';
+import { barLevel, envelopeStatus, moneyLeftBar } from '@/utils/envelope-status';
 import { haptic } from '@/utils/haptics';
 
 export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: MonthKey }) {
@@ -87,7 +87,14 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const status = envelopeStatus(envelope, row, month, debt);
   const past = month < currentMonth();
   const left = moneyLeftBar(row, envelope);
-  const barColor = past ? colors.textTertiary : groupColor(envelope.group);
+  const level = barLevel(row);
+  const barColor = past
+    ? colors.textTertiary
+    : level === 'over'
+      ? colors.negativeStrong
+      : level === 'plenty'
+        ? colors.positive
+        : colors.cautionDot;
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
   // The last three months; older ones load on request so the page opens quickly.
@@ -122,8 +129,8 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
               </Text>
             </View>
             <ProgressBar
-              value={row.available < 0 ? 1 : left.progress}
-              color={row.available < 0 ? (past ? colors.textSecondary : colors.negativeStrong) : barColor}
+              value={level === 'over' ? 1 : left.progress}
+              color={barColor}
               height={3}
             />
           </View>

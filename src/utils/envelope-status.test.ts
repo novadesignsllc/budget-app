@@ -3,7 +3,7 @@ import { describe, expect, it } from '@jest/globals';
 import type { EnvelopeMonth } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 
-import { moneyLeftBar, targetBar } from './envelope-status';
+import { barLevel, moneyLeftBar, targetBar } from './envelope-status';
 
 const MONTH = '2026-10';
 const groceries: Envelope = { id: 'g', name: 'Groceries', group: 'Daily', order: 0, targets: { [MONTH]: 40000 } };
@@ -47,5 +47,15 @@ describe('moneyLeftBar', () => {
     const bill = { recurringId: 'r1' };
     expect(moneyLeftBar(row({ available: 0, spent: 15000 }), bill).red).toBe(false);
     expect(moneyLeftBar(row({ available: -500, spent: 15500 }), bill).red).toBe(true);
+  });
+});
+
+describe('barLevel', () => {
+  it('green over half left, yellow at half or less, grey at zero, red over', () => {
+    expect(barLevel(row({ available: 30000, spent: 10000 }))).toBe('plenty');
+    expect(barLevel(row({ available: 20000, spent: 20000 }))).toBe('low');
+    expect(barLevel(row({ available: 5000, spent: 35000 }))).toBe('low');
+    expect(barLevel(row({ available: 0, spent: 40000 }))).toBe('empty');
+    expect(barLevel(row({ available: -500, spent: 40500 }))).toBe('over');
   });
 });

@@ -31,6 +31,17 @@ export function moneyLeftBar(
 }
 
 /**
+ * The bar's color from how much of the month's money is left: green over half, yellow
+ * half or less, grey at zero (nothing to draw), red when overspent.
+ */
+export type BarLevel = 'plenty' | 'low' | 'empty' | 'over';
+export function barLevel(row: Pick<EnvelopeMonth, 'available' | 'spent'>): BarLevel {
+  if (row.available < 0) return 'over';
+  if (row.available < 100) return 'empty';
+  return moneyLeftBar(row).progress > 0.5 ? 'plenty' : 'low';
+}
+
+/**
  * Where an envelope with a target stands, shown as its row's tint: yellow while short of
  * the target, green once funded, grey when funded and spent to zero, red when overspent.
  * `null` means no target, so the row stays white.

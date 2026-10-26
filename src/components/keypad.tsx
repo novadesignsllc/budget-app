@@ -54,6 +54,8 @@ type Session = {
   actions?: KeypadAction[];
   /** A line above the keys saying what the number is for. */
   title?: string;
+  /** Show the amount being typed on the pad itself, for numbers that have no field on screen. */
+  showValue?: boolean;
 };
 
 const useKeypadStore = create<{ session: Session | null }>()(() => ({ session: null }));
@@ -237,17 +239,31 @@ function KeypadPanel({ session }: { session: Session }) {
       {/* What the number is for on the left, and the answer while doing math on the right. */}
       <View
         style={{
-          height: 18,
+          height: session.showValue ? 30 : 18,
           paddingHorizontal: spacing.md,
           flexDirection: 'row',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: spacing.sm,
         }}
       >
         <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
           {session.title ?? ''}
         </Text>
-        {math ? (
+        {session.showValue ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text variant="section" style={{ fontVariant: ['tabular-nums'] }} numberOfLines={1}>
+              {keypadDisplay(session.expr, session.mode, session.unit) || keypadDisplay('0', session.mode, session.unit)}
+              {math ? (
+                <Text variant="footnote" weight="600" tone="accent">
+                  {'  = '}
+                  {keypadDisplay(press(session.expr, '=', session.mode), session.mode, session.unit)}
+                </Text>
+              ) : null}
+            </Text>
+            <Caret height={18} />
+          </View>
+        ) : math ? (
           <Text variant="footnote" weight="600" tone="accent" style={{ fontVariant: ['tabular-nums'] }}>
             = {keypadDisplay(press(session.expr, '=', session.mode), session.mode, session.unit)}
           </Text>
@@ -343,6 +359,7 @@ export function useKeypadField({
   onClose,
   actions,
   title,
+  showValue,
   ref,
   autoFocus,
 }: {
@@ -357,6 +374,7 @@ export function useKeypadField({
   onClose?: (text: string) => void;
   actions?: KeypadAction[];
   title?: string;
+  showValue?: boolean;
   ref?: React.Ref<KeypadFieldHandle>;
   autoFocus?: boolean;
 }) {
@@ -389,6 +407,7 @@ export function useKeypadField({
         onClose: (t) => latest.current.onClose?.(t),
         actions,
         title,
+        showValue,
       },
     });
   };

@@ -8,7 +8,8 @@ import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
-import { Caret, closeKeypad, useKeypadField } from '@/components/keypad';
+import { closeKeypad, useKeypadField } from '@/components/keypad';
+import { ActionMenu } from '@/components/action-menu';
 import { debtTarget } from '@/domain/debt';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -471,8 +472,8 @@ export function Budget() {
 
 /**
  * The Left amount: a colored pill when the envelope has a target, a plain number when it
- * doesn't. Tapping it moves money back to Ready to assign: the pad opens on everything
- * that's left, and Done sends it back (or type less).
+ * doesn't. It's never typed into. Tapping it offers to move money back to Ready to
+ * assign: all of it, or an amount typed on the number pad.
  */
 function LeftCell({
   row,
@@ -495,20 +496,11 @@ function LeftCell({
   const max = floorDollars(row.available);
   const movable = !past && max >= 100;
   const pad = useKeypadField({
-    value: String(max / 100),
+    value: '',
     mode: 'whole',
     live: false,
-    title: 'Move back to Ready to assign',
-    actions: [
-      {
-        label: `Move all ${formatDollars(max)}`,
-        icon: { sf: 'arrow.uturn.backward', md: 'undo' },
-        onPress: () => {
-          closeKeypad();
-          onMoveBack(max);
-        },
-      },
-    ],
+    title: `Move back to Ready to assign (up to ${formatDollars(max)})`,
+    showValue: true,
     onDone: (cents) => {
       const amount = Math.min(max, Math.max(0, cents ?? 0));
       if (amount > 0) onMoveBack(amount);
@@ -518,43 +510,51 @@ function LeftCell({
   const pill = bar && !past ? LEFT_PILL[bar.state](colors) : null;
   return (
     <View ref={cell} collapsable={false} style={{ width: COL, marginLeft: COL_GAP, alignItems: 'flex-end' }}>
-      <Pressable
-        accessibilityRole="button"
+      <ActionMenu
+        items={[
+          {
+            label: 'Move all back',
+            detail: formatDollars(max),
+            icon: { sf: 'arrow.uturn.backward', md: 'undo' },
+            onPress: () => onMoveBack(max),
+          },
+          {
+            label: 'Move a custom amount',
+            icon: { sf: 'number', md: 'dialpad' },
+            onPress: () => {
+              pad.open();
+              onEditingChange(true, cell.current);
+            },
+          },
+        ]}
         accessibilityLabel={`${formatDollars(row.available)} left. Move back to Ready to assign`}
         disabled={!movable}
         hitSlop={8}
-        onPress={() => {
-          pad.open();
-          onEditingChange(true, cell.current);
-        }}
-        style={{
+        style={({ pressed, open }) => ({
           // The same box as the Assigned chip: same width in every row, digits on the column edge.
           width: COL + 6,
           height: 24,
           marginRight: -6,
-          paddingHorizontal: 4.5,
+          paddingHorizontal: 6,
           borderRadius: 6,
-          borderWidth: 1.5,
-          borderColor: pad.active ? colors.accent : 'transparent',
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          backgroundColor: pad.active ? colors.surface : (pill?.bg ?? 'transparent'),
-        }}
+          justifyContent: 'center',
+          backgroundColor: pill?.bg ?? (open || pressed ? colors.control : 'transparent'),
+          opacity: pressed && pill ? 0.7 : 1,
+        })}
       >
         <Text
           variant="row"
           weight="600"
-          tone={pill || pad.active ? undefined : tone}
-          color={pad.active ? colors.text : pill?.fg}
-          style={{ fontVariant: ['tabular-nums'], flexShrink: 1 }}
+          align="right"
+          tone={pill ? undefined : tone}
+          color={pill?.fg}
+          style={{ fontVariant: ['tabular-nums'] }}
           numberOfLines={1}
           adjustsFontSizeToFit
         >
-          {pad.active ? pad.text || '$0' : formatDollars(row.available)}
+          {formatDollars(row.available)}
         </Text>
-        {pad.active && <Caret height={15} />}
-      </Pressable>
+      </ActionMenu>
     </View>
   );
 }

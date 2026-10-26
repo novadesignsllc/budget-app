@@ -7,7 +7,8 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Card, CardHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
-import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
+import { InlineAmount } from '@/components/inline-amount';
+import { closeKeypad } from '@/components/keypad';
 import { debtTarget } from '@/domain/debt';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -41,8 +42,12 @@ const STARTERS: { name: string; group: string }[] = [
   { name: 'Gifts', group: 'Savings' },
 ];
 
-/** Assigned, Spent and Left share one width, so the columns always line up. Names get "…" first. */
-const COL = 70;
+/**
+ * Assigned, Spent and Left share one width and one gap, so every row and section lines up
+ * and a four-digit amount like $5,082 fits with room to spare. Names get "…" first.
+ */
+const COL = 72;
+const COL_GAP = 6;
 const EMPTY: EnvelopeMonth = {
   assigned: 0,
   activity: 0,
@@ -340,8 +345,14 @@ export function Budget() {
             <Text variant="label" tone="textTertiary" style={{ flex: 1 }}>
               ENVELOPE
             </Text>
-            {['ASSIGNED', 'SPENT', 'LEFT'].map((l) => (
-              <Text key={l} variant="label" tone="textTertiary" align="right" style={{ width: COL }}>
+            {['ASSIGNED', 'SPENT', 'LEFT'].map((l, i) => (
+              <Text
+                key={l}
+                variant="label"
+                tone="textTertiary"
+                align="right"
+                style={{ width: COL, marginLeft: i ? COL_GAP : 0 }}
+              >
                 {l}
               </Text>
             ))}
@@ -400,6 +411,7 @@ export function Budget() {
                       color={hue}
                       overspent={status.overspent}
                       bar={targetBar(e, row, month, debtFor(e))}
+                      need={past ? 0 : status.need}
                       last={i === g.items.length - 1}
                       past={past}
                       onEditingChange={(on, view) => {
@@ -436,7 +448,6 @@ export function Budget() {
           </Card>
         )}
       </Screen>
-      <AmountKeyboardBar />
 
       <ScreenActions>
         <Dropdown variant="compact" value={month} options={monthOptions} onChange={setMonth} label="Month" />
@@ -472,6 +483,7 @@ function EnvelopeRow({
   color,
   overspent,
   bar,
+  need,
   last,
   past,
   onEditingChange,
@@ -484,6 +496,8 @@ function EnvelopeRow({
   overspent: boolean;
   /** Set when the envelope has a target: the bar shows how funded it is. */
   bar: TargetBar | null;
+  /** What Fill target on the number pad adds. */
+  need: number;
   last: boolean;
   past: boolean;
   onEditingChange: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
@@ -515,8 +529,8 @@ function EnvelopeRow({
             style={({ pressed }) => ({
               flex: 1,
               minWidth: 0,
-              // Room between a long name's "…" and the Assigned chip, which reaches 6pt into this side.
-              paddingRight: spacing.md,
+              // Room between a long name's "…" and the Assigned chip.
+              paddingRight: spacing.sm,
               opacity: pressed ? 0.5 : 1,
             })}
           >
@@ -543,21 +557,44 @@ function EnvelopeRow({
             muted={past}
             onEditingChange={onEditingChange}
             onCommit={onAssign}
+            actions={[
+              {
+                label: need > 0 ? `Fill ${formatDollars(need)}` : 'Target met',
+                icon: { sf: 'bolt.fill', md: 'bolt' },
+                disabled: need <= 0,
+                onPress: () => {
+                  closeKeypad();
+                  onAssign(row.assigned + need);
+                },
+              },
+              {
+                label: 'Details',
+                icon: { sf: 'ellipsis', md: 'more_horiz' },
+                onPress: () => {
+                  closeKeypad();
+                  onPress();
+                },
+              },
+            ]}
           />
-          <Text variant="row" tone="textSecondary" align="right" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
+          <Text
+            variant="row"
+            tone="textSecondary"
+            align="right"
+            numberOfLines={1}
+            style={{ width: COL, marginLeft: COL_GAP, fontVariant: ['tabular-nums'] }}
+          >
             {formatDollars(row.spent, 'up')}
           </Text>
           {bar && !past ? (
-            <View style={{ width: COL, alignItems: 'flex-end' }}>
+            <View style={{ width: COL, marginLeft: COL_GAP, alignItems: 'flex-end' }}>
               <View
                 style={{
-                  // A little narrower than the column, so it never touches the Spent number;
-                  // its digits still end on the column edge like the rows without a pill.
-                  maxWidth: COL - 2,
-                  minWidth: 44,
+                  // The same box as the Assigned chip: same width in every row, digits on the column edge.
+                  width: COL + 6,
                   height: 24,
-                  marginRight: -4,
-                  paddingHorizontal: 8,
+                  marginRight: -6,
+                  paddingHorizontal: 6,
                   borderRadius: 6,
                   justifyContent: 'center',
                   backgroundColor: LEFT_PILL[bar.state](colors).bg,
@@ -581,7 +618,8 @@ function EnvelopeRow({
               weight="600"
               tone={leftTone}
               align="right"
-              style={{ width: COL, fontVariant: ['tabular-nums'] }}
+              numberOfLines={1}
+              style={{ width: COL, marginLeft: COL_GAP, fontVariant: ['tabular-nums'] }}
             >
               {formatDollars(row.available)}
             </Text>

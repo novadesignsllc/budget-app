@@ -6,6 +6,7 @@ import { Card } from '@/components/card';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { ActionList, AmountHero, FlagRow, FormCard, FormRow, InputRow } from '@/components/form';
+import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
@@ -46,7 +47,7 @@ export function EditTransaction({ id }: { id: string }) {
   const [memo, setMemo] = useState(t?.memo ?? '');
   const [flag, setFlagState] = useState<FlagColor | null>(t?.flagged ? (t.flagColor ?? 'red') : null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const amountRef = useRef<KeypadFieldHandle>(null);
   const noteRef = useRef<React.ComponentRef<typeof TextInput>>(null);
 
   // Envelopes listed in the Budget's group order.

@@ -1,8 +1,8 @@
 import { useRef, useState } from 'react';
-import { TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
-import { cleanDollars, FormCard, InputRow } from '@/components/form';
+import { AmountRow, FormCard, InputRow } from '@/components/form';
+import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
@@ -30,7 +30,7 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   // Only set once the user picks one; until then the name decides.
   const [emoji, setEmoji] = useState<string>();
   const shown = envelopeEmoji({ name, emoji });
-  const targetRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const targetRef = useRef<KeypadFieldHandle>(null);
   const duplicate = envelopes.some((e) => e.name.toLowerCase() === name.trim().toLowerCase() && !e.hidden);
 
   return (
@@ -51,15 +51,13 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
         />
         <GroupPicker group={group} onGroup={setGroup} />
         <TargetKindRow value={kind} onChange={setPickedKind} />
-        <InputRow
+        <AmountRow
           ref={targetRef}
           label={targetLabel(kind)}
-          value={target ? `$${Number(target).toLocaleString('en-US')}` : ''}
-          onChangeText={(v) => setTarget(cleanDollars(v))}
+          value={target}
+          onChange={setTarget}
+          mode="whole"
           placeholder="$0"
-          keyboardType="number-pad"
-          inputMode="numeric"
-          returnKeyType="done"
         />
       </FormCard>
       <Button

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
-import { cleanAmount, cleanDollars, showAmount } from '@/components/form';
+import { cleanAmount, cleanDollars, showAmount } from '@/domain/amount-text';
 import { comparePlan, debtTarget, project } from '@/domain/debt';
 import { computeLedger } from '@/domain/ledger';
 import { addMonthKey, computeMonth, monthOf } from '@/domain/months';

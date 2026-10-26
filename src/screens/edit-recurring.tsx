@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { Alert, TextInput, View } from 'react-native';
+import { Alert, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { ActionList, AmountHero, FormCard, InputRow } from '@/components/form';
+import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { spacing } from '@/theme';
@@ -37,7 +38,7 @@ export function EditRecurring({ id }: { id?: string }) {
   const [accountId, setAccountId] = useState(existing?.accountId ?? cash[0]?.id);
   const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? 'monthly');
   const [nextDue, setNextDue] = useState(existing?.nextDue ?? today());
-  const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const amountRef = useRef<KeypadFieldHandle>(null);
 
   const amount = parseMoney(amountText);
   const deleted = !!id && !existing;

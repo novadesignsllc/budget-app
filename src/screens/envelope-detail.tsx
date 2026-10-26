@@ -6,7 +6,7 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { AmountKeyboardBar, InlineAmount } from '@/components/inline-amount';
+import { InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
 import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
@@ -210,7 +210,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
           <Button title="Show older months" variant="ghost" onPress={() => setShowAll(true)} />
         )}
       </Screen>
-      <AmountKeyboardBar />
 
       {!envelope.debtAccountId && (
         <ScreenActions>

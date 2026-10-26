@@ -1,12 +1,16 @@
-import { Children, isValidElement } from 'react';
-import { Platform, Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import { Children, isValidElement, useRef } from 'react';
+import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
 
+import { showAmount } from '@/domain/amount-text';
+import type { KeypadMode, KeypadUnit } from '@/domain/keypad';
 import { FLAG_COLORS, type FlagColor } from '@/domain/types';
 import { flagHues, radius, spacing, type as typeScale, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
 import { Card } from './card';
 import { Icon } from './icon';
+import { Caret, useKeypadField, type KeypadFieldHandle } from './keypad';
+import { useSheetReveal } from './screen';
 import { Text } from './text';
 
 /** Every row in a sheet's card is this tall: inputs, dropdowns, dates, the flag picker. */
@@ -86,75 +90,39 @@ export function InputRow({
   );
 }
 
+export { cleanAmount, cleanDollars, showAmount } from '@/domain/amount-text';
+
 /**
- * Money is typed the way YNAB does it: digits fill in from the right, so 4 is $0.04 and
- * 4, 3, 5, 7 is $43.57. Returns plain text like "43.57" (or "" when empty). With
- * `negative`, typing a minus flips the sign.
+ * The big amount at the top of a sheet. Editable when given `onChangeText`: tapping it
+ * brings up the number pad (with + and − for quick math).
  */
-export function cleanAmount(v: string, negative = false) {
-  const minus = negative && (v.match(/-/g)?.length ?? 0) % 2 === 1 ? '-' : '';
-  const digits = v.replace(/\D/g, '').replace(/^0+/, '').slice(0, 9);
-  // A lone minus waits for digits, so an overdrawn balance can be typed minus-first.
-  if (!digits) return minus;
-  return minus + (parseInt(digits, 10) / 100).toFixed(2);
-}
-
-/** Whole dollars only, for budget amounts like targets: "600". */
-export function cleanDollars(v: string) {
-  return v.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 7);
-}
-
-/** "43.57" as "$43.57", "-12.00" as "-$12.00", with thousands commas. */
-export function showAmount(v: string) {
-  if (v === '-') return '-$';
-  const negative = v.startsWith('-');
-  const [whole, cents] = (negative ? v.slice(1) : v).split('.');
-  const text = `$${Number(whole || 0).toLocaleString('en-US')}${cents !== undefined ? `.${cents}` : ''}`;
-  return negative ? `-${text}` : text;
-}
-
-/** Props for a TextInput that takes money typed from the right. */
-export function amountInputProps(value: string, onChange: (v: string) => void, negative = false) {
-  return {
-    value: value ? showAmount(value) : '',
-    onChangeText: (v: string) => {
-      const next = cleanAmount(v, negative);
-      // Typing 0 into an empty field means $0.00 (a paid-off card, an empty account).
-      if (!next.replace('-', '') && value === '' && /0/.test(v)) onChange('0.00');
-      else onChange(next);
-    },
-    // inputMode wins over keyboardType and its number pad has no minus, so leave it out when one is needed.
-    ...(negative
-      ? { keyboardType: Platform.select({ ios: 'numbers-and-punctuation', default: 'numeric' } as const) }
-      : { keyboardType: 'number-pad' as const, inputMode: 'numeric' as const }),
-    // Digits always land at the end, so keep the caret there.
-    selection: value ? { start: showAmount(value).length, end: showAmount(value).length } : undefined,
-  };
-}
-
-/** The big amount at the top of a sheet. Editable when given `onChangeText`. */
 export function AmountHero({
   value,
   onChangeText,
   caption,
   tone,
   allowNegative = false,
+  placeholder = '$0.00',
+  autoFocus,
   ref,
-  ...props
-}: Omit<TextInputProps, 'value' | 'onChangeText'> & {
+}: {
   /** Plain amount text, like "85.30". */
   value: string;
   onChangeText?: (v: string) => void;
-  /** A small line above the amount, like the payee in quick-add. */
+  /** A small line above the amount. */
   caption?: string;
   tone?: 'negative' | 'positive';
   /** For balances that can be below zero. */
   allowNegative?: boolean;
-  ref?: React.Ref<React.ComponentRef<typeof TextInput>>;
+  placeholder?: string;
+  autoFocus?: boolean;
+  ref?: React.Ref<KeypadFieldHandle>;
 }) {
   const colors = useColors();
+  const pad = useKeypadField({ value, onChange: onChangeText, negative: allowNegative, ref, autoFocus: autoFocus && !!onChangeText });
   const color = tone === 'negative' ? colors.negative : tone === 'positive' ? colors.positive : colors.text;
-  const style = [typeScale.display, { fontSize: 36, lineHeight: 44, letterSpacing: -0.8, color, textAlign: 'center' as const }];
+  const style = [typeScale.display, { fontSize: 36, lineHeight: 44, letterSpacing: -0.8, color, fontVariant: ['tabular-nums' as const] }];
+  const shown = onChangeText ? pad.text : value ? showAmount(value) : '';
   return (
     <View style={{ alignItems: 'center', gap: 2, paddingVertical: 2 }}>
       {caption ? (
@@ -162,20 +130,78 @@ export function AmountHero({
           {caption}
         </Text>
       ) : null}
-      {onChangeText ? (
-        <TextInput
-          ref={ref}
-          {...amountInputProps(value, onChangeText, allowNegative)}
-          placeholder="$0.00"
-          placeholderTextColor={colors.placeholder}
-          accessibilityLabel="Amount"
-          {...props}
-          style={[style, { alignSelf: 'stretch', height: 48, outlineWidth: 0 }]}
-        />
-      ) : (
-        <Text style={[style, !value && { color: colors.placeholder }]}>{value ? showAmount(value) : '$0.00'}</Text>
-      )}
+      <Pressable
+        accessibilityRole={onChangeText ? 'button' : 'text'}
+        accessibilityLabel={`Amount, ${shown || 'empty'}`}
+        disabled={!onChangeText}
+        onPress={pad.open}
+        style={{ alignSelf: 'stretch', height: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}
+      >
+        <Text style={[style, !shown && { color: colors.placeholder }]} numberOfLines={1} adjustsFontSizeToFit>
+          {shown || placeholder}
+        </Text>
+        {pad.active && <Caret height={34} />}
+      </Pressable>
     </View>
+  );
+}
+
+/**
+ * A number in a form row: label on the left, the value on the right, typed on the number
+ * pad. `onCommit` gets the final text when the pad closes for it (to save right away, like the debt page).
+ */
+export function AmountRow({
+  label,
+  value,
+  onChange,
+  onCommit,
+  placeholder = '$0.00',
+  mode = 'cents',
+  unit = 'money',
+  negative = false,
+  ref,
+}: {
+  label: string;
+  value: string;
+  onChange: (text: string) => void;
+  onCommit?: (text: string) => void;
+  placeholder?: string;
+  mode?: KeypadMode;
+  unit?: KeypadUnit;
+  negative?: boolean;
+  ref?: React.Ref<KeypadFieldHandle>;
+}) {
+  const colors = useColors();
+  const reveal = useSheetReveal();
+  const row = useRef<React.ComponentRef<typeof View>>(null);
+  const pad = useKeypadField({ value, onChange, mode, unit, negative, onClose: onCommit, ref });
+  return (
+    <Pressable
+      ref={row}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}, ${pad.text || 'empty'}`}
+      onPress={() => {
+        pad.open();
+        // Once the pad is up, scroll so this row sits above it.
+        setTimeout(() => reveal(row.current), 120);
+      }}
+      style={({ pressed }) => ({ backgroundColor: pad.active ? colors.accentSoft : pressed ? colors.control : colors.surface })}
+    >
+      <FormRow label={label}>
+        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text
+            variant="body"
+            weight="500"
+            color={pad.text ? colors.text : colors.placeholder}
+            style={{ fontVariant: ['tabular-nums'] }}
+            numberOfLines={1}
+          >
+            {pad.text || placeholder}
+          </Text>
+          {pad.active && <Caret height={18} />}
+        </View>
+      </FormRow>
+    </Pressable>
   );
 }
 

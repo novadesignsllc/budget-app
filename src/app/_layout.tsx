@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { KeypadHost } from '@/components/keypad';
 import { SyncIndicator } from '@/components/sync-indicator';
 import { ToastHost } from '@/components/toast';
 import { useSession, useSessionBootstrap } from '@/sync/session';
@@ -57,28 +58,30 @@ export default function RootLayout() {
           },
         }}
       >
-        <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
-          <Stack.Protected guard={status === 'signedIn'}>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="add" options={sheetStyle} />
-            <Stack.Screen name="transaction/[id]" options={sheetStyle} />
-            <Stack.Screen name="new-account" options={sheetStyle} />
-            <Stack.Screen name="reconcile" options={sheetStyle} />
-            <Stack.Screen name="fix-balance" options={sheetStyle} />
-            <Stack.Screen name="edit-account" options={sheetStyle} />
-            <Stack.Screen name="reset-account" options={sheetStyle} />
-            <Stack.Screen name="delete-account" options={sheetStyle} />
-            <Stack.Screen name="envelope/[id]" options={sheetStyle} />
-            <Stack.Screen name="new-envelope" options={sheetStyle} />
-            <Stack.Screen name="transfer" options={sheetStyle} />
-            <Stack.Screen name="statement" options={sheetStyle} />
-            <Stack.Screen name="edit-recurring" options={sheetStyle} />
-            <Stack.Screen name="debt-plan" options={sheetStyle} />
-          </Stack.Protected>
-          <Stack.Protected guard={status !== 'signedIn'}>
-            <Stack.Screen name="sign-in" options={{ headerShown: false }} />
-          </Stack.Protected>
-        </Stack>
+        <KeypadHost>
+          <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
+            <Stack.Protected guard={status === 'signedIn'}>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="add" options={sheetStyle} />
+              <Stack.Screen name="transaction/[id]" options={sheetStyle} />
+              <Stack.Screen name="new-account" options={sheetStyle} />
+              <Stack.Screen name="reconcile" options={sheetStyle} />
+              <Stack.Screen name="fix-balance" options={sheetStyle} />
+              <Stack.Screen name="edit-account" options={sheetStyle} />
+              <Stack.Screen name="reset-account" options={sheetStyle} />
+              <Stack.Screen name="delete-account" options={sheetStyle} />
+              <Stack.Screen name="envelope/[id]" options={sheetStyle} />
+              <Stack.Screen name="new-envelope" options={sheetStyle} />
+              <Stack.Screen name="transfer" options={sheetStyle} />
+              <Stack.Screen name="statement" options={sheetStyle} />
+              <Stack.Screen name="edit-recurring" options={sheetStyle} />
+              <Stack.Screen name="debt-plan" options={sheetStyle} />
+            </Stack.Protected>
+            <Stack.Protected guard={status !== 'signedIn'}>
+              <Stack.Screen name="sign-in" options={{ headerShown: false }} />
+            </Stack.Protected>
+          </Stack>
+        </KeypadHost>
         <SyncIndicator />
         <ToastHost />
       </ThemeProvider>

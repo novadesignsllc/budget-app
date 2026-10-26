@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
-import { Pressable, Text as RNText, TextInput, View } from 'react-native';
+import { Pressable, Text as RNText, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
-import { ActionList, cleanDollars, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
+import { ActionList, AmountRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
+import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
@@ -106,7 +107,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const ledger = useLedger();
   const [name, setName] = useState(envelope?.name ?? '');
   const [group, setGroup] = useState<string>(fixGroup(envelope?.group ?? 'Daily'));
-  const targetRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const targetRef = useRef<KeypadFieldHandle>(null);
   const current = envelope ? targetFor(envelope, month) : null;
   const [target, setTarget] = useState(current ? String(Math.ceil(current / 100)) : '');
   const [confirmHide, setConfirmHide] = useState(false);
@@ -157,15 +158,13 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
         {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
         {!fixed && <TargetKindRow value={kind} onChange={setKind} />}
         {!isDebt && (
-          <InputRow
+          <AmountRow
             ref={targetRef}
             label={targetLabel(fixed ? 'spending' : kind)}
-            value={target ? `$${Number(target).toLocaleString('en-US')}` : ''}
-            onChangeText={(v) => setTarget(cleanDollars(v))}
+            value={target}
+            onChange={setTarget}
+            mode="whole"
             placeholder="$0"
-            keyboardType="number-pad"
-            inputMode="numeric"
-            returnKeyType="done"
           />
         )}
       </FormCard>

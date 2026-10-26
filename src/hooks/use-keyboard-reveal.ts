@@ -1,8 +1,9 @@
 import { useEffect, useRef } from 'react';
-import { Keyboard, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView, type View } from 'react-native';
+import { Dimensions, Keyboard, type NativeScrollEvent, type NativeSyntheticEvent, type ScrollView, type View } from 'react-native';
 
-// Room for the Cancel / Done bar that sits on the keyboard, plus a little air.
-const GAP = 96;
+import { currentKeyboardHeight } from '@/utils/keyboard';
+
+const GAP = 24;
 
 /**
  * Keeps a row you're typing in just above the keyboard, even when the list is short.
@@ -40,9 +41,12 @@ export function useKeyboardReveal() {
     },
     watch(view: React.ComponentRef<typeof View> | null) {
       target.current = view;
-      const metrics = typeof Keyboard.metrics === 'function' ? Keyboard.metrics() : undefined;
-      // Already open (moving from one row to the next): scroll right away.
-      if (view && metrics) setTimeout(() => reveal(metrics.screenY), 60);
+      if (!view) return;
+      // The app's number pad (or the keyboard) is up, or about to be: scroll once it has its height.
+      setTimeout(() => {
+        const height = currentKeyboardHeight();
+        if (height) reveal(Dimensions.get('window').height - height);
+      }, 120);
     },
   };
 }

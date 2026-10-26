@@ -43,9 +43,7 @@ export function DebtPlan() {
         value={text}
         onChangeText={setText}
         placeholder={formatMoney(minimums)}
-        selectTextOnFocus
         autoFocus
-        onSubmitEditing={save}
         tone={below ? 'negative' : undefined}
       />
       <FormCard>

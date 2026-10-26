@@ -6,7 +6,11 @@ import { keyboardTopIn } from '@/utils/keyboard';
 import { gutter, maxContentWidth, spacing } from '@/theme';
 
 import { useDock } from './dock';
+import { KeypadHost, useKeypadOpen } from './keypad';
 import { MenuHost } from './menu-host';
+
+/** Room under the content while the number pad is up, so the last fields can scroll above it. */
+const KEYPAD_ROOM = 360;
 
 /** The scroll container for tab screens: gutter, card rhythm, room for the action bar. */
 export function Screen({
@@ -17,6 +21,7 @@ export function Screen({
   ref?: React.Ref<React.ComponentRef<typeof ScrollView>>;
 }) {
   const { contentBottom } = useDock();
+  const keypadOpen = useKeypadOpen();
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
@@ -38,6 +43,7 @@ export function Screen({
       {...props}
     >
       {children}
+      {keypadOpen && <View style={{ height: KEYPAD_ROOM }} />}
     </ScrollView>
   );
 }
@@ -58,6 +64,7 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const frameRef = useRef<React.ComponentRef<typeof View>>(null);
   const offset = useRef(0);
+  const keypadOpen = useKeypadOpen();
   // Measured against the sheet itself, so the sheet's own offset on screen cancels out.
   const reveal: Reveal = (view) =>
     frameRef.current?.measureInWindow((_sx: number, sheetY: number, _sw: number, sheetH: number) =>
@@ -69,30 +76,33 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
   return (
     <SheetReveal value={reveal}>
       <View ref={frameRef} collapsable={false} style={{ flex: 1 }}>
-        <MenuHost>
-          <ScrollView
-            ref={scrollRef}
-            keyboardShouldPersistTaps="handled"
-            automaticallyAdjustKeyboardInsets
-            scrollEventThrottle={32}
-            onScroll={(e) => {
-              offset.current = e.nativeEvent.contentOffset.y;
-              onScroll?.(e);
-            }}
-            contentContainerStyle={[
-              {
-                padding: gutter,
-                paddingTop: spacing.lg,
-                gap: spacing.md + 2,
-                paddingBottom: spacing.xxxl,
-              },
-              contentContainerStyle,
-            ]}
-            {...props}
-          >
-            {children}
-          </ScrollView>
-        </MenuHost>
+        <KeypadHost>
+          <MenuHost>
+            <ScrollView
+              ref={scrollRef}
+              keyboardShouldPersistTaps="handled"
+              automaticallyAdjustKeyboardInsets
+              scrollEventThrottle={32}
+              onScroll={(e) => {
+                offset.current = e.nativeEvent.contentOffset.y;
+                onScroll?.(e);
+              }}
+              contentContainerStyle={[
+                {
+                  padding: gutter,
+                  paddingTop: spacing.lg,
+                  gap: spacing.md + 2,
+                  paddingBottom: spacing.xxxl,
+                },
+                contentContainerStyle,
+              ]}
+              {...props}
+            >
+              {children}
+              {keypadOpen && <View style={{ height: KEYPAD_ROOM }} />}
+            </ScrollView>
+          </MenuHost>
+        </KeypadHost>
       </View>
     </SheetReveal>
   );

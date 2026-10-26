@@ -20,8 +20,15 @@ for (const name of ['keyboardWillHide', 'keyboardDidHide'] as const) {
   Keyboard.addListener(name, () => (keyboardHeight = 0));
 }
 
-/** How tall the keyboard is right now; 0 when it's down. */
+// The app's own number pad, which covers the bottom of the screen just like the keyboard.
+let keypadHeight = 0;
+export function setKeypadHeight(height: number) {
+  keypadHeight = height;
+}
+
+/** How tall the keyboard (or the app's number pad) is right now; 0 when neither is up. */
 export function currentKeyboardHeight(): number {
+  if (keypadHeight > 0) return keypadHeight;
   if (keyboardHeight > 0) return keyboardHeight;
   if (!Keyboard.isVisible()) return 0;
   const metrics = typeof Keyboard.metrics === 'function' ? Keyboard.metrics() : undefined;

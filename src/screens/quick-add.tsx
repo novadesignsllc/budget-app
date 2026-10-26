@@ -1,13 +1,14 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
 import Animated, { useAnimatedStyle, useReducedMotion, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DateRow, formatPickedDate } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
-import { amountInputProps, FlagRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
+import { FlagRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
+import { Caret, useKeypadField, type KeypadFieldHandle } from '@/components/keypad';
 import { Icon } from '@/components/icon';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
@@ -46,11 +47,13 @@ function Bar({ volume, weight, color }: { volume: SharedValue<number>; weight: n
 export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const colors = useColors();
   const nameRef = useRef<React.ComponentRef<typeof TextInput>>(null);
-  const amountRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const amountRef = useRef<KeypadFieldHandle>(null);
   // What dictation heard, in voice mode. Typing uses the two fields instead.
   const [text, setText] = useState('');
   const [payee, setPayee] = useState('');
   const [amountText, setAmountText] = useState('');
+  // The amount is typed on the app's number pad, with + and − for splitting or adding up a receipt.
+  const amountPad = useKeypadField({ value: amountText, onChange: setAmountText, ref: amountRef });
   const [mode, setMode] = useState<'voice' | 'type'>(voice ? 'voice' : 'type');
   const [override, setOverride] = useState<Override>({});
   const [note, setNote] = useState('');
@@ -457,29 +460,43 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             ]}
           />
           <View style={{ width: 1, height: 26, backgroundColor: colors.hairline }} />
-          <TextInput
-            ref={amountRef}
-            {...amountInputProps(amountText, setAmountText)}
-            placeholder="$0.00"
-            placeholderTextColor={colors.placeholder}
-            returnKeyType="done"
-            onSubmitEditing={() => save(parsed, override)}
-            accessibilityLabel="Amount"
-            style={[
-              typeScale.body,
-              {
-                width: 130,
-                height: 52,
-                paddingHorizontal: spacing.md,
-                textAlign: 'right',
-                fontSize: 17,
-                fontWeight: '600',
-                fontVariant: ['tabular-nums'],
-                color: r.isIncome ? colors.positive : r.isSlip ? colors.negative : colors.text,
-                outlineWidth: 0,
-              },
-            ]}
-          />
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Amount, ${amountPad.text || 'empty'}`}
+            onPress={amountPad.open}
+            style={{
+              width: 140,
+              height: 52,
+              paddingHorizontal: spacing.md,
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              backgroundColor: amountPad.active ? colors.accentSoft : 'transparent',
+            }}
+          >
+            <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
+              style={[
+                typeScale.body,
+                {
+                  fontSize: 17,
+                  fontWeight: '600',
+                  fontVariant: ['tabular-nums'],
+                  color: !amountPad.text
+                    ? colors.placeholder
+                    : r.isIncome
+                      ? colors.positive
+                      : r.isSlip
+                        ? colors.negative
+                        : colors.text,
+                },
+              ]}
+            >
+              {amountPad.text || '$0.00'}
+            </Text>
+            {amountPad.active && <Caret height={20} />}
+          </Pressable>
         </View>
       </FormCard>
 

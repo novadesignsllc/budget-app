@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import { Card } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
-import { amountInputProps, cleanAmount, cleanDollars, FormCard, InputRow } from '@/components/form';
+import { AmountRow, FormCard } from '@/components/form';
 import { LineChart } from '@/components/line-chart';
 import { Money } from '@/components/money';
 import { Text } from '@/components/text';
@@ -46,16 +46,16 @@ function DebtHeader({ id }: { id: string }) {
   const minimum = account.minPayment || estimateMinPayment(owed, account.apr ?? 0);
   const targetMode = account.paymentTarget ? 'custom' : 'minimum';
 
-  const commitDue = () => {
-    const n = due ? Number(due) : undefined;
+  const commitDue = (text: string) => {
+    const n = text ? Number(text) : undefined;
     if (n !== undefined && (!Number.isInteger(n) || n < 1 || n > 31)) {
       setDue(account.dueDay ? String(account.dueDay) : '');
       return;
     }
     updateAccount(id, { dueDay: n });
   };
-  const commitCustom = () => {
-    const dollars = Number(custom || 0);
+  const commitCustom = (text: string) => {
+    const dollars = Number(text || 0);
     updateAccount(id, { paymentTarget: dollars > 0 ? dollars * 100 : null });
   };
 
@@ -118,45 +118,38 @@ function DebtHeader({ id }: { id: string }) {
           ]}
         />
         {targetMode === 'custom' && (
-          <InputRow
+          <AmountRow
             label="Target"
-            value={custom ? `$${Number(custom).toLocaleString('en-US')}` : ''}
-            onChangeText={(v) => setCustom(cleanDollars(v))}
-            onBlur={commitCustom}
-            onSubmitEditing={commitCustom}
+            value={custom}
+            onChange={setCustom}
+            onCommit={commitCustom}
+            mode="whole"
             placeholder={formatDollars(debtTarget(account, owed), 'up')}
-            keyboardType="number-pad"
-            inputMode="numeric"
-            returnKeyType="done"
           />
         )}
-        <InputRow
+        <AmountRow
           label="Minimum payment"
-          {...amountInputProps(min, setMin)}
-          onBlur={() => updateAccount(id, { minPayment: parseMoney(min) ?? undefined })}
+          value={min}
+          onChange={setMin}
+          onCommit={(t) => updateAccount(id, { minPayment: parseMoney(t) ?? undefined })}
           placeholder="Estimated"
-          returnKeyType="done"
         />
-        <InputRow
+        <AmountRow
           label="Interest rate"
-          value={apr ? `${apr}%` : ''}
-          onChangeText={(v) => setApr(cleanAmount(v))}
-          selection={apr ? { start: apr.length, end: apr.length } : undefined}
-          onBlur={() => updateAccount(id, { apr: apr ? Math.round(parseFloat(apr) * 100) : undefined })}
+          value={apr}
+          onChange={setApr}
+          onCommit={(t) => updateAccount(id, { apr: t ? Math.round(parseFloat(t) * 100) : undefined })}
+          unit="percent"
           placeholder="24.99%"
-          keyboardType="number-pad"
-          inputMode="numeric"
-          returnKeyType="done"
         />
-        <InputRow
+        <AmountRow
           label="Due day"
           value={due}
-          onChangeText={(v) => setDue(v.replace(/\D/g, '').slice(0, 2))}
-          onBlur={commitDue}
+          onChange={setDue}
+          onCommit={commitDue}
+          mode="whole"
+          unit="number"
           placeholder="Not set"
-          keyboardType="number-pad"
-          inputMode="numeric"
-          returnKeyType="done"
         />
       </FormCard>
 

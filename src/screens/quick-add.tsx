@@ -8,7 +8,9 @@ import { Card } from '@/components/card';
 import { DateRow, formatPickedDate } from '@/components/date-picker';
 import { Dropdown } from '@/components/dropdown';
 import { FlagRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
+import { useIsDesktop } from '@/components/dock';
 import { Caret, useKeypadField, type KeypadFieldHandle } from '@/components/keypad';
+import { TypedAmount } from '@/components/typed-amount';
 import { Icon } from '@/components/icon';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
@@ -53,7 +55,13 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const [payee, setPayee] = useState('');
   const [amountText, setAmountText] = useState('');
   // The amount is typed on the app's number pad, with + and − for splitting or adding up a receipt.
-  const amountPad = useKeypadField({ value: amountText, onChange: setAmountText, ref: amountRef });
+  // A computer types the amount straight into the field; the phone uses the number pad.
+  const desktop = useIsDesktop();
+  const amountPad = useKeypadField({
+    value: amountText,
+    onChange: setAmountText,
+    ref: desktop ? undefined : amountRef,
+  });
   const [mode, setMode] = useState<'voice' | 'type'>(voice ? 'voice' : 'type');
   const [override, setOverride] = useState<Override>({});
   const [note, setNote] = useState('');
@@ -408,43 +416,65 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             ]}
           />
           <View style={{ width: 1, height: 26, backgroundColor: colors.hairline }} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Amount, ${amountPad.text || 'empty'}`}
-            onPress={amountPad.open}
-            style={{
-              width: 140,
-              height: 52,
-              paddingHorizontal: spacing.md,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'flex-end',
-              backgroundColor: amountPad.active ? colors.accentSoft : 'transparent',
-            }}
-          >
-            <Text
-              numberOfLines={1}
-              adjustsFontSizeToFit
+          {desktop ? (
+            <TypedAmount
+              ref={amountRef}
+              value={amountText}
+              onChange={setAmountText}
+              placeholder="$0.00"
+              accessibilityLabel="Amount"
               style={[
                 typeScale.body,
                 {
+                  width: 140,
+                  height: 52,
+                  paddingHorizontal: spacing.md,
+                  textAlign: 'right',
                   fontSize: 17,
                   fontWeight: '600',
-                  fontVariant: ['tabular-nums'],
-                  color: !amountPad.text
-                    ? colors.placeholder
-                    : r.isIncome
-                      ? colors.positive
-                      : r.isSlip
-                        ? colors.negative
-                        : colors.text,
+                  color: r.isIncome ? colors.positive : r.isSlip ? colors.negative : colors.text,
                 },
               ]}
+            />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Amount, ${amountPad.text || 'empty'}`}
+              onPress={amountPad.open}
+              style={{
+                width: 140,
+                height: 52,
+                paddingHorizontal: spacing.md,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                backgroundColor: amountPad.active ? colors.accentSoft : 'transparent',
+              }}
             >
-              {amountPad.text || '$0.00'}
-            </Text>
-            {amountPad.active && <Caret height={20} />}
-          </Pressable>
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                style={[
+                  typeScale.body,
+                  {
+                    fontSize: 17,
+                    fontWeight: '600',
+                    fontVariant: ['tabular-nums'],
+                    color: !amountPad.text
+                      ? colors.placeholder
+                      : r.isIncome
+                        ? colors.positive
+                        : r.isSlip
+                          ? colors.negative
+                          : colors.text,
+                  },
+                ]}
+              >
+                {amountPad.text || '$0.00'}
+              </Text>
+              {amountPad.active && <Caret height={20} />}
+            </Pressable>
+          )}
         </View>
       </FormCard>
 

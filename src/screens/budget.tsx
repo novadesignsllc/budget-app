@@ -482,9 +482,12 @@ export function LeftCell({
   onEditingChange,
   onMoveBack,
   width = COL,
+  onCustomAmount,
 }: {
   /** The box's width; the phone's columns are COL, the desktop's wider. */
   width?: number;
+  /** Where "Move a custom amount" types its amount instead of the number pad (the desktop's details panel). */
+  onCustomAmount?: () => void;
   row: EnvelopeMonth;
   bar: TargetBar | null;
   past: boolean;
@@ -527,6 +530,7 @@ export function LeftCell({
             icon: { sf: 'number', md: 'dialpad' },
             disabled: !movable,
             onPress: () => {
+              if (onCustomAmount) return onCustomAmount();
               pad.open();
               onEditingChange(true, cell.current);
             },

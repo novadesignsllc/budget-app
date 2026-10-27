@@ -1,12 +1,15 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { textCents } from '@/domain/keypad';
 import { formatDollars } from '@/domain/money';
 import type { Cents } from '@/domain/types';
 import { type as typeScale, useColors } from '@/theme';
 
+import { useIsDesktop } from './dock';
 import { Caret, useKeypadField, type KeypadAction } from './keypad';
 import { Text } from './text';
+import { TypedAmount } from './typed-amount';
 
 /** Inner padding of the box; the box reaches this far past the column so the digits line up. */
 const PAD = 6;
@@ -45,6 +48,8 @@ export function InlineAmount({
   exact?: boolean;
 }) {
   const colors = useColors();
+  const desktop = useIsDesktop();
+  const [typing, setTyping] = useState(false);
   const box = useRef<React.ComponentRef<typeof View>>(null);
   // Can be negative when money was taken back out this month.
   const whole = Math.floor(cents / 100);
@@ -79,6 +84,39 @@ export function InlineAmount({
     fontVariant: ['tabular-nums'],
     color: colors.text,
   } as const;
+
+  // On a computer you just type in the box (math works too); Enter or Tab saves, Escape puts it back.
+  if (desktop) {
+    const shown = String(Math.max(0, whole));
+    return (
+      <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }}>
+        <View
+          style={[
+            boxStyle,
+            typing
+              ? { borderColor: muted ? colors.textSecondary : colors.accent, backgroundColor: colors.surface }
+              : { borderColor: 'transparent', backgroundColor: muted ? colors.control : colors.accentSoft },
+          ]}
+        >
+          <TypedAmount
+            value={shown}
+            mode="whole"
+            accessibilityLabel={`${accessibilityLabel}, ${formatDollars(cents)}`}
+            onFocusChange={(on) => {
+              setTyping(on);
+              onEditingChange?.(on, box.current);
+            }}
+            onCommit={(text) => {
+              if (text === shown) return;
+              const value = Math.max(0, textCents(text, 'whole') ?? 0);
+              if (value !== cents) onCommit(value);
+            }}
+            style={[textStyle, { flex: 1, height: 20, padding: 0, textAlign: align }]}
+          />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }}>

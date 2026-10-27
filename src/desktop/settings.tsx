@@ -18,8 +18,8 @@ const SHORTCUTS: [string, string][] = [
   ['/', 'Search on this page'],
   ['↑ ↓', 'Pick an envelope in Budget'],
   ['← →', 'Change the month in Budget'],
-  ['Enter', 'Save the row or the number pad'],
-  ['Esc', 'Close a form or the number pad'],
+  ['Enter', 'Save an amount or the new transaction row'],
+  ['Esc', 'Cancel typing, or close a form'],
 ];
 
 /** Settings on a computer: payees on the left; your account, shortcuts and the danger zone on the right. */

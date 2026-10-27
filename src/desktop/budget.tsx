@@ -5,12 +5,14 @@ import { Pressable, View } from 'react-native';
 import { ActionMenu } from '@/components/action-menu';
 import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
-import { closeKeypad, keypadIsOpen, useKeypadField } from '@/components/keypad';
+import { closeKeypad, keypadIsOpen } from '@/components/keypad';
 import { desktopSheetOpen } from '@/components/screen';
 import { SortList, type SortGroup } from '@/components/sort-list';
 import { Text } from '@/components/text';
+import { TypedAmount } from '@/components/typed-amount';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
+import { textCents } from '@/domain/keypad';
 import { debtTarget } from '@/domain/debt';
 import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
 import { addMonthKey, assignDateFor, monthOf, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
@@ -23,7 +25,14 @@ import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import { barLevel, envelopeStatus, groupSummary, moneyLeftBar, targetBar, type TargetBar } from '@/utils/envelope-status';
+import {
+  barLevel,
+  envelopeStatus,
+  groupSummary,
+  moneyLeftBar,
+  targetBar,
+  type TargetBar,
+} from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -73,6 +82,8 @@ export function DesktopBudget() {
   const [sorting, setSorting] = useState<SortGroup[] | null>(null);
   const [dragging, setDragging] = useState(false);
   const [confirmUnassign, setConfirmUnassign] = useState(false);
+  // The envelope whose "Move a custom amount" field is open in the details panel.
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const past = month < thisMonth;
   const rta = budget.readyToAssign;
@@ -93,7 +104,9 @@ export function DesktopBudget() {
   const shown = groups
     .map((g) => ({ ...g, items: q ? g.items.filter((e) => e.name.toLowerCase().includes(q)) : g.items }))
     .filter((g) => g.items.length);
-  const flat: Row[] = shown.flatMap((g) => g.items.map((e) => ({ envelope: e, row: budget.envelopes.get(e.id) ?? EMPTY })));
+  const flat: Row[] = shown.flatMap((g) =>
+    g.items.map((e) => ({ envelope: e, row: budget.envelopes.get(e.id) ?? EMPTY })),
+  );
   const selected = flat.find((r) => r.envelope.id === selectedId) ?? flat[0];
 
   function debtFor(e: Envelope) {
@@ -162,7 +175,10 @@ export function DesktopBudget() {
   // Up and down pick the envelope; left and right change the month.
   usePageKeys((e) => {
     if (keypadIsOpen() || desktopSheetOpen() || sorting || !flat.length) return;
-    const i = Math.max(0, flat.findIndex((r) => r.envelope.id === selected?.envelope.id));
+    const i = Math.max(
+      0,
+      flat.findIndex((r) => r.envelope.id === selected?.envelope.id),
+    );
     if (e.key === 'ArrowDown') setSelectedId(flat[Math.min(flat.length - 1, i + 1)].envelope.id);
     else if (e.key === 'ArrowUp') setSelectedId(flat[Math.max(0, i - 1)].envelope.id);
     else if (e.key === 'ArrowLeft') setMonth((m) => addMonthKey(m, -1));
@@ -188,7 +204,9 @@ export function DesktopBudget() {
               label="Save order"
               variant="accent"
               onPress={() => {
-                reorderEnvelopes(sorting.filter((g) => g.items.length).map((g) => ({ name: g.name, ids: g.items.map((i) => i.id) })));
+                reorderEnvelopes(
+                  sorting.filter((g) => g.items.length).map((g) => ({ name: g.name, ids: g.items.map((i) => i.id) })),
+                );
                 setSorting(null);
                 showToast({ message: 'Order saved' });
               }}
@@ -217,7 +235,12 @@ export function DesktopBudget() {
       header={
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-            <MonthStep label="Previous month" glyph="chevron_left" sf="chevron.left" onPress={() => setMonth(addMonthKey(month, -1))} />
+            <MonthStep
+              label="Previous month"
+              glyph="chevron_left"
+              sf="chevron.left"
+              onPress={() => setMonth(addMonthKey(month, -1))}
+            />
             <View style={{ minWidth: 176, alignItems: 'center' }}>
               <PageTitle>{monthYear.format(asDate(month))}</PageTitle>
             </View>
@@ -247,7 +270,15 @@ export function DesktopBudget() {
               </Text>
             ) : (
               <>
-                <Text style={{ fontSize: 20, lineHeight: 24, fontWeight: '700', color: rtaLook.fg, fontVariant: ['tabular-nums'] }}>
+                <Text
+                  style={{
+                    fontSize: 20,
+                    lineHeight: 24,
+                    fontWeight: '700',
+                    color: rtaLook.fg,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                >
                   {formatDollars(Math.abs(rtaLeft))}
                 </Text>
                 <Text variant="callout" weight="600" color={rtaLook.fg}>
@@ -256,7 +287,9 @@ export function DesktopBudget() {
               </>
             )}
           </View>
-          {past && <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />}
+          {past && (
+            <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />
+          )}
           <Spacer />
           <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={210} />
           <DButton
@@ -296,7 +329,11 @@ export function DesktopBudget() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
         <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 600, minWidth: 0, gap: spacing.md }}>
           {starters.length > 0 && (
-            <Starters starters={starters} onAdd={(s) => addEnvelope({ ...s, month })} onDone={() => updateSettings({ startersDone: true })} />
+            <Starters
+              starters={starters}
+              onAdd={(s) => addEnvelope({ ...s, month })}
+              onDone={() => updateSettings({ startersDone: true })}
+            />
           )}
 
           {shown.length > 0 ? (
@@ -344,7 +381,14 @@ export function DesktopBudget() {
                       }}
                     >
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: past ? colors.textTertiary : groupColor(g.name) }} />
+                        <View
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: past ? colors.textTertiary : groupColor(g.name),
+                          }}
+                        />
                         <Text variant="section" style={{ fontSize: 15 }}>
                           {g.name}
                         </Text>
@@ -375,6 +419,10 @@ export function DesktopBudget() {
                           onSelect={() => setSelectedId(e.id)}
                           onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
                           onMoveBack={(cents) => moveBack(e, cents)}
+                          onCustomAmount={() => {
+                            setSelectedId(e.id);
+                            setMovingId(e.id);
+                          }}
                         />
                       );
                     })}
@@ -392,7 +440,8 @@ export function DesktopBudget() {
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: 4 }}>
             <Text variant="footnote" style={{ flex: 1, color: '#6B778C' }}>
-              Click Assigned to type an amount (math works: 560+40). Arrow keys pick an envelope; ← → change the month.
+              Click Assigned and type (math works: 560+40); Enter or Tab saves, Esc cancels. Arrow keys pick an
+              envelope; ← → change the month.
             </Text>
             {!past && assignedTotal !== 0 && (
               <Pressable accessibilityRole="button" onPress={unassignAll} hitSlop={6}>
@@ -413,8 +462,12 @@ export function DesktopBudget() {
             past={past}
             rta={rta}
             debt={debtFor(selected.envelope)}
-            onFill={(need) => fill([{ envelopeId: selected.envelope.id, amount: need }], `Filled ${selected.envelope.name}`)}
+            onFill={(need) =>
+              fill([{ envelopeId: selected.envelope.id, amount: need }], `Filled ${selected.envelope.name}`)
+            }
             onMoveBack={(cents) => moveBack(selected.envelope, cents)}
+            moving={movingId === selected.envelope.id}
+            onMoving={(on) => setMovingId(on ? selected.envelope.id : null)}
           />
         )}
       </View>
@@ -434,7 +487,11 @@ function targetLabel(
   const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
   if (target <= 0) return { text: 'No target', tone: 'textTertiary' };
   const amount = formatDollars(ceilDollars(target));
-  const base = e.debtAccountId ? `${amount} a month` : targetKindOf(e) === 'goal' ? `Save ${amount} a month` : `${amount} a month`;
+  const base = e.debtAccountId
+    ? `${amount} a month`
+    : targetKindOf(e) === 'goal'
+      ? `Save ${amount} a month`
+      : `${amount} a month`;
   if (e.debtAccountId && debt && debt.owed <= 0) return { text: 'Paid off', tone: 'textSecondary' };
   if (need >= 100) return { text: `${base} · ${formatDollars(need)} short`, tone: 'caution' };
   if (row.available < 100 && row.spent > 0) return { text: `${base} · paid`, tone: 'textSecondary' };
@@ -452,6 +509,7 @@ function EnvelopeRow({
   onSelect,
   onAssign,
   onMoveBack,
+  onCustomAmount,
 }: {
   envelope: Envelope;
   row: EnvelopeMonth;
@@ -463,6 +521,7 @@ function EnvelopeRow({
   onSelect: () => void;
   onAssign: (cents: number) => void;
   onMoveBack: (cents: number) => void;
+  onCustomAmount: () => void;
 }) {
   const colors = useColors();
   const level = barLevel(row);
@@ -491,7 +550,13 @@ function EnvelopeRow({
             <Text style={{ width: 20, textAlign: 'center', fontSize: 15, lineHeight: 20, opacity: past ? 0.6 : 1 }}>
               {envelopeEmoji(envelope)}
             </Text>
-            <Text variant="body" weight="500" tone={red ? 'negative' : past ? 'textSecondary' : 'text'} numberOfLines={1} style={{ flex: 1 }}>
+            <Text
+              variant="body"
+              weight="500"
+              tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
+              numberOfLines={1}
+              style={{ flex: 1 }}
+            >
               {envelope.name}
             </Text>
           </View>
@@ -521,7 +586,12 @@ function EnvelopeRow({
             ]}
           />
         </View>
-        <Text variant="body" tone="textSecondary" align="right" style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}>
+        <Text
+          variant="body"
+          tone="textSecondary"
+          align="right"
+          style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}
+        >
           {formatDollars(row.spent, 'up')}
         </Text>
         <LeftCell
@@ -532,9 +602,16 @@ function EnvelopeRow({
           tone={red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text'}
           onEditingChange={(on) => on && onSelect()}
           onMoveBack={onMoveBack}
+          onCustomAmount={onCustomAmount}
         />
       </View>
-      <View style={{ height: 3, borderRadius: 2, backgroundColor: level === 'over' ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill }}>
+      <View
+        style={{
+          height: 3,
+          borderRadius: 2,
+          backgroundColor: level === 'over' ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
+        }}
+      >
         {left.progress > 0 && (
           <View
             style={{
@@ -560,6 +637,8 @@ function Inspector({
   debt,
   onFill,
   onMoveBack,
+  moving,
+  onMoving,
 }: {
   envelope: Envelope;
   row: EnvelopeMonth;
@@ -569,6 +648,9 @@ function Inspector({
   debt?: { owed: number; target: number };
   onFill: (need: number) => void;
   onMoveBack: (cents: number) => void;
+  /** The "Move a custom amount" field is open. */
+  moving: boolean;
+  onMoving: (on: boolean) => void;
 }) {
   const colors = useColors();
   const transactions = useStore((s) => s.transactions);
@@ -577,17 +659,6 @@ function Inspector({
   const label = targetLabel(envelope, row, month, status.need, debt);
   const max = floorDollars(row.available);
   const movable = !past && max >= 100;
-  const pad = useKeypadField({
-    value: '',
-    mode: 'whole',
-    live: false,
-    title: `Move back to Ready to assign (up to ${formatDollars(max)})`,
-    showValue: true,
-    onDone: (cents) => {
-      const amount = Math.min(max, Math.max(0, cents ?? 0));
-      if (amount > 0) onMoveBack(amount);
-    },
-  });
   const spending = useMemo(
     () => transactions.filter((t) => t.envelopeId === envelope.id && monthOf(t.date) === month).sort(newestFirst),
     [transactions, envelope.id, month],
@@ -611,7 +682,11 @@ function Inspector({
             <Text variant="footnote" tone="textSecondary">
               {envelope.group}
             </Text>
-            <Text accessibilityRole="header" style={{ fontSize: 20, lineHeight: 25, fontWeight: '700', letterSpacing: -0.3 }} numberOfLines={2}>
+            <Text
+              accessibilityRole="header"
+              style={{ fontSize: 20, lineHeight: 25, fontWeight: '700', letterSpacing: -0.3 }}
+              numberOfLines={2}
+            >
               {envelopeEmoji(envelope)} {envelope.name}
             </Text>
           </View>
@@ -633,7 +708,16 @@ function Inspector({
           <Text variant="footnote" tone="textSecondary">
             {row.available < 0 ? 'Overspent' : 'Left to spend'}
           </Text>
-          <Text style={{ fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5, color: leftColor, fontVariant: ['tabular-nums'] }}>
+          <Text
+            style={{
+              fontSize: 30,
+              lineHeight: 36,
+              fontWeight: '700',
+              letterSpacing: -0.5,
+              color: leftColor,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
             {formatMoney(row.available)}
           </Text>
         </View>
@@ -653,7 +737,13 @@ function Inspector({
         </View>
         {bar && (
           <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: 'hidden' }}>
-            <View style={{ width: `${(bar.state === 'short' ? bar.progress : 1) * 100}%`, height: 6, backgroundColor: barColor }} />
+            <View
+              style={{
+                width: `${(bar.state === 'short' ? bar.progress : 1) * 100}%`,
+                height: 6,
+                backgroundColor: barColor,
+              }}
+            />
           </View>
         )}
         <Text variant="callout" weight="600" color={colors[label.tone]}>
@@ -661,7 +751,11 @@ function Inspector({
         </Text>
         <View style={{ flexDirection: 'row', gap: spacing.sm }}>
           <DButton
-            label={status.need > 0 ? `${status.fillLabel} ${formatDollars(Math.min(status.need, Math.max(0, floorDollars(rta))))}` : 'Target met'}
+            label={
+              status.need > 0
+                ? `${status.fillLabel} ${formatDollars(Math.min(status.need, Math.max(0, floorDollars(rta))))}`
+                : 'Target met'
+            }
             variant="accent"
             disabled={past || status.need <= 0 || rta < 100}
             onPress={() => onFill(status.need)}
@@ -677,7 +771,7 @@ function Inspector({
                 icon: { sf: 'arrow.uturn.backward', md: 'undo' },
                 onPress: () => onMoveBack(max),
               },
-              { label: 'Move a custom amount', icon: { sf: 'number', md: 'dialpad' }, onPress: pad.open },
+              { label: 'Move a custom amount', icon: { sf: 'number', md: 'dialpad' }, onPress: () => onMoving(true) },
             ]}
             style={({ pressed, open }) => ({
               flex: 1,
@@ -697,8 +791,51 @@ function Inspector({
             </Text>
           </ActionMenu>
         </View>
+        {moving && movable && (
+          <View style={{ gap: 6 }}>
+            <Text variant="footnote" tone="textSecondary">
+              Move back to Ready to assign, up to {formatDollars(max)}. Enter moves it.
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <TypedAmount
+                value=""
+                mode="whole"
+                autoFocus
+                placeholder="$0"
+                accessibilityLabel={`Amount to move back, up to ${formatDollars(max)}`}
+                onCommit={(text) => {
+                  // Leaving the field empty keeps it open (the menu hands focus back as it closes).
+                  const amount = Math.min(max, Math.max(0, textCents(text, 'whole') ?? 0));
+                  if (!text) return;
+                  onMoving(false);
+                  if (amount > 0) onMoveBack(amount);
+                }}
+                onCancel={() => onMoving(false)}
+                style={{
+                  flex: 1,
+                  height: 34,
+                  paddingHorizontal: 10,
+                  borderWidth: 1.5,
+                  borderColor: colors.accent,
+                  borderRadius: 9,
+                  backgroundColor: colors.surface,
+                  fontSize: 15,
+                  fontWeight: '600',
+                }}
+              />
+              <Pressable accessibilityRole="button" onPress={() => onMoving(false)} hitSlop={6}>
+                <Text variant="callout" weight="600" tone="accent">
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        )}
         {!bar && !envelope.debtAccountId && (
-          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/envelope/[id]', params: { id: envelope.id, month } })}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/envelope/[id]', params: { id: envelope.id, month } })}
+          >
             <Text variant="callout" weight="600" tone="accent">
               Set a target ›
             </Text>
@@ -707,11 +844,22 @@ function Inspector({
       </DCard>
 
       <DCard>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            paddingHorizontal: 18,
+            paddingTop: 14,
+            paddingBottom: 10,
+          }}
+        >
           <Text variant="callout" weight="700">
             {past ? monthOnly.format(asDate(month)) : 'This month'}
           </Text>
-          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/budget/[id]', params: { id: envelope.id, month } })}>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() => router.push({ pathname: '/budget/[id]', params: { id: envelope.id, month } })}
+          >
             <Text variant="callout" weight="600" tone="accent">
               All ›
             </Text>
@@ -745,7 +893,11 @@ function Inspector({
               <Text variant="callout" weight="500" numberOfLines={1} style={{ flex: 1 }}>
                 {t.payee}
               </Text>
-              <Text variant="callout" color={t.amount < 0 ? colors.negative : colors.positive} style={{ fontVariant: ['tabular-nums'] }}>
+              <Text
+                variant="callout"
+                color={t.amount < 0 ? colors.negative : colors.positive}
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
                 {formatMoney(t.amount)}
               </Text>
             </Pressable>
@@ -800,9 +952,25 @@ function MonthStep({
   );
 }
 
-function ColumnLabel({ children, width, right, flex }: { children: string; width?: number; right?: boolean; flex?: boolean }) {
+function ColumnLabel({
+  children,
+  width,
+  right,
+  flex,
+}: {
+  children: string;
+  width?: number;
+  right?: boolean;
+  flex?: boolean;
+}) {
   return (
-    <Text variant="label" caps color="#6B778C" align={right ? 'right' : 'left'} style={[flex ? { flex: 1 } : { width }, right && { paddingRight: 6 }]}>
+    <Text
+      variant="label"
+      caps
+      color="#6B778C"
+      align={right ? 'right' : 'left'}
+      style={[flex ? { flex: 1 } : { width }, right && { paddingRight: 6 }]}
+    >
       {children}
     </Text>
   );
@@ -810,7 +978,12 @@ function ColumnLabel({ children, width, right, flex }: { children: string; width
 
 function GroupSum({ children }: { children: string }) {
   return (
-    <Text variant="footnote" tone="textSecondary" align="right" style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}>
+    <Text
+      variant="footnote"
+      tone="textSecondary"
+      align="right"
+      style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}
+    >
       {children}
     </Text>
   );
@@ -841,7 +1014,9 @@ function Starters({
       <Text variant="callout" tone="textSecondary" style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 8 }}>
         Bills and Daily are money you spend each month. Savings is money you add each month and leave alone.
       </Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, paddingBottom: 16 }}>
+      <View
+        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, paddingBottom: 16 }}
+      >
         {starters.map((s) => (
           <Pressable
             key={s.name}

@@ -9,6 +9,7 @@ import { gutter, maxContentWidth, radius, spacing, useColors } from '@/theme';
 import { useDock, useIsDesktop } from './dock';
 import { KeypadHost, useKeypadOpen } from './keypad';
 import { MenuHost } from './menu-host';
+import { amountFieldFocused } from './typed-amount';
 
 /** Room under the content while the number pad is up, so the last fields can scroll above it. */
 const KEYPAD_ROOM = 360;
@@ -133,7 +134,7 @@ function SheetDialog({ children, keypadOpen }: { children: React.ReactNode; keyp
     if (typeof window === 'undefined') return;
     const onKey = (e: KeyboardEvent) => {
       // Escape closes the number pad first.
-      if (e.key === 'Escape' && !keypadOpen) closeSheet();
+      if (e.key === 'Escape' && !keypadOpen && !amountFieldFocused()) closeSheet();
     };
     // Capture, so it works while typing in a field too (fields keep Escape to themselves).
     window.addEventListener('keydown', onKey, true);

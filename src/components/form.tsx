@@ -9,7 +9,9 @@ import { haptic } from '@/utils/haptics';
 
 import { Card } from './card';
 import { Icon } from './icon';
+import { useIsDesktop } from './dock';
 import { Caret, useKeypadField, type KeypadFieldHandle } from './keypad';
+import { TypedAmount } from './typed-amount';
 import { useSheetReveal } from './screen';
 import { Text } from './text';
 
@@ -119,9 +121,38 @@ export function AmountHero({
   ref?: React.Ref<KeypadFieldHandle>;
 }) {
   const colors = useColors();
-  const pad = useKeypadField({ value, onChange: onChangeText, negative: allowNegative, ref, autoFocus: autoFocus && !!onChangeText });
+  // A computer types straight into the amount; the phone opens the number pad.
+  const desktop = useIsDesktop();
+  const pad = useKeypadField({
+    value,
+    onChange: onChangeText,
+    negative: allowNegative,
+    ref: desktop ? undefined : ref,
+    autoFocus: autoFocus && !!onChangeText && !desktop,
+  });
   const color = tone === 'negative' ? colors.negative : tone === 'positive' ? colors.positive : colors.text;
   const style = [typeScale.display, { fontSize: 36, lineHeight: 44, letterSpacing: -0.8, color, fontVariant: ['tabular-nums' as const] }];
+  if (desktop && onChangeText) {
+    return (
+      <View style={{ alignItems: 'center', gap: 2, paddingVertical: 2 }}>
+        {caption ? (
+          <Text variant="callout" tone="textSecondary" numberOfLines={1}>
+            {caption}
+          </Text>
+        ) : null}
+        <TypedAmount
+          ref={ref}
+          value={value}
+          onChange={onChangeText}
+          negative={allowNegative}
+          autoFocus={autoFocus}
+          placeholder={placeholder}
+          accessibilityLabel={caption ?? 'Amount'}
+          style={[...style, { alignSelf: 'stretch', height: 48, textAlign: 'center' }]}
+        />
+      </View>
+    );
+  }
   const shown = onChangeText ? pad.text : value ? showAmount(value) : '';
   return (
     <View style={{ alignItems: 'center', gap: 2, paddingVertical: 2 }}>
@@ -174,7 +205,26 @@ export function AmountRow({
   const colors = useColors();
   const reveal = useSheetReveal();
   const row = useRef<React.ComponentRef<typeof View>>(null);
-  const pad = useKeypadField({ value, onChange, mode, unit, negative, onClose: onCommit, ref });
+  const desktop = useIsDesktop();
+  const pad = useKeypadField({ value, onChange, mode, unit, negative, onClose: onCommit, ref: desktop ? undefined : ref });
+  if (desktop) {
+    return (
+      <FormRow label={label}>
+        <TypedAmount
+          ref={ref}
+          value={value}
+          onChange={onChange}
+          onCommit={onCommit}
+          mode={mode}
+          unit={unit}
+          negative={negative}
+          placeholder={placeholder}
+          accessibilityLabel={label}
+          style={[typeScale.body, { fontWeight: '500', textAlign: 'right', height: 30, minWidth: 140 }]}
+        />
+      </FormRow>
+    );
+  }
   return (
     <Pressable
       ref={row}

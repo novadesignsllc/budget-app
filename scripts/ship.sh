@@ -54,4 +54,18 @@ fi
 echo "› Publishing the website (Vercel builds it from GitHub)"
 git push
 
-echo "✓ Done. Phones pick it up on the next two opens; the website in about a minute."
+# Wait for Vercel to finish building, so "Done" means the site has it.
+if command -v vercel >/dev/null; then
+  sleep 10
+  for _ in $(seq 1 45); do
+    state=$(vercel ls slip 2>/dev/null | grep -m1 -oE 'Ready|Error|Canceled|Building|Queued|Initializing' || true)
+    [[ "$state" == "Ready" || "$state" == "Error" || "$state" == "Canceled" ]] && break
+    sleep 8
+  done
+  if [[ "$state" != "Ready" ]]; then
+    echo "✗ The website build didn't finish (${state:-unknown}). Check: vercel ls slip" >&2
+    exit 1
+  fi
+fi
+
+echo "✓ Done. The website has it now (refresh the page); phones pick it up on the next two opens."

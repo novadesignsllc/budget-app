@@ -1,6 +1,6 @@
 import { ceilDollars, formatDollars } from '@/domain/money';
 import type { EnvelopeMonth, MonthKey } from '@/domain/months';
-import { builderEnded, targetFor, targetKindOf, targetNeed } from '@/domain/targets';
+import { builderEnded, nextDue, targetFor, targetKindOf, targetNeed } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
 import { DEBT_GROUP } from '@/store';
 
@@ -146,6 +146,25 @@ export function envelopeStatus(
               ? `${m(need)} this month to reach ${m(target)}${by}`
               : `On track for ${m(target)}${by}`,
       tone: have >= target ? 'positive' : need > 0 ? 'accent' : 'textSecondary',
+      progress: Math.min(1, Math.max(0, have / target)),
+      overspent: false,
+      need,
+      fillLabel: 'Fill',
+    };
+  }
+
+  if (kind === 'repeat' && target) {
+    const due = nextDue(e, month);
+    const when = due ? monthName(due) : '';
+    const have = row.carriedIn + assigned;
+    return {
+      subtitle:
+        need > 0
+          ? `${m(need)} this month toward ${m(target)} due ${when}`
+          : have >= target
+            ? `${m(target)} ready for ${when}`
+            : `On track for ${m(target)} due ${when}`,
+      tone: need > 0 ? 'accent' : have >= target ? 'positive' : 'textSecondary',
       progress: Math.min(1, Math.max(0, have / target)),
       overspent: false,
       need,

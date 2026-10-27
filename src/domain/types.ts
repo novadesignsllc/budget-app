@@ -31,6 +31,11 @@ export type Account = {
    * minimum payment; a number is a custom amount in whole dollars.
    */
   paymentTarget?: Cents | null;
+  /**
+   * Pay it off by this month (`YYYY-MM`): the payment envelope aims for what that takes
+   * each month, interest included. Unset or null uses `paymentTarget` or the minimum.
+   */
+  payoffBy?: string | null;
   /** Credit cards: the card's limit, to see how close the balance is to it. */
   creditLimit?: Cents;
   /** Cash-only: last time the user confirmed the bank balance. */
@@ -50,7 +55,7 @@ export type BudgetGroup = (typeof GROUPS)[number];
  * What a target means. Stored values never change meaning: 'spending' is Maximum and
  * 'goal' is Save each month, as they always were.
  */
-export type TargetKind = 'spending' | 'goal' | 'bank' | 'builder';
+export type TargetKind = 'spending' | 'goal' | 'bank' | 'builder' | 'repeat' | 'weekly' | 'percent';
 
 export type Envelope = {
   id: string;
@@ -71,11 +76,19 @@ export type Envelope = {
    * What the target means. Spending (Maximum): the most to spend each month, so it refills
    * up to the target. Goal (Save each month): put the target in every month. Bank: always
    * keep the target in it, refilling whatever was spent. Builder: reach the target by
-   * `targetDate`. Unset follows the group: Savings is a goal, everything else is spending.
+   * `targetDate`. Repeating builder: a builder that starts over every `targetEvery` months.
+   * Weekly: the most to spend each week, so a month with five Sundays gets five weeks.
+   * Percent: a share of the month's income; its `targets` value is the percent × 100
+   * (10% is 1000). Unset follows the group: Savings is a goal, everything else is spending.
    */
   targetKind?: TargetKind;
-  /** Builder targets: the month (`YYYY-MM`) the amount should be reached by. */
+  /**
+   * Builder: the month (`YYYY-MM`) the amount should be reached by. Repeating builder: the
+   * next month it's due; after that it comes due every `targetEvery` months.
+   */
   targetDate?: string;
+  /** Repeating builder: how many months apart it comes due. */
+  targetEvery?: number;
   /** Legacy single target, used before any `targets` entry. */
   monthlyTarget?: Cents;
   /** Months (`YYYY-MM`) whose target is snoozed: it counts as no target for just that month. */

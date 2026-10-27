@@ -26,7 +26,7 @@ import {
   type EnvelopeMonth,
   type MonthKey,
 } from '@/domain/months';
-import { builderEnded, isSnoozed, targetFor, targetKindName, targetKindOf, targetSetFor } from '@/domain/targets';
+import { builderEnded, isSnoozed, nextDue, targetFor, targetKindName, targetKindOf, targetSetFor } from '@/domain/targets';
 import { envelopePool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -569,11 +569,24 @@ function targetLabel(
     if (need >= 100) return { text: `${amount}${by} · ${formatDollars(need)} this month`, tone: 'caution' };
     return { text: `${amount}${by} · on track`, tone: 'textSecondary' };
   }
+  if (kind === 'repeat') {
+    const due = nextDue(e, month);
+    const base = `${amount} due ${due ? monthName(due) : '—'}`;
+    if (need >= 100) return { text: `${base} · ${formatDollars(need)} this month`, tone: 'caution' };
+    if (row.carriedIn + row.assigned >= target) return { text: `${base} · ready`, tone: 'textSecondary' };
+    return { text: `${base} · on track`, tone: 'textSecondary' };
+  }
+  if (kind === 'percent') {
+    const base = `${target / 100}% of income`;
+    if (need >= 100) return { text: `${base} · ${formatDollars(need)} short`, tone: 'caution' };
+    if (!row.monthIncome) return { text: `${base} · no income yet`, tone: 'textSecondary' };
+    return { text: `${base} · funded`, tone: 'textSecondary' };
+  }
   if (kind === 'bank') {
     if (need >= 100) return { text: `Keep ${amount} · ${formatDollars(need)} to refill`, tone: 'caution' };
     return { text: `Keep ${amount} · full`, tone: 'textSecondary' };
   }
-  const base = kind === 'goal' ? `Save ${amount} a month` : `${amount} a month`;
+  const base = kind === 'goal' ? `Save ${amount} a month` : kind === 'weekly' ? `${amount} a week` : `${amount} a month`;
   if (e.debtAccountId && debt && debt.owed <= 0) return { text: 'Paid off', tone: 'textSecondary' };
   if (need >= 100) return { text: `${base} · ${formatDollars(need)} short`, tone: 'caution' };
   if (row.available < 100 && row.spent > 0) return { text: `${base} · paid`, tone: 'textSecondary' };

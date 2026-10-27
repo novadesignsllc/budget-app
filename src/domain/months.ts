@@ -57,6 +57,8 @@ export type EnvelopeMonth = {
   carriedIn: Cents;
   /** What's in the envelope at the end of the month. */
   available: Cents;
+  /** All income that came in this month, for percent-of-income targets. */
+  monthIncome?: Cents;
 };
 
 export type BudgetMonth = {
@@ -72,6 +74,8 @@ export type BudgetMonth = {
    * add up to the totals above. Null means one pool (no savings account yet).
    */
   pools: Record<Pool, { cash: Cents; readyToAssign: Cents }> | null;
+  /** All income that came in during this month. */
+  income?: Cents;
 };
 
 /**
@@ -140,11 +144,13 @@ export function computeMonth(
     }
   };
 
+  let income = 0;
   for (const t of input.transactions) {
     if (t.date > end) continue;
     const account = accountById.get(t.accountId);
     if (!account) continue;
     if (isCashAccount(account)) {
+      if (t.kind === 'income' && t.amount > 0 && t.date >= start) income += t.amount;
       cash += t.amount;
       if (accountPool(account) === 'savings') savingsCash += t.amount;
     }
@@ -165,6 +171,7 @@ export function computeMonth(
   let savingsTotal = 0;
   for (const [id, r] of rows) {
     r.available = r.carriedIn + r.assigned + r.activity;
+    r.monthIncome = income;
     total += r.available;
     if (savingsEnvelopes.has(id)) savingsTotal += r.available;
   }
@@ -177,7 +184,7 @@ export function computeMonth(
         savings: { cash: savingsCash, readyToAssign: savingsReady },
       }
     : null;
-  return { month, envelopes: rows, cash, readyToAssign, pools };
+  return { month, envelopes: rows, cash, readyToAssign, pools, income };
 }
 
 /**

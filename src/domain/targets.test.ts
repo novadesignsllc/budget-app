@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { builderMonthly, monthsThrough, targetFor, targetNeed, withTarget } from './targets';
+import { builderMonthly, monthsThrough, nextDue, targetFor, targetNeed, weeksIn, withTarget } from './targets';
 
 describe('targetFor', () => {
   it('falls back to the legacy target when there are no entries', () => {
@@ -83,5 +83,41 @@ describe('targetNeed by type', () => {
     expect(targetNeed(christmas, 120000, row(0, 0), '2027-01')).toBe(0);
     // In its last month it asks for everything left.
     expect(targetNeed(christmas, 120000, row(80000, 0), '2026-12')).toBe(40000);
+  });
+});
+
+describe('more target types', () => {
+  const daily = { group: 'Daily' };
+  const row = (carriedIn: number, assigned: number, spent = 0, monthIncome = 0) => ({
+    carriedIn,
+    assigned,
+    available: carriedIn + assigned - spent,
+    monthIncome,
+  });
+
+  it('Weekly counts the month by its Sundays', () => {
+    expect(weeksIn('2026-11')).toBe(5); // Nov 2026 has Sundays on the 1st, 8th, 15th, 22nd, 29th
+    expect(weeksIn('2026-10')).toBe(4);
+    const weekly = { ...daily, targetKind: 'weekly' as const };
+    expect(targetNeed(weekly, 10000, row(0, 0), '2026-11')).toBe(50000);
+    expect(targetNeed(weekly, 10000, row(15000, 0), '2026-10')).toBe(25000);
+  });
+
+  it('Percent of income asks for its share of what came in this month', () => {
+    const tithe = { ...daily, targetKind: 'percent' as const };
+    // 10% (stored as 1000) of $4,215.50 is $421.55, rounded up to $422.
+    expect(targetNeed(tithe, 1000, row(0, 0, 0, 421550), '2026-10')).toBe(42200);
+    expect(targetNeed(tithe, 1000, row(0, 20000, 0, 421550), '2026-10')).toBe(22200);
+    expect(targetNeed(tithe, 1000, row(0, 0), '2026-10')).toBe(0);
+  });
+
+  it('Repeating builder builds toward its next due month, then starts over', () => {
+    const insurance = { ...daily, targetKind: 'repeat' as const, targetDate: '2026-12', targetEvery: 6 };
+    expect(nextDue(insurance, '2026-10')).toBe('2026-12');
+    expect(nextDue(insurance, '2027-01')).toBe('2027-06');
+    // $600 by December from October: $200 a month.
+    expect(targetNeed(insurance, 60000, row(0, 0), '2026-10')).toBe(20000);
+    // Paid in December; January starts the next six months: $100 a month.
+    expect(targetNeed(insurance, 60000, row(0, 0), '2027-01')).toBe(10000);
   });
 });

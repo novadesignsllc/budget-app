@@ -1,3 +1,4 @@
+import { today } from './dates';
 import type { Account, Cents } from './types';
 
 export type Strategy = 'snowball' | 'avalanche';
@@ -172,13 +173,38 @@ export function expectedMonthlyInterest(owed: Cents, apr: number): Cents {
 }
 
 /**
- * What a debt's payment envelope should get each month: the custom target if one is set,
- * otherwise the minimum (or an estimate when there's no minimum). Never more than is owed.
+ * What a debt's payment envelope should get each month: what it takes to pay it off by
+ * `payoffBy` if that's set, else the custom target, else the minimum (or an estimate when
+ * there's no minimum). Never less than the minimum, never more than is owed.
  */
-export function debtTarget(account: Pick<Account, 'paymentTarget' | 'minPayment' | 'apr'>, owed: Cents): Cents {
+export function debtTarget(
+  account: Pick<Account, 'paymentTarget' | 'minPayment' | 'apr' | 'payoffBy'>,
+  owed: Cents,
+  month: string = today().slice(0, 7),
+): Cents {
   if (owed <= 0) return 0;
-  const target = account.paymentTarget ?? (account.minPayment || estimateMinPayment(owed, account.apr ?? 0));
+  const minimum = account.minPayment || estimateMinPayment(owed, account.apr ?? 0);
+  const target = account.payoffBy
+    ? Math.max(minimum, payoffPayment(owed, account.apr ?? 0, monthsUntil(month, account.payoffBy)))
+    : (account.paymentTarget ?? minimum);
   return Math.min(target, owed);
+}
+
+/** Months from `from` through `to`, counting both (at least 1). */
+function monthsUntil(from: string, to: string): number {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return Math.max(1, (ty - fy) * 12 + (tm - fm) + 1);
+}
+
+/**
+ * The level monthly payment that clears `owed` in `months` payments at `apr` (basis
+ * points), rounded up to whole dollars so it never falls short.
+ */
+export function payoffPayment(owed: Cents, apr: number, months: number): Cents {
+  const r = apr / 10000 / 12;
+  const payment = r > 0 ? (owed * r) / (1 - Math.pow(1 + r, -months)) : owed / months;
+  return Math.ceil(payment / 100) * 100;
 }
 
 /**

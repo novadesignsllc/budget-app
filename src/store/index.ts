@@ -120,6 +120,7 @@ type Actions = {
         | 'creditLimit'
         | 'closed'
         | 'paymentTarget'
+        | 'payoffBy'
       >
     >,
   ) => void;
@@ -134,6 +135,7 @@ type Actions = {
     emoji?: string;
     targetKind?: TargetKind;
     targetDate?: string;
+    targetEvery?: number;
   }) => string;
   /** Sets the target from `month` on. Earlier months keep the target they had. */
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
@@ -144,7 +146,7 @@ type Actions = {
     patch: Partial<
       Pick<
         Envelope,
-        'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji' | 'targetKind' | 'targetDate'
+        'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji' | 'targetKind' | 'targetDate' | 'targetEvery'
       >
     >,
   ) => void;
@@ -314,7 +316,7 @@ export const useStore = create<Store>()((set, get) => ({
       return { accounts: sorted.map((a, order) => ({ ...a, order })) };
     }),
 
-  addEnvelope: ({ name, group, monthlyTarget, month, emoji, targetKind, targetDate }) => {
+  addEnvelope: ({ name, group, monthlyTarget, month, emoji, targetKind, targetDate, targetEvery }) => {
     const id = newId();
     const from = month ?? today().slice(0, 7);
     set((s) => ({
@@ -329,6 +331,7 @@ export const useStore = create<Store>()((set, get) => ({
           ...(emoji ? { emoji } : {}),
           ...(targetKind ? { targetKind } : {}),
           ...(targetDate ? { targetDate } : {}),
+          ...(targetEvery ? { targetEvery } : {}),
         },
       ],
     }));

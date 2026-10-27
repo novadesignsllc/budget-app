@@ -12,7 +12,7 @@ import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { ceilDollars, formatDollars, parseMoney } from '@/domain/money';
 import { addMonthKey, monthOf, type MonthKey } from '@/domain/months';
-import { builderMonthly, monthsThrough, TARGET_KINDS, targetKindOf, targetSetFor } from '@/domain/targets';
+import { monthsThrough, TARGET_KINDS, targetKindOf, targetSetFor, targetThisMonth } from '@/domain/targets';
 import { useBudgetMonth } from '@/hooks/use-budget-month';
 import { monthName } from '@/utils/envelope-status';
 import { GROUPS, type BudgetGroup, type TargetKind } from '@/domain/types';
@@ -81,10 +81,49 @@ export function EmojiHeader({ emoji, onChange }: { emoji: string; onChange: (emo
 
 /** What the target amount is called for each type. */
 export function targetLabel(kind: TargetKind) {
-  return kind === 'goal' ? 'Each month' : kind === 'bank' ? 'Keep in it' : kind === 'builder' ? 'Amount' : 'Monthly max';
+  switch (kind) {
+    case 'goal':
+      return 'Each month';
+    case 'bank':
+      return 'Keep in it';
+    case 'builder':
+    case 'repeat':
+      return 'Amount';
+    case 'weekly':
+      return 'Each week';
+    case 'percent':
+      return 'Percent';
+    default:
+      return 'Monthly max';
+  }
 }
 
-/** Maximum, Bank, Builder or Save each month. */
+/** The amount field for a target type: a whole percent for Percent of income, else whole dollars. */
+export function TargetAmountRow({
+  kind,
+  value,
+  onChange,
+  ref,
+}: {
+  kind: TargetKind;
+  value: string;
+  onChange: (v: string) => void;
+  ref?: React.Ref<KeypadFieldHandle>;
+}) {
+  return (
+    <AmountRow
+      ref={ref}
+      label={targetLabel(kind)}
+      value={value}
+      onChange={onChange}
+      mode="whole"
+      unit={kind === 'percent' ? 'percent' : 'money'}
+      placeholder={kind === 'percent' ? '10%' : '$0'}
+    />
+  );
+}
+
+/** Maximum, Bank, Builder, Save each month, Weekly maximum, Repeating builder or Percent of income. */
 export function TargetKindRow({ value, onChange }: { value: TargetKind; onChange: (kind: TargetKind) => void }) {
   return (
     <Dropdown<TargetKind>
@@ -102,36 +141,93 @@ export function defaultTargetDate(month: MonthKey): MonthKey {
   return addMonthKey(month, 6);
 }
 
-/** Builder: the month to reach the amount by, from this month to five years out. */
-export function TargetDateRow({ month, value, onChange }: { month: MonthKey; value: MonthKey; onChange: (m: MonthKey) => void }) {
+/** A month to reach the amount by (Builder) or when it's next due (Repeating builder), up to five years out. */
+export function TargetDateRow({
+  month,
+  value,
+  onChange,
+  label = 'By',
+}: {
+  month: MonthKey;
+  value: MonthKey;
+  onChange: (m: MonthKey) => void;
+  label?: string;
+}) {
   const first = value < month ? value : month;
   const options = Array.from({ length: Math.max(60, monthsThrough(first, value)) }, (_, i) => {
     const m = addMonthKey(first, i);
     return { value: m, label: monthName(m) };
   });
-  return <Dropdown<MonthKey> variant="row" label="By" value={value} options={options} onChange={onChange} />;
+  return <Dropdown<MonthKey> variant="row" label={label} value={value} options={options} onChange={onChange} />;
 }
 
-/** Builder: what that works out to this month, as the amount and date change. */
-export function BuilderMonthlyRow({
+const EVERY = [1, 2, 3, 4, 6, 12, 24];
+const everyLabel = (n: number) =>
+  n === 1 ? 'Every month' : n === 12 ? 'Every year' : n === 24 ? 'Every 2 years' : `Every ${n} months`;
+
+/** Repeating builder: how many months apart it comes due. */
+export function TargetEveryRow({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <Dropdown<string>
+      variant="row"
+      label="Repeats"
+      value={String(value)}
+      options={EVERY.map((n) => ({ value: String(n), label: everyLabel(n) }))}
+      onChange={(v) => onChange(Number(v))}
+    />
+  );
+}
+
+/** What the target works out to this month, as the amount, date and type change. */
+export function ThisMonthRow({
+  kind,
   amount,
   date,
+  every,
   carriedIn,
+  income,
   month,
 }: {
+  kind: TargetKind;
   amount: string;
   date: MonthKey;
+  every: number;
   carriedIn: number;
+  income: number;
   month: MonthKey;
 }) {
-  const target = parseMoney(amount) ?? 0;
-  const monthly = builderMonthly({ targetDate: date }, ceilDollars(target), carriedIn, month);
+  const target = ceilDollars(parseMoney(amount) ?? 0);
+  const monthly = targetThisMonth({ targetKind: kind, group: '', targetDate: date, targetEvery: every }, target, { carriedIn, monthIncome: income }, month);
   return (
     <FormRow label="This month">
       <Text variant="body" weight="600" tone={target ? 'text' : 'textTertiary'} style={{ fontVariant: ['tabular-nums'] }}>
         {target ? formatDollars(monthly) : '—'}
       </Text>
     </FormRow>
+  );
+}
+
+/** The type's extra rows: a date for builders, how often for repeating, and what this month works out to. */
+export function TargetExtraRows(props: {
+  kind: TargetKind;
+  amount: string;
+  date: MonthKey;
+  onDate: (m: MonthKey) => void;
+  every: number;
+  onEvery: (n: number) => void;
+  carriedIn: number;
+  income: number;
+  month: MonthKey;
+}) {
+  const { kind, date, onDate, every, onEvery, month } = props;
+  if (kind !== 'builder' && kind !== 'repeat' && kind !== 'weekly' && kind !== 'percent') return null;
+  return (
+    <>
+      {kind === 'builder' && <TargetDateRow month={month} value={date} onChange={onDate} />}
+      {kind === 'repeat' && <TargetDateRow month={month} value={date} onChange={onDate} label="Next due" />}
+      {kind === 'repeat' && <TargetEveryRow value={every} onChange={onEvery} />}
+      <ThisMonthRow {...props} />
+    </>
   );
 }
 
@@ -150,7 +246,9 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const [confirmHide, setConfirmHide] = useState(false);
   const [kind, setKind] = useState<TargetKind>(envelope ? targetKindOf(envelope) : 'spending');
   const [date, setDate] = useState<MonthKey>(envelope?.targetDate ?? defaultTargetDate(month));
-  const carriedIn = useBudgetMonth(month).envelopes.get(id)?.carriedIn ?? 0;
+  const [every, setEvery] = useState(envelope?.targetEvery ?? 12);
+  const budget = useBudgetMonth(month);
+  const carriedIn = budget.envelopes.get(id)?.carriedIn ?? 0;
   // Only set once the user picks one; until then the name decides.
   const [emoji, setEmoji] = useState<string | undefined>(envelope?.emoji);
 
@@ -196,19 +294,19 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
         )}
         {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
         {!fixed && <TargetKindRow value={kind} onChange={setKind} />}
-        {!isDebt && (
-          <AmountRow
-            ref={targetRef}
-            label={targetLabel(fixed ? 'spending' : kind)}
-            value={target}
-            onChange={setTarget}
-            mode="whole"
-            placeholder="$0"
+        {!isDebt && <TargetAmountRow ref={targetRef} kind={fixed ? 'spending' : kind} value={target} onChange={setTarget} />}
+        {!fixed && (
+          <TargetExtraRows
+            kind={kind}
+            amount={target}
+            date={date}
+            onDate={setDate}
+            every={every}
+            onEvery={setEvery}
+            carriedIn={carriedIn}
+            income={budget.income ?? 0}
+            month={month}
           />
-        )}
-        {!fixed && kind === 'builder' && <TargetDateRow month={month} value={date} onChange={setDate} />}
-        {!fixed && kind === 'builder' && (
-          <BuilderMonthlyRow amount={target} date={date} carriedIn={carriedIn} month={month} />
         )}
       </FormCard>
       {/* The snooze switch saves right away, not with Save. */}
@@ -227,7 +325,8 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             group: fixed ? envelope.group : group,
             ...(emoji && emoji !== envelope.emoji ? { emoji } : {}),
             ...(!fixed && kind !== targetKindOf(envelope) ? { targetKind: kind } : {}),
-            ...(!fixed && kind === 'builder' && date !== envelope.targetDate ? { targetDate: date } : {}),
+            ...(!fixed && (kind === 'builder' || kind === 'repeat') && date !== envelope.targetDate ? { targetDate: date } : {}),
+            ...(!fixed && kind === 'repeat' && every !== envelope.targetEvery ? { targetEvery: every } : {}),
           });
           const next = parseMoney(target);
           if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);

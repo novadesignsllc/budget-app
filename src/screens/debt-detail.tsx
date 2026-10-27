@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Card } from '@/components/card';
 import { CreditUsePill } from '@/components/credit-use';
 import { Dropdown } from '@/components/dropdown';
-import { AmountRow, FormCard } from '@/components/form';
+import { AmountRow, FormCard, FormRow } from '@/components/form';
 import { LineChart } from '@/components/line-chart';
 import { Money } from '@/components/money';
 import { Text } from '@/components/text';
@@ -14,6 +14,9 @@ import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { AccountDetail } from '@/screens/account';
 import { axisMoney, debtColor, endAtPayoff, horizonTicks, payoffLabel } from '@/screens/debt';
 import { useStore } from '@/store';
+import { today } from '@/domain/dates';
+import { addMonthKey, monthOf } from '@/domain/months';
+import { TargetDateRow } from '@/screens/envelope-settings';
 
 /**
  * A debt's page: the account register (activity, slips in red, Reconcile at the bottom)
@@ -45,7 +48,8 @@ export function DebtHeader({ id, activityTitle = true }: { id: string; activityT
   const color = debtColor(debts, id);
   const minimum = account.minPayment || estimateMinPayment(owed, account.apr ?? 0);
   const credit = creditUse(owed, account.creditLimit);
-  const targetMode = account.paymentTarget ? 'custom' : 'minimum';
+  const targetMode = account.payoffBy ? 'payoff' : account.paymentTarget ? 'custom' : 'minimum';
+  const thisMonth = monthOf(today());
 
   const commitDue = (text: string) => {
     const n = text ? Number(text) : undefined;
@@ -112,25 +116,46 @@ export function DebtHeader({ id, activityTitle = true }: { id: string; activityT
       </Card>
 
       <FormCard>
-        <Dropdown<'minimum' | 'custom'>
+        <Dropdown<'minimum' | 'custom' | 'payoff'>
           variant="row"
           label="Monthly target"
           value={targetMode}
           onChange={(mode) => {
             if (mode === 'minimum') {
-              updateAccount(id, { paymentTarget: null });
+              updateAccount(id, { paymentTarget: null, payoffBy: null });
+              return;
+            }
+            if (mode === 'payoff') {
+              // A year out to start; the month picker below changes it.
+              updateAccount(id, { payoffBy: addMonthKey(thisMonth, 11) });
               return;
             }
             // Start from the minimum, rounded up to whole dollars like the rest of the budget.
             const start = ceilDollars(minimum);
             setCustom(String(start / 100));
-            updateAccount(id, { paymentTarget: start });
+            updateAccount(id, { paymentTarget: start, payoffBy: null });
           }}
           options={[
             { value: 'minimum', label: 'Minimum payment', detail: formatDollars(minimum, 'up') },
             { value: 'custom', label: 'Custom' },
+            { value: 'payoff', label: 'Pay off by a date', description: 'What it takes each month, interest included' },
           ]}
         />
+        {targetMode === 'payoff' && account.payoffBy && (
+          <>
+            <TargetDateRow
+              month={thisMonth}
+              value={account.payoffBy}
+              onChange={(m) => updateAccount(id, { payoffBy: m })}
+              label="Pay off by"
+            />
+            <FormRow label="Each month">
+              <Text variant="body" weight="600" style={{ fontVariant: ['tabular-nums'] }}>
+                {formatDollars(debtTarget(account, owed, thisMonth), 'up')}
+              </Text>
+            </FormRow>
+          </>
+        )}
         {targetMode === 'custom' && (
           <AmountRow
             label="Target"

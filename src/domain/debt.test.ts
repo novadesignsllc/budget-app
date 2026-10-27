@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { comparePlan, creditUse, interestFromStatement, orderDebts, project, type DebtInput } from './debt';
+import { comparePlan, creditUse, debtTarget, interestFromStatement, orderDebts, payoffPayment, project, type DebtInput } from './debt';
 
 const debts: DebtInput[] = [
   { id: 'big', name: 'Car', balance: 1200000, apr: 699, minPayment: 30000 },
@@ -93,3 +93,16 @@ describe('creditUse', () => {
   });
 });
 
+
+describe('pay off by a date', () => {
+  it('aims for the level payment that clears it by then, never under the minimum', () => {
+    // $1,200 at 0% over 12 months (Oct through next Sep) is $100 a month.
+    expect(debtTarget({ apr: 0, minPayment: 2500, payoffBy: '2027-09' }, 120000, '2026-10')).toBe(10000);
+    // With interest it costs a bit more each month.
+    expect(payoffPayment(120000, 2400, 12)).toBe(11400);
+    // A far-off date never goes below the minimum.
+    expect(debtTarget({ apr: 0, minPayment: 5000, payoffBy: '2036-01' }, 120000, '2026-10')).toBe(5000);
+    // The date wins over a custom amount.
+    expect(debtTarget({ apr: 0, minPayment: 2500, paymentTarget: 30000, payoffBy: '2027-09' }, 120000, '2026-10')).toBe(10000);
+  });
+});

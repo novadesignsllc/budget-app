@@ -28,6 +28,7 @@ import {
   type MonthKey,
 } from '@/domain/months';
 import { envelopePool, type Pool } from '@/domain/pools';
+import { isSnoozed, targetSetFor } from '@/domain/targets';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
@@ -500,6 +501,7 @@ export function Budget() {
                     >
                       <EnvelopeRow
                         envelope={e}
+                        snoozed={!e.debtAccountId && isSnoozed(e, month) && !!targetSetFor(e, month)}
                         row={row}
                         overspent={status.overspent}
                         bar={targetBar(e, row, month, debtFor(e))}
@@ -723,6 +725,7 @@ export const LEFT_PILL: Record<TargetBar['state'], (c: ReturnType<typeof useColo
  */
 function EnvelopeRow({
   envelope,
+  snoozed,
   row,
   overspent,
   bar,
@@ -735,6 +738,8 @@ function EnvelopeRow({
   onPress,
 }: {
   envelope: Envelope;
+  /** Its target is snoozed this month. */
+  snoozed?: boolean;
   row: EnvelopeMonth;
   overspent: boolean;
   /** Set when the envelope has a target: the bar shows how funded it is. */
@@ -787,10 +792,16 @@ function EnvelopeRow({
               tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
               numberOfLines={1}
               ellipsizeMode="tail"
-              style={{ flex: 1, minWidth: 0 }}
+              style={{ flexShrink: 1, minWidth: 0 }}
             >
               {envelope.name}
             </Text>
+            {snoozed && (
+              <View accessibilityLabel="Target snoozed this month">
+                <Icon sf="moon.zzz" md="snooze" size={13} color={colors.textTertiary} />
+              </View>
+            )}
+            <View style={{ flex: 1 }} />
           </View>
         </Pressable>
         <View style={{ marginLeft: COL_GAP }}>

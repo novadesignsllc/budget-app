@@ -71,6 +71,8 @@ export type Envelope = {
   targetKind?: TargetKind;
   /** Legacy single target, used before any `targets` entry. */
   monthlyTarget?: Cents;
+  /** Months (`YYYY-MM`) whose target is snoozed: it counts as no target for just that month. */
+  snoozed?: string[];
   hidden?: boolean;
   /** The user's emoji for this envelope. Unset means one is picked from the name. */
   emoji?: string;

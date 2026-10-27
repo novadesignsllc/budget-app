@@ -24,7 +24,7 @@ export function targetNeed(
  * The monthly target in effect for `month`: the latest `targets` entry at or before it.
  * Months before any entry fall back to the legacy `monthlyTarget`. `null` means no target.
  */
-export function targetFor(envelope: Pick<Envelope, 'targets' | 'monthlyTarget'>, month: MonthKey): Cents | null {
+export function targetSetFor(envelope: Pick<Envelope, 'targets' | 'monthlyTarget'>, month: MonthKey): Cents | null {
   const entries = Object.keys(envelope.targets ?? {})
     .filter((m) => m <= month)
     .sort();
@@ -33,6 +33,22 @@ export function targetFor(envelope: Pick<Envelope, 'targets' | 'monthlyTarget'>,
     return v && v > 0 ? v : null;
   }
   return envelope.monthlyTarget && envelope.monthlyTarget > 0 ? envelope.monthlyTarget : null;
+}
+
+/** Whether the target is snoozed for `month`. */
+export function isSnoozed(envelope: Pick<Envelope, 'snoozed'>, month: MonthKey): boolean {
+  return !!envelope.snoozed?.includes(month);
+}
+
+/**
+ * The target that counts in `month`: the one set for it, unless it's snoozed that month.
+ * Editing a target uses `targetSetFor`, so a snooze never wipes the real target.
+ */
+export function targetFor(
+  envelope: Pick<Envelope, 'targets' | 'monthlyTarget' | 'snoozed'>,
+  month: MonthKey,
+): Cents | null {
+  return isSnoozed(envelope, month) ? null : targetSetFor(envelope, month);
 }
 
 /**

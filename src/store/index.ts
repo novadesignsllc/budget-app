@@ -136,6 +136,8 @@ type Actions = {
   }) => string;
   /** Sets the target from `month` on. Earlier months keep the target they had. */
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
+  /** Snoozes (or un-snoozes) an envelope's target for one month. */
+  snoozeTarget: (envelopeId: string, month: MonthKey, on: boolean) => void;
   updateEnvelope: (
     id: string,
     patch: Partial<
@@ -328,6 +330,15 @@ export const useStore = create<Store>()((set, get) => ({
   setTarget: (envelopeId, month, amount) =>
     set((s) => ({
       envelopes: s.envelopes.map((e) => (e.id === envelopeId ? { ...e, targets: withTarget(e, month, amount) } : e)),
+    })),
+
+  snoozeTarget: (envelopeId, month, on) =>
+    set((s) => ({
+      envelopes: s.envelopes.map((e) => {
+        if (e.id !== envelopeId) return e;
+        const rest = (e.snoozed ?? []).filter((m) => m !== month);
+        return { ...e, snoozed: on ? [...rest, month].sort() : rest };
+      }),
     })),
 
   updateEnvelope: (id, patch) =>

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from '@jest/globals';
 
 import { today } from '@/domain/dates';
 import { computeLedger } from '@/domain/ledger';
-import { targetFor } from '@/domain/targets';
+import { targetFor, targetSetFor } from '@/domain/targets';
 
 import { isLocked, resetStore, useStore } from './index';
 
@@ -261,5 +261,20 @@ describe('editing an account', () => {
     const ledger = computeLedger(useStore.getState());
     expect(ledger.balance.get(card)).toBe(-60000);
     expect(useStore.getState().envelopes.find((e) => e.debtAccountId === card)?.name).toBe('Chase Visa');
+  });
+});
+
+describe('snoozing a target', () => {
+  it('skips the target for that month only and keeps the target itself', () => {
+    const { groceries } = setup();
+    const s = useStore.getState();
+    s.setTarget(groceries, '2026-10', 40000);
+    s.snoozeTarget(groceries, '2026-10', true);
+    const e = useStore.getState().envelopes.find((x) => x.id === groceries)!;
+    expect(targetFor(e, '2026-10')).toBeNull();
+    expect(targetFor(e, '2026-11')).toBe(40000);
+    expect(targetSetFor(e, '2026-10')).toBe(40000);
+    useStore.getState().snoozeTarget(groceries, '2026-10', false);
+    expect(targetFor(useStore.getState().envelopes.find((x) => x.id === groceries)!, '2026-10')).toBe(40000);
   });
 });

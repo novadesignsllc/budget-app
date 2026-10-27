@@ -8,6 +8,7 @@ import { InlineAmount } from '@/components/inline-amount';
 import { closeKeypad, keypadIsOpen } from '@/components/keypad';
 import { desktopSheetOpen } from '@/components/screen';
 import { SortList, type SortGroup } from '@/components/sort-list';
+import { SnoozeRow } from '@/components/snooze-row';
 import { Text } from '@/components/text';
 import { TypedAmount } from '@/components/typed-amount';
 import { useToast } from '@/components/toast';
@@ -24,7 +25,7 @@ import {
   type EnvelopeMonth,
   type MonthKey,
 } from '@/domain/months';
-import { targetFor, targetKindOf } from '@/domain/targets';
+import { isSnoozed, targetFor, targetKindOf, targetSetFor } from '@/domain/targets';
 import { envelopePool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -44,7 +45,6 @@ import { DButton, DCard, DPage, PageTitle, SearchField, Spacer, usePageKeys } fr
 
 /** Assigned, Spent and Left: one width for all three, roomy enough for $12,345. */
 const COL = 84;
-const TARGET_COL = 200;
 const GAP = 12;
 const EMPTY: EnvelopeMonth = { assigned: 0, activity: 0, spent: 0, carriedIn: 0, available: 0 };
 
@@ -365,7 +365,6 @@ export function DesktopBudget() {
                 }}
               >
                 <ColumnLabel flex>Envelope</ColumnLabel>
-                <ColumnLabel width={TARGET_COL}>Target</ColumnLabel>
                 <ColumnLabel width={COL} center>
                   Assigned
                 </ColumnLabel>
@@ -413,7 +412,6 @@ export function DesktopBudget() {
                           </Text>
                         )}
                       </View>
-                      <View style={{ width: TARGET_COL }} />
                       <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
                       <GroupSum>{formatDollars(sum('spent'), 'up')}</GroupSum>
                       <View style={{ width: COL + 6, alignItems: 'center', paddingLeft: 6 }}>
@@ -430,11 +428,11 @@ export function DesktopBudget() {
                         <EnvelopeRow
                           key={e.id}
                           envelope={e}
+                          snoozed={!e.debtAccountId && isSnoozed(e, month) && !!targetSetFor(e, month)}
                           row={row}
                           past={past}
                           selected={selected?.envelope.id === e.id}
                           bar={targetBar(e, row, month, debt)}
-                          target={targetLabel(e, row, month, status.need, debt)}
                           need={past ? 0 : status.need}
                           onSelect={() => setSelectedId(e.id)}
                           onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
@@ -562,7 +560,11 @@ function targetLabel(
 ): { text: string; tone: 'textSecondary' | 'textTertiary' | 'negative' | 'caution' } {
   if (row.available < 0) return { text: `Over by ${formatDollars(-row.available, 'up')}`, tone: 'negative' };
   const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
-  if (target <= 0) return { text: 'No target', tone: 'textTertiary' };
+  if (target <= 0) {
+    if (!e.debtAccountId && isSnoozed(e, month) && targetSetFor(e, month))
+      return { text: 'Snoozed this month', tone: 'textSecondary' };
+    return { text: 'No target', tone: 'textTertiary' };
+  }
   const amount = formatDollars(ceilDollars(target));
   const base = e.debtAccountId
     ? `${amount} a month`
@@ -577,11 +579,11 @@ function targetLabel(
 
 function EnvelopeRow({
   envelope,
+  snoozed,
   row,
   past,
   selected,
   bar,
-  target,
   need,
   onSelect,
   onAssign,
@@ -589,11 +591,12 @@ function EnvelopeRow({
   onCustomAmount,
 }: {
   envelope: Envelope;
+  /** Its target is snoozed this month. */
+  snoozed?: boolean;
   row: EnvelopeMonth;
   past: boolean;
   selected: boolean;
   bar: TargetBar | null;
-  target: ReturnType<typeof targetLabel>;
   need: number;
   onSelect: () => void;
   onAssign: (cents: number) => void;
@@ -602,7 +605,7 @@ function EnvelopeRow({
 }) {
   const colors = useColors();
   const red = row.available < 0 && !past;
-  // The name and target select the row; Assigned and Left are their own buttons beside them.
+  // The name selects the row; Assigned and Left are their own buttons beside it.
   return (
     <View
       style={{
@@ -628,14 +631,17 @@ function EnvelopeRow({
               weight="500"
               tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
               numberOfLines={1}
-              style={{ flex: 1 }}
+              style={{ flexShrink: 1, minWidth: 0 }}
             >
               {envelope.name}
             </Text>
+            {snoozed && (
+              <View accessibilityLabel="Target snoozed this month">
+                <Icon sf="moon.zzz" md="snooze" size={13} color={colors.textTertiary} />
+              </View>
+            )}
+            <View style={{ flex: 1 }} />
           </View>
-          <Text variant="footnote" color={colors[target.tone]} numberOfLines={1} style={{ width: TARGET_COL }}>
-            {target.text}
-          </Text>
         </Pressable>
         <View>
           <InlineAmount
@@ -711,6 +717,7 @@ function Inspector({
   const status = envelopeStatus(envelope, row, month, debt);
   const bar = targetBar(envelope, row, month, debt);
   const label = targetLabel(envelope, row, month, status.need, debt);
+  const snoozed = !envelope.debtAccountId && isSnoozed(envelope, month) && !!targetSetFor(envelope, month);
   const max = floorDollars(row.available);
   const movable = !past && max >= 100;
   const spending = useMemo(
@@ -797,7 +804,11 @@ function Inspector({
             Target
           </Text>
           <Text variant="callout" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {bar ? `${targetKindOf(envelope) === 'goal' && !envelope.debtAccountId ? 'Goal' : 'Spending'}` : 'None set'}
+            {bar
+              ? `${targetKindOf(envelope) === 'goal' && !envelope.debtAccountId ? 'Goal' : 'Spending'}`
+              : snoozed
+                ? 'Snoozed'
+                : 'None set'}
           </Text>
         </View>
         <Text variant="callout" weight="600" color={colors[label.tone]}>
@@ -808,7 +819,9 @@ function Inspector({
             label={
               status.need > 0
                 ? `${status.fillLabel} ${formatDollars(Math.min(status.need, Math.max(0, floorDollars(rta))))}`
-                : 'Target met'
+                : snoozed
+                  ? 'Snoozed'
+                  : 'Target met'
             }
             variant="accent"
             disabled={past || status.need <= 0 || rta < 100}
@@ -885,7 +898,7 @@ function Inspector({
             </View>
           </View>
         )}
-        {!bar && !envelope.debtAccountId && (
+        {!bar && !snoozed && !envelope.debtAccountId && (
           <Pressable
             accessibilityRole="link"
             onPress={() => router.push({ pathname: '/envelope/[id]', params: { id: envelope.id, month } })}
@@ -894,6 +907,11 @@ function Inspector({
               Set a target ›
             </Text>
           </Pressable>
+        )}
+        {!past && !envelope.debtAccountId && !!targetSetFor(envelope, month) && (
+          <View style={{ paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.separator }}>
+            <SnoozeRow envelope={envelope} month={month} flat />
+          </View>
         )}
       </DCard>
 

@@ -4,6 +4,7 @@ import { Pressable, Text as RNText, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
+import { SnoozeRow } from '@/components/snooze-row';
 import { ActionList, AmountRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
 import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
@@ -11,7 +12,7 @@ import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
-import { targetFor, targetKindOf } from '@/domain/targets';
+import { targetSetFor, targetKindOf } from '@/domain/targets';
 import { GROUPS, type BudgetGroup, type TargetKind } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
@@ -108,7 +109,8 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const [name, setName] = useState(envelope?.name ?? '');
   const [group, setGroup] = useState<string>(fixGroup(envelope?.group ?? 'Daily'));
   const targetRef = useRef<KeypadFieldHandle>(null);
-  const current = envelope ? targetFor(envelope, month) : null;
+  // The target as set, even in a month it's snoozed.
+  const current = envelope ? targetSetFor(envelope, month) : null;
   const [target, setTarget] = useState(current ? String(Math.ceil(current / 100)) : '');
   const [confirmHide, setConfirmHide] = useState(false);
   const [kind, setKind] = useState<TargetKind>(envelope ? targetKindOf(envelope) : 'spending');
@@ -168,6 +170,12 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
           />
         )}
       </FormCard>
+      {/* The snooze switch saves right away, not with Save. */}
+      {!isDebt && targetSetFor(envelope, month) ? (
+        <FormCard>
+          <SnoozeRow envelope={envelope} month={month} />
+        </FormCard>
+      ) : null}
       <Button
         title="Save"
         size="lg"

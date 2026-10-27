@@ -34,9 +34,11 @@ export function SnoozeRow({ envelope, month, flat }: { envelope: Envelope; month
         <Text variant="body" weight="500">
           Snooze target in {formatMonth(month)}
         </Text>
-        <Text variant="footnote" tone="textSecondary">
-          {on ? 'Snoozed: no target this month. It’s back next month.' : 'Skip it for this month only.'}
-        </Text>
+        {on && (
+          <Text variant="footnote" tone="textSecondary">
+            Back next month
+          </Text>
+        )}
       </View>
       <Switch
         accessibilityLabel={`Snooze target in ${formatMonth(month)}`}

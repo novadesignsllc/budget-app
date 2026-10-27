@@ -53,12 +53,11 @@ export function monthlyCashFlow(
 ): Cents {
   const current = monthOf(today);
   const byId = new Map(input.accounts.map((a) => [a.id, a]));
-  const opened = input.accounts.filter(isCashAccount).map((a) => monthOf(a.openedOn));
-  if (!opened.length) return 0;
-  const first = opened.sort()[0];
+  const first = firstFullMonth(input.accounts);
+  if (!first) return 0;
   // Only full months the accounts existed for; a month you joined partway through would skew it.
   let start = addMonthKey(current, -months);
-  while (start <= first && start < current) start = addMonthKey(start, 1);
+  while (start < first && start < current) start = addMonthKey(start, 1);
   const count = (Number(current.slice(0, 4)) - Number(start.slice(0, 4))) * 12 + Number(current.slice(5)) - Number(start.slice(5));
   if (count <= 0) return 0;
   const from = `${start}-01`;
@@ -106,4 +105,40 @@ export function projectBalances({
     out.push({ cash: c, debt: after });
   }
   return out;
+}
+
+/**
+ * Average income a month: money that came in as income to checking, savings or cash, over
+ * the last `months` full months you've had accounts (this month isn't over, so it's left
+ * out). Zero until there's a full month.
+ */
+export function averageMonthlyIncome(
+  input: { accounts: Account[]; transactions: Transaction[] },
+  today: ISODate,
+  months = 12,
+): Cents {
+  const current = monthOf(today);
+  const first = firstFullMonth(input.accounts);
+  if (!first) return 0;
+  let start = addMonthKey(current, -months);
+  while (start < first && start < current) start = addMonthKey(start, 1);
+  const count = (Number(current.slice(0, 4)) - Number(start.slice(0, 4))) * 12 + Number(current.slice(5)) - Number(start.slice(5));
+  if (count <= 0) return 0;
+  const byId = new Map(input.accounts.map((a) => [a.id, a]));
+  const from = `${start}-01`;
+  const to = monthEnd(addMonthKey(current, -1));
+  let total = 0;
+  for (const t of input.transactions) {
+    if (t.kind !== 'income' || t.amount <= 0 || t.date < from || t.date > to) continue;
+    const a = byId.get(t.accountId);
+    if (a && isCashAccount(a)) total += t.amount;
+  }
+  return Math.round(total / count);
+}
+
+/** The first month the cash accounts were open for all of: the opening month if opened on the 1st, else the next. */
+function firstFullMonth(accounts: Account[]): string | null {
+  const opened = accounts.filter(isCashAccount).map((a) => a.openedOn).sort()[0];
+  if (!opened) return null;
+  return opened.endsWith('-01') ? monthOf(opened) : addMonthKey(monthOf(opened), 1);
 }

@@ -1,9 +1,11 @@
+import { router } from 'expo-router';
 import { useEffect } from 'react';
 import { create } from 'zustand';
 
+
 import { backend } from '@/backend';
 import type { SessionUser } from '@/backend/types';
-import { resetStore, useStore } from '@/store';
+import { initialState, resetStore, useStore, type State } from '@/store';
 
 import { startSync } from './engine';
 import { listenToProfiles, MAIN_PROFILE, rememberedProfile, rememberProfile, scopeFor, useProfiles } from './profiles';
@@ -40,19 +42,34 @@ function runSync(user: SessionUser) {
   });
 }
 
+/** Each profile's data as last seen this session, so switching back shows it at once. */
+const seen = new Map<string, State>();
+const DATA_KEYS = Object.keys(initialState) as (keyof State)[];
+
 /**
- * Opens another profile: stops syncing the one you're in, clears it from the screen, and
- * loads the other. Nothing is written to either while it switches.
+ * Opens another profile: lands on Home, stops syncing the one you're in, and loads the
+ * other. A profile already opened this session appears right away from memory while
+ * Firebase catches up; a new one shows a short loading cover. Nothing is written to either
+ * while it switches.
  */
 export function switchProfile(profileId: string) {
   const user = useSession.getState().user;
-  if (!user || useProfiles.getState().activeId === profileId) return;
-  pauseSync();
-  resetStore();
-  useSyncStatus.getState().reset();
+  const { activeId } = useProfiles.getState();
+  if (!user || activeId === profileId) return;
+  router.navigate('/');
+  const state = useStore.getState();
+  seen.set(activeId, Object.fromEntries(DATA_KEYS.map((k) => [k, state[k]])) as State);
+  const cached = seen.get(profileId);
+  useProfiles.setState({ activeId: profileId, switching: !cached });
   rememberProfile(user.uid, profileId);
-  useProfiles.setState({ activeId: profileId, switching: true });
-  runSync(user);
+  // Let the tap and the move to Home draw first; then swap the data.
+  setTimeout(() => {
+    pauseSync();
+    useSyncStatus.getState().reset();
+    if (cached) useStore.setState(cached);
+    else resetStore();
+    runSync(user);
+  }, 0);
 }
 
 /**
@@ -76,6 +93,7 @@ export function useSessionBootstrap() {
       pauseSync();
       stopProfiles?.();
       stopProfiles = undefined;
+      seen.clear();
       resetStore();
       useSyncStatus.getState().reset();
       if (!user) {

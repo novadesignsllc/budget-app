@@ -8,6 +8,7 @@ import { InlineAmount } from '@/components/inline-amount';
 import { closeKeypad, keypadIsOpen } from '@/components/keypad';
 import { desktopSheetOpen } from '@/components/screen';
 import { SortList, type SortGroup } from '@/components/sort-list';
+import { useAssignedAhead } from '@/components/home-cards';
 import { SnoozeRow } from '@/components/snooze-row';
 import { Text } from '@/components/text';
 import { TypedAmount } from '@/components/typed-amount';
@@ -91,6 +92,7 @@ export function DesktopBudget() {
   const past = month < thisMonth;
   // Budgeting ahead: up to MONTHS_AHEAD months after this one.
   const ahead = month > thisMonth;
+  const aheadMoney = useAssignedAhead();
   const lastMonth = addMonthKey(thisMonth, MONTHS_AHEAD);
   const rta = budget.readyToAssign;
   // Spending and savings, once there's a savings account; null means one pool.
@@ -292,6 +294,13 @@ export function DesktopBudget() {
           ) : (
             <ReadyPill cents={rta} past={past} />
           )}
+          {month === thisMonth && aheadMoney && (
+            <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.control }}>
+              <Text variant="callout" weight="600" tone="textSecondary">
+                {formatDollars(aheadMoney.total)} assigned ahead
+              </Text>
+            </View>
+          )}
           {ahead && (
             <View
               style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.accentSoft }}
@@ -341,7 +350,7 @@ export function DesktopBudget() {
       }
     >
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
-        <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 600, minWidth: 0, gap: spacing.md }}>
+        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 560, maxWidth: 680, minWidth: 0, gap: spacing.md }}>
           {starters.length > 0 && (
             <Starters
               starters={starters}
@@ -351,47 +360,36 @@ export function DesktopBudget() {
           )}
 
           {shown.length > 0 ? (
-            <DCard>
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: GAP,
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  backgroundColor: colors.tableHeader,
-                  borderBottomWidth: 1,
-                  borderBottomColor: colors.separator,
-                }}
-              >
+            <View style={{ gap: spacing.md }}>
+              {/* Column labels over the cards, like the phone. */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: GAP, paddingHorizontal: 17, marginBottom: -4 }}>
                 <ColumnLabel flex>Envelope</ColumnLabel>
-                <ColumnLabel width={COL} center>
+                <ColumnLabel width={COL} right>
                   Assigned
                 </ColumnLabel>
-                <ColumnLabel width={COL} center>
+                <ColumnLabel width={COL} right>
                   Spent
                 </ColumnLabel>
-                {/* The Left pill sits 6pt in from its column's edge; center over the pill. */}
-                <ColumnLabel width={COL + 6} center inset={6}>
+                <ColumnLabel width={COL + 6} right>
                   Left
                 </ColumnLabel>
               </View>
-              {shown.map((g, gi) => {
+              {shown.map((g) => {
                 const rows = g.items.map((e) => budget.envelopes.get(e.id) ?? EMPTY);
                 const sum = (k: 'assigned' | 'spent') => rows.reduce((a, r) => a + r[k], 0);
                 const left = rows.reduce((a, r) => a + floorDollars(r.available), 0);
                 return (
-                  <View key={g.name}>
+                  // Each group is its own card, so the whole budget reads at a glance.
+                  <DCard key={g.name}>
                     <View
                       style={{
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: GAP,
                         paddingHorizontal: 16,
-                        paddingTop: 12,
-                        paddingBottom: 6,
-                        borderTopWidth: gi === 0 ? 0 : 1,
-                        borderTopColor: colors.hairline,
+                        paddingVertical: 11,
+                        borderBottomWidth: 1,
+                        borderBottomColor: colors.separator,
                       }}
                     >
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
@@ -407,47 +405,48 @@ export function DesktopBudget() {
                           {g.name}
                         </Text>
                         {pools && (
-                          <Text variant="footnote" style={{ color: '#6B778C' }}>
+                          <Text variant="footnote" tone="textSecondary">
                             {POOL_SOURCE[envelopePool({ group: g.name })]}
                           </Text>
                         )}
                       </View>
                       <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
                       <GroupSum>{formatDollars(sum('spent'), 'up')}</GroupSum>
-                      <View style={{ width: COL + 6, alignItems: 'center', paddingLeft: 6 }}>
+                      <View style={{ width: COL + 6, alignItems: 'flex-end', paddingRight: 6 }}>
                         <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1}>
                           {groupSummary(g.name, left)}
                         </Text>
                       </View>
                     </View>
-                    {g.items.map((e) => {
+                    {g.items.map((e, i) => {
                       const row = budget.envelopes.get(e.id) ?? EMPTY;
                       const debt = debtFor(e);
                       const status = envelopeStatus(e, row, month, debt);
                       return (
-                        <EnvelopeRow
-                          key={e.id}
-                          envelope={e}
-                          snoozed={!e.debtAccountId && isSnoozed(e, month) && !!targetSetFor(e, month)}
-                          row={row}
-                          past={past}
-                          selected={selected?.envelope.id === e.id}
-                          bar={targetBar(e, row, month, debt)}
-                          need={past ? 0 : status.need}
-                          onSelect={() => setSelectedId(e.id)}
-                          onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
-                          onMoveBack={(cents) => moveBack(e, cents)}
-                          onCustomAmount={() => {
-                            setSelectedId(e.id);
-                            setMovingId(e.id);
-                          }}
-                        />
+                        <View key={e.id} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: colors.hairline }}>
+                          <EnvelopeRow
+                            envelope={e}
+                            snoozed={!e.debtAccountId && isSnoozed(e, month) && !!targetSetFor(e, month)}
+                            row={row}
+                            past={past}
+                            selected={selected?.envelope.id === e.id}
+                            bar={targetBar(e, row, month, debt)}
+                            need={past ? 0 : status.need}
+                            onSelect={() => setSelectedId(e.id)}
+                            onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
+                            onMoveBack={(cents) => moveBack(e, cents)}
+                            onCustomAmount={() => {
+                              setSelectedId(e.id);
+                              setMovingId(e.id);
+                            }}
+                          />
+                        </View>
                       );
                     })}
-                  </View>
+                  </DCard>
                 );
               })}
-            </DCard>
+            </View>
           ) : (
             <DCard padded>
               <Text variant="callout" tone="textSecondary">
@@ -456,11 +455,7 @@ export function DesktopBudget() {
             </DCard>
           )}
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: 4 }}>
-            <Text variant="footnote" style={{ flex: 1, color: '#6B778C' }}>
-              Click Assigned and type (math works: 560+40); Enter or Tab saves, Esc cancels. Arrow keys pick an
-              envelope; ← → change the month.
-            </Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 4 }}>
             {!past && assignedTotal !== 0 && (
               <Pressable accessibilityRole="button" onPress={unassignAll} hitSlop={6}>
                 <Text variant="footnote" weight="600" tone="negative">
@@ -646,7 +641,6 @@ function EnvelopeRow({
         <View>
           <InlineAmount
             exact
-            align="center"
             cents={row.assigned}
             width={COL}
             accessibilityLabel={`Assigned to ${envelope.name}`}
@@ -666,7 +660,12 @@ function EnvelopeRow({
             ]}
           />
         </View>
-        <Text variant="body" tone="textSecondary" align="center" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
+        <Text
+          variant="body"
+          tone="textSecondary"
+          align="right"
+          style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}
+        >
           {formatDollars(row.spent, 'up')}
         </Text>
         <LeftCell
@@ -678,6 +677,7 @@ function EnvelopeRow({
           onEditingChange={(on) => on && onSelect()}
           onMoveBack={onMoveBack}
           onCustomAmount={onCustomAmount}
+          align="right"
         />
       </View>
     </View>
@@ -727,7 +727,7 @@ function Inspector({
   const leftColor = row.available < 0 ? colors.negative : row.available < 100 ? colors.textSecondary : colors.positive;
 
   return (
-    <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 300, maxWidth: 380, gap: 14 }}>
+    <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 360, maxWidth: 480, gap: 14 }}>
       <DCard padded>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1, gap: 2 }}>
@@ -1024,27 +1024,15 @@ function MonthStep({
   );
 }
 
-function ColumnLabel({
-  children,
-  width,
-  center,
-  inset = 0,
-  flex,
-}: {
-  children: string;
-  width?: number;
-  center?: boolean;
-  /** Space before the label, so it centers over a box that doesn't start at the column's edge. */
-  inset?: number;
-  flex?: boolean;
-}) {
+function ColumnLabel({ children, width, right, flex }: { children: string; width?: number; right?: boolean; flex?: boolean }) {
   return (
     <Text
       variant="label"
       caps
-      color="#6B778C"
-      align={center ? 'center' : 'left'}
-      style={[flex ? { flex: 1 } : { width }, inset ? { paddingLeft: inset } : null]}
+      tone="textTertiary"
+      align={right ? 'right' : 'left'}
+      // Right-aligned labels end where the digits below them end.
+      style={[flex ? { flex: 1 } : { width }, right && { paddingRight: 6 }]}
     >
       {children}
     </Text>
@@ -1081,9 +1069,6 @@ function Starters({
           </Text>
         </Pressable>
       </View>
-      <Text variant="callout" tone="textSecondary" style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 8 }}>
-        Bills and Daily are money you spend each month. Savings is money you add each month and leave alone.
-      </Text>
       <View
         style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, paddingBottom: 16 }}
       >

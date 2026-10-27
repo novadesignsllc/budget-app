@@ -18,6 +18,8 @@ export function ProfileBar({ paddingBottom = 0 }: { paddingBottom?: number }) {
   const list = useProfiles((s) => s.list);
   const activeId = useProfiles((s) => s.activeId);
   const switching = useProfiles((s) => s.switching);
+  // One profile needs no tabs.
+  if (list.length < 2) return null;
   return (
     <View
       style={{

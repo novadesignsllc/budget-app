@@ -80,6 +80,7 @@ function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
 function Dock() {
   const colors = useColors();
   const { paddingBottom } = useDock();
+  const profileTabs = useProfiles((s) => s.list.length > 1);
   return (
     <View>
       <View
@@ -100,7 +101,8 @@ function Dock() {
           borderTopWidth: StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           paddingHorizontal: spacing.xs,
-          paddingBottom: 4,
+          // With profile tabs below, they take the home indicator's space instead.
+          paddingBottom: profileTabs ? 4 : paddingBottom + 4,
         }}
       >
         {BAR.map((t) => (

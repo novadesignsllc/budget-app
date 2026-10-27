@@ -8,7 +8,7 @@ import { AmountRow, FormCard, InputRow } from '@/components/form';
 import { SheetScreen } from '@/components/screen';
 import { SheetHeader } from '@/components/sheet-header';
 import { Text } from '@/components/text';
-import { formatShortDate, today } from '@/domain/dates';
+import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
 import { isCashAccount } from '@/domain/types';
 import { KINDS } from '@/screens/new-account';
@@ -137,11 +137,6 @@ export function EditAccount({ id }: { id: string }) {
       )}
 
       <View style={{ gap: spacing.xs, paddingHorizontal: spacing.xs }}>
-        <Text variant="footnote" tone="textSecondary">
-          {firstTxn
-            ? `The starting balance is what the account held before its first transaction here (${formatShortDate(firstTxn)}).`
-            : 'The starting balance is what the account held when you added it.'}
-        </Text>
         {effect && (
           <Text variant="footnote" weight="600" tone="accent">
             {effect}

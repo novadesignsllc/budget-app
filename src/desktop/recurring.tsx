@@ -212,9 +212,6 @@ export function DesktopRecurring() {
               })
             )}
           </DCard>
-          <Text variant="footnote" style={{ color: '#6B778C', marginTop: -6, paddingHorizontal: 4 }}>
-            Monthly totals count weekly and yearly items at their monthly rate. Paused items aren’t counted.
-          </Text>
         </>
       )}
     </DPage>

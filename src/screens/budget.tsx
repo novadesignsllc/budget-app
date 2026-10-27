@@ -33,6 +33,7 @@ import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
+import { AssignedAheadNote } from '@/components/home-cards';
 import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools, type PoolView } from '@/hooks/use-pools';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
@@ -297,9 +298,6 @@ export function Budget() {
               <Text variant="body" weight="600" tone="accent">
                 Planning ahead: {monthOnly.format(asDate(month))}
               </Text>
-              <Text variant="footnote" tone="textSecondary">
-                What you assign here comes out of today’s money.
-              </Text>
             </View>
             <Pressable
               accessibilityRole="button"
@@ -333,6 +331,11 @@ export function Budget() {
         ) : (
           <LeftToAssign cents={rta} past={past} />
         )}
+        {month === thisMonth && (
+          <View style={{ paddingHorizontal: spacing.xs, marginTop: -spacing.xs }}>
+            <AssignedAheadNote />
+          </View>
+        )}
 
         {groups.length > 0 && (
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -364,16 +367,6 @@ export function Budget() {
               title="Make your envelopes"
               action={{ label: 'Done', onPress: () => updateSettings({ startersDone: true }) }}
             />
-            <Text
-              variant="callout"
-              tone="textSecondary"
-              style={{
-                paddingHorizontal: spacing.md + 2,
-                paddingTop: spacing.md - 2,
-              }}
-            >
-              Bills and Daily are money you spend each month. Savings is money you add each month and leave alone.
-            </Text>
             <View style={{ paddingTop: spacing.xs }}>
               {starters.map((s, i, list) => (
                 <Pressable
@@ -579,7 +572,10 @@ export function LeftCell({
   onMoveBack,
   width = COL,
   onCustomAmount,
+  align = 'center',
 }: {
+  /** Centered on the phone; the desktop's table lines amounts up on the right. */
+  align?: 'center' | 'right';
   /** The box's width; the phone's columns are COL, the desktop's wider. */
   width?: number;
   /** Where "Move a custom amount" types its amount instead of the number pad (the desktop's details panel). */
@@ -649,7 +645,7 @@ export function LeftCell({
         <Text
           variant="row"
           weight="600"
-          align="center"
+          align={align}
           tone={pill ? undefined : tone}
           color={pill?.fg}
           style={{ fontVariant: ['tabular-nums'] }}

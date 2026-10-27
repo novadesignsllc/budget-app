@@ -88,9 +88,15 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
         ].map((g) =>
           g.rows.length ? (
             <View key={g.title} style={{ gap: 2 }}>
-              <Text variant="label" caps color="#6B778C" style={{ paddingHorizontal: 10, paddingBottom: 4 }}>
-                {g.title}
-              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 10, paddingBottom: 4 }}>
+                <Text variant="label" caps tone="textTertiary">
+                  {g.title}
+                </Text>
+                {/* What they add up to: cash on hand, or everything owed. */}
+                <Text variant="label" tone="textTertiary" style={{ fontVariant: ['tabular-nums'] }}>
+                  {formatMoney(g.rows.reduce((sum, a) => sum + (g.debt ? -1 : 1) * (ledger.balance.get(a.id) ?? 0), 0))}
+                </Text>
+              </View>
               {g.rows.map((a) => {
                 const b = ledger.balance.get(a.id) ?? 0;
                 return (

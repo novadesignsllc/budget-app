@@ -40,3 +40,15 @@ export const FREQUENCY_LABEL: Record<Frequency, string> = {
   quarterly: 'Every 3 months',
   yearly: 'Yearly',
 };
+
+/** What bills and subscriptions cost a month, together and each (paused ones left out). */
+export function recurringMonthly(items: Recurring[]): { bills: Cents; subscriptions: Cents; total: Cents } {
+  let bills = 0;
+  let subscriptions = 0;
+  for (const r of items) {
+    if (!r.active) continue;
+    if (r.kind === 'bill') bills += monthlyCost(r);
+    else subscriptions += monthlyCost(r);
+  }
+  return { bills, subscriptions, total: bills + subscriptions };
+}

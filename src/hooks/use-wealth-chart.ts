@@ -9,9 +9,9 @@ import { useDebtPlan } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
 import { chartCash, chartDebt } from '@/theme';
 
-/** A year back and a year ahead, so today sits in the middle of the chart. */
-const BACK = 12;
-const AHEAD = 12;
+/** How far ahead the chart projects, and how much history it shows with it. */
+export type WealthRange = 3 | 6 | 12;
+const BACK: Record<WealthRange, number> = { 3: 2, 6: 4, 12: 6 };
 
 const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
 const monthLong = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
@@ -25,7 +25,7 @@ const asDate = (key: string) => {
  * year projected (dashed). Debt follows the payoff plan; cash moves by the usual monthly
  * cash flow (last three full months) minus the plan's payments.
  */
-export function useWealthChart() {
+export function useWealthChart(range: WealthRange = 3) {
   const accounts = useStore((s) => s.accounts);
   const transactions = useStore((s) => s.transactions);
   const { monthly, comparison } = useDebtPlan();
@@ -33,7 +33,7 @@ export function useWealthChart() {
   return useMemo(() => {
     const day = today();
     // BACK months before this one, plus this month (which ends today).
-    const history = balanceHistory({ accounts, transactions }, BACK + 1, day);
+    const history = balanceHistory({ accounts, transactions }, BACK[range] + 1, day);
     if (history.length === 0) return null;
     const latest = history[history.length - 1];
     const cashFlow = monthlyCashFlow({ accounts, transactions }, day);
@@ -43,12 +43,17 @@ export function useWealthChart() {
       debtBalances: plan ? plan.balances : latest.debt > 0 ? [latest.debt] : [],
       monthlyPayment: monthly,
       cashFlow,
-      months: AHEAD,
+      months: range,
     });
     const months = [...history.map((h) => h.month), ...projected.map((_, i) => addMonthKey(latest.month, i + 1))];
-    // The chart's floor is $0; a projection that runs out of cash stops there (and the note says when).
+    // The chart's floor is $0; a projection that runs out of cash stops there.
     const series: ChartSeries[] = [
-      { id: 'debt', label: 'Debt', color: chartDebt, values: [...history.map((h) => h.debt), ...projected.map((p) => p.debt)] },
+      {
+        id: 'debt',
+        label: 'Debt',
+        color: chartDebt,
+        values: [...history.map((h) => h.debt), ...projected.map((p) => p.debt)],
+      },
       {
         id: 'cash',
         label: 'Cash',
@@ -59,36 +64,32 @@ export function useWealthChart() {
     const projectFrom = history.length;
     const now = projectFrom - 1;
 
-    // Five evenly spaced labels; today reads "Now".
+    // Today reads "Now".
     const thisYear = Number(latest.month.slice(0, 4));
     const tickLabel = (i: number) => {
       if (i === now) return 'Now';
       const key = months[i];
       const year = Number(key.slice(0, 4));
-      return year === thisYear ? monthShort.format(asDate(key)) : `${monthShort.format(asDate(key))} ’${key.slice(2, 4)}`;
+      return year === thisYear
+        ? monthShort.format(asDate(key))
+        : `${monthShort.format(asDate(key))} ’${key.slice(2, 4)}`;
     };
-    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => tickLabel(Math.round(f * (months.length - 1))));
+    // Every month when there are few (so today is always labeled); otherwise five spread evenly.
+    const ticks =
+      months.length <= 7
+        ? months.map((_, i) => tickLabel(i))
+        : [0, 0.25, 0.5, 0.75, 1].map((f) => tickLabel(Math.round(f * (months.length - 1))));
 
-    const runsOut = projected.findIndex((p) => p.cash < 0);
     const end = projected[projected.length - 1];
-    const usual =
-      cashFlow === 0 ? 'stays about where it is' : `moves ${formatMoney(cashFlow, { whole: true, signed: true })} a month (your last 3 months)`;
-    const note =
-      projectFrom === 1 && cashFlow === 0
-        ? 'Dashed lines are the next year. Cash stays flat until there’s a full month of history to project from.'
-        : `Dashed lines are the next year: cash ${usual}${
-            plan ? `, less debt payments; debt follows your ${formatMoney(monthly, { whole: true })}-a-month plan` : ''
-          }.${runsOut >= 0 ? ` At this pace, cash runs out in ${monthLong.format(asDate(months[projectFrom + runsOut]))}.` : ''}`;
-
     return {
       history,
       latest,
       series,
       projectFrom,
       ticks,
-      note,
-      pointLabel: (i: number) => (i > now ? `Projected · ${monthLong.format(asDate(months[i]))}` : monthLong.format(asDate(months[i]))),
+      pointLabel: (i: number) =>
+        i > now ? `Projected · ${monthLong.format(asDate(months[i]))}` : monthLong.format(asDate(months[i])),
       accessibilityLabel: `Cash is ${formatMoney(latest.cash, { whole: true })} and debt ${formatMoney(latest.debt, { whole: true })} today. In a year, projected cash is ${formatMoney(Math.max(0, end.cash), { whole: true })} and debt ${formatMoney(end.debt, { whole: true })}.`,
     };
-  }, [accounts, transactions, monthly, comparison]);
+  }, [accounts, transactions, monthly, comparison, range]);
 }

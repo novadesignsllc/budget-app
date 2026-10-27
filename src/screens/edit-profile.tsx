@@ -118,12 +118,6 @@ export function EditProfile({ id }: { id?: string }) {
           </View>
         </FormRow>
       </FormCard>
-      {!existing && (
-        <Text variant="footnote" tone="textSecondary" style={{ paddingHorizontal: spacing.xs }}>
-          A profile is its own budget: its own accounts, envelopes, debts and bills. Switch between them with the tabs
-          at the bottom.
-        </Text>
-      )}
       <Button title={existing ? 'Save' : 'Add profile'} size="lg" disabled={!trimmed || busy} onPress={save} />
     </SheetScreen>
   );

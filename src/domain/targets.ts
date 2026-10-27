@@ -1,3 +1,4 @@
+import { ceilDollars } from './money';
 import type { MonthKey } from './months';
 import type { Cents, Envelope, TargetKind } from './types';
 
@@ -28,11 +29,12 @@ export function targetSetFor(envelope: Pick<Envelope, 'targets' | 'monthlyTarget
   const entries = Object.keys(envelope.targets ?? {})
     .filter((m) => m <= month)
     .sort();
+  // Targets are whole dollars, rounded up: a $10.10 bill budgets $11, so pennies never leave it short.
   if (entries.length) {
     const v = envelope.targets![entries[entries.length - 1]];
-    return v && v > 0 ? v : null;
+    return v && v > 0 ? ceilDollars(v) : null;
   }
-  return envelope.monthlyTarget && envelope.monthlyTarget > 0 ? envelope.monthlyTarget : null;
+  return envelope.monthlyTarget && envelope.monthlyTarget > 0 ? ceilDollars(envelope.monthlyTarget) : null;
 }
 
 /** Whether the target is snoozed for `month`. */

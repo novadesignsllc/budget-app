@@ -1,3 +1,4 @@
+import { ceilDollars } from './money';
 import { accountPool, envelopePool, type Pool } from './pools';
 import { targetFor, targetNeed } from './targets';
 import { isCashAccount, type Account, type Allocation, type Cents, type Envelope, type ISODate, type Transaction } from './types';
@@ -197,7 +198,8 @@ export function targetGaps(
       const row = budget.envelopes.get(e.id) ?? { assigned: 0, carriedIn: 0 };
       // Debt payments always want the full amount this month.
       const need = e.debtAccountId ? target! - row.assigned : targetNeed(e, target!, row);
-      return { envelopeId: e.id, need };
+      // Whole dollars, rounded up: Auto-assign never leaves a target a few cents short.
+      return { envelopeId: e.id, need: ceilDollars(need) };
     })
     .filter((g) => g.need > 0);
 }
@@ -208,4 +210,17 @@ export const MONTHS_AHEAD = 12;
 /** You can always look back, and plan up to MONTHS_AHEAD months ahead. */
 export function canGoToMonth(month: MonthKey, today: ISODate): boolean {
   return month <= addMonthKey(monthOf(today), MONTHS_AHEAD);
+}
+
+/** Money already given to months after `month` (budgeting ahead), and which months. */
+export function assignedAhead(allocations: Allocation[], month: MonthKey): { total: Cents; months: MonthKey[] } {
+  const end = monthEnd(month);
+  const months = new Set<MonthKey>();
+  let total = 0;
+  for (const a of allocations) {
+    if (a.date <= end) continue;
+    total += a.amount;
+    months.add(monthOf(a.date));
+  }
+  return { total, months: [...months].sort() };
 }

@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { ChartLegend, LineChart } from '@/components/line-chart';
+import { AssignedAheadNote, BudgetCheckCard, MonthlyCard, useAssignedAhead } from '@/components/home-cards';
+import { RangePills } from '@/components/range-pills';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
-import { budgetStatus } from '@/domain/budget-status';
 import { addDays, daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetHealth } from '@/domain/health';
 import { formatDollars, formatMoney } from '@/domain/money';
@@ -13,9 +15,9 @@ import { isCashAccount, type Recurring } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { payoffLabel } from '@/screens/debt';
-import { BudgetStatusCard, Home, todayTitle } from '@/screens/home';
+import { Home, todayTitle } from '@/screens/home';
 import { isListed, newestFirst } from '@/screens/transactions';
-import { useWealthChart } from '@/hooks/use-wealth-chart';
+import { useWealthChart, type WealthRange } from '@/hooks/use-wealth-chart';
 import { useStore } from '@/store';
 import { chartCash, chartDebt, spacing, useColors } from '@/theme';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
@@ -44,7 +46,9 @@ export function DesktopHome() {
   const showToast = useToast((s) => s.show);
   const thisMonth = useBudgetMonth(currentMonth());
   const { comparison } = useDebtPlan();
-  const wealth = useWealthChart();
+  const [range, setRange] = useState<WealthRange>(3);
+  const wealth = useWealthChart(range);
+  const ahead = useAssignedAhead();
 
   // No accounts yet: the phone's getting-started card works here too.
   if (all.length === 0) return <Home />;
@@ -54,7 +58,6 @@ export function DesktopHome() {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const daysLeft = daysInMonth - now.getDate();
   const health = budgetHealth(ledger);
-  const status = budgetStatus(envelopes, thisMonth.envelopes, now.getDate(), daysInMonth);
   const history = wealth?.history ?? [];
   const soon = [...dueForApproval(recurring, day), ...upcoming(recurring, day, 7)];
   const accountById = new Map(all.map((a) => [a.id, a]));
@@ -88,7 +91,9 @@ export function DesktopHome() {
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.md }}>
           <PageTitle>{todayTitle(now)}</PageTitle>
           <Text variant="callout" tone="textSecondary">
-            {daysLeft === 0 ? `Last day of ${monthName.format(now)}` : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left in ${monthName.format(now)}`}
+            {daysLeft === 0
+              ? `Last day of ${monthName.format(now)}`
+              : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left in ${monthName.format(now)}`}
           </Text>
         </View>
       }
@@ -107,17 +112,34 @@ export function DesktopHome() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'flex-start' }}>
         {wealth && (
           <DCard padded style={{ flexGrow: 2, flexShrink: 1, flexBasis: 560, minWidth: 0 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'flex-start',
+                gap: spacing.md,
+              }}
+            >
               <View style={{ gap: 2 }}>
                 <Text variant="footnote" tone="textSecondary">
                   Where you stand
                 </Text>
-                <Text style={{ fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5, color: colors.text, fontVariant: ['tabular-nums'] }}>
+                <Text
+                  style={{
+                    fontSize: 30,
+                    lineHeight: 36,
+                    fontWeight: '700',
+                    letterSpacing: -0.5,
+                    color: colors.text,
+                    fontVariant: ['tabular-nums'],
+                  }}
+                >
                   {formatMoney(standing)}
                 </Text>
                 {change !== 0 && (
                   <Text variant="callout" weight="600" tone={change > 0 ? 'positive' : 'negative'}>
-                    {change > 0 ? 'Up' : 'Down'} {formatMoney(Math.abs(change), { whole: true })} since {monthShort.format(monthDate(first.month))}
+                    {change > 0 ? 'Up' : 'Down'} {formatMoney(Math.abs(change), { whole: true })} since{' '}
+                    {monthShort.format(monthDate(first.month))}
                   </Text>
                 )}
               </View>
@@ -129,6 +151,15 @@ export function DesktopHome() {
                 ]}
               />
             </View>
+            <RangePills
+              options={[
+                { value: 3, label: 'Next 3 months' },
+                { value: 6, label: '6 months' },
+                { value: 12, label: '1 year' },
+              ]}
+              value={range}
+              onChange={setRange}
+            />
             <LineChart
               height={220}
               series={wealth.series}
@@ -140,14 +171,12 @@ export function DesktopHome() {
               formatAxis={k}
               accessibilityLabel={wealth.accessibilityLabel}
             />
-            <Text variant="footnote" tone="textTertiary">
-              {wealth.note}
-            </Text>
           </DCard>
         )}
 
         <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 300, minWidth: 0, gap: spacing.lg }}>
-          <BudgetStatusCard status={status} day={now.getDate()} daysInMonth={daysInMonth} />
+          <BudgetCheckCard padding={18} />
+          <MonthlyCard padding={18} />
           <DCard>
             <Pressable
               accessibilityRole="button"
@@ -183,6 +212,11 @@ export function DesktopHome() {
                 Assign ›
               </Text>
             </Pressable>
+            {ahead && (
+              <View style={{ paddingHorizontal: 18, paddingBottom: 12, marginTop: -6 }}>
+                <AssignedAheadNote />
+              </View>
+            )}
           </DCard>
         </View>
       </View>
@@ -199,7 +233,13 @@ export function DesktopHome() {
               const days = daysBetween(day, r.nextDue);
               const isDue = r.nextDue <= day;
               const when =
-                days < 0 ? `Due ${formatDay(r.nextDue, day).toLowerCase()}` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+                days < 0
+                  ? `Due ${formatDay(r.nextDue, day).toLowerCase()}`
+                  : days === 0
+                    ? 'Due today'
+                    : days === 1
+                      ? 'Tomorrow'
+                      : `In ${days} days`;
               const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
               return (
                 <View
@@ -226,7 +266,11 @@ export function DesktopHome() {
                       <Text variant="body" weight="600" tone={onCard ? 'negative' : 'text'} numberOfLines={1}>
                         {r.name}
                       </Text>
-                      <Text variant="footnote" tone={onCard ? 'negative' : isDue ? 'orange' : 'textSecondary'} numberOfLines={1}>
+                      <Text
+                        variant="footnote"
+                        tone={onCard ? 'negative' : isDue ? 'orange' : 'textSecondary'}
+                        numberOfLines={1}
+                      >
                         {onCard ? `Slip on ${account?.name ?? 'a card'}` : when}
                       </Text>
                     </View>
@@ -254,12 +298,18 @@ export function DesktopHome() {
                 </Text>
               </Pressable>
             </View>
-            <Text style={{ fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4 }} tone={plan.months == null ? 'negative' : 'text'}>
+            <Text
+              style={{ fontSize: 26, lineHeight: 32, fontWeight: '700', letterSpacing: -0.4 }}
+              tone={plan.months == null ? 'negative' : 'text'}
+            >
               {plan.months == null ? 'Never at this payment' : payoffLabel(plan.months)}
             </Text>
             <Text variant="callout" tone="textSecondary">
-              {debtPaid > 0 ? `${formatMoney(debtPaid, { whole: true })} paid since ${monthShort.format(monthDate(first.month))} · ` : ''}
-              {settings.debtStrategy === 'avalanche' ? 'Avalanche' : 'Snowball'} · {formatMoney(settings.monthlyDebtPayment, { whole: true })} a month
+              {debtPaid > 0
+                ? `${formatMoney(debtPaid, { whole: true })} paid since ${monthShort.format(monthDate(first.month))} · `
+                : ''}
+              {settings.debtStrategy === 'avalanche' ? 'Avalanche' : 'Snowball'} ·{' '}
+              {formatMoney(settings.monthlyDebtPayment, { whole: true })} a month
             </Text>
             {comparison && comparison.interestSaved > 0 && (
               <Text variant="callout" weight="600" tone="positive">
@@ -348,7 +398,15 @@ export function DesktopHome() {
 
 function CardTop({ title, detail }: { title: string; detail?: string }) {
   return (
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 16, paddingBottom: 10 }}>
+    <View
+      style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingHorizontal: 18,
+        paddingTop: 16,
+        paddingBottom: 10,
+      }}
+    >
       <Text variant="body" weight="700">
         {title}
       </Text>

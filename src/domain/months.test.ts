@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { computeLedger } from './ledger';
-import { addMonthKey, assignDateFor, canGoToMonth, computeMonth, formatMonth, monthEnd, targetGaps } from './months';
+import { addMonthKey, assignDateFor, assignedAhead, canGoToMonth, computeMonth, formatMonth, monthEnd, targetGaps } from './months';
 import type { Account, Allocation, Envelope, Transaction } from './types';
 
 const checking: Account = { id: 'chk', name: 'Checking', kind: 'checking', openingBalance: 100000, openedOn: '2026-09-01', order: 0 };
@@ -218,5 +218,12 @@ describe('assigning months ahead', () => {
   it('lets you go a year ahead, not further', () => {
     expect(canGoToMonth('2027-10', '2026-10-27')).toBe(true);
     expect(canGoToMonth('2027-11', '2026-10-27')).toBe(false);
+  });
+});
+
+describe('assignedAhead', () => {
+  it('adds up money given to later months', () => {
+    const allocations = [al('groc', 10000, '2026-10-05'), al('groc', 5000, '2026-11-01'), al('save', 2500, '2026-12-01')];
+    expect(assignedAhead(allocations, '2026-10')).toEqual({ total: 7500, months: ['2026-11', '2026-12'] });
   });
 });

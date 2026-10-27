@@ -1,6 +1,7 @@
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useProfiles } from '@/sync/profiles';
 import { spacing } from '@/theme';
 
 /** Width of the desktop sidebar. */
@@ -27,7 +28,9 @@ export function useDock() {
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
   const paddingBottom = insets.bottom > 0 ? insets.bottom - 4 : 8;
-  const height = desktop ? 0 : QUICK_ADD_HEIGHT + TAB_BAR_HEIGHT + PROFILE_BAR_HEIGHT + 1 + paddingBottom;
+  // The profile tabs only show with two or more profiles.
+  const profileTabs = useProfiles((s) => s.list.length > 1);
+  const height = desktop ? 0 : QUICK_ADD_HEIGHT + TAB_BAR_HEIGHT + (profileTabs ? PROFILE_BAR_HEIGHT + 1 : 0) + paddingBottom;
   return {
     height,
     paddingBottom,

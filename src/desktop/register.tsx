@@ -247,7 +247,7 @@ export function Label({
   right?: boolean;
 }) {
   return (
-    <Text variant="label" caps color="#6B778C" align={right ? 'right' : 'left'} style={flex ? { flex } : { width }}>
+    <Text variant="label" caps tone="textTertiary" align={right ? 'right' : 'left'} style={flex ? { flex } : { width }}>
       {children}
     </Text>
   );

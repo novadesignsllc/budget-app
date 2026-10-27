@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
@@ -11,18 +12,19 @@ import { MiniCard } from '@/components/mini-card';
 import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
 import { ScreenTitle } from '@/components/screen-title';
+import { AssignedAheadNote, BudgetCheckCard, MonthlyCard, useAssignedAhead } from '@/components/home-cards';
+import { RangePills } from '@/components/range-pills';
 import { Text } from '@/components/text';
 import { DateBlock, TransactionRow } from '@/components/transaction-row';
 import { useToast } from '@/components/toast';
 import { addDays, daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
-import { budgetStatus, type BudgetStatus } from '@/domain/budget-status';
 import { budgetHealth } from '@/domain/health';
 import { formatDollars, formatMoney } from '@/domain/money';
 import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
-import { useWealthChart } from '@/hooks/use-wealth-chart';
+import { useWealthChart, type WealthRange } from '@/hooks/use-wealth-chart';
 import { useStore } from '@/store';
 import { isListed, newestFirst } from '@/screens/transactions';
 import { loadSampleData } from '@/store/sample-data';
@@ -37,7 +39,8 @@ const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' });
 /** "Friday, October 23rd": Home's title is today. */
 export function todayTitle(d: Date) {
   const n = d.getDate();
-  const suffix = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
+  const suffix =
+    n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
   return `${weekday.format(d)}, ${monthName.format(d)} ${n}${suffix}`;
 }
 const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
@@ -63,10 +66,9 @@ export function Home() {
   // Anything waiting for approval, then the next week of bills and subscriptions.
   const soon = [...dueForApproval(recurring, day), ...upcoming(recurring, day, 7)];
   const health = budgetHealth(ledger);
-  const now = fromISODate(day);
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const status = budgetStatus(envelopes, thisMonth.envelopes, now.getDate(), daysInMonth);
-  const wealth = useWealthChart();
+  const [range, setRange] = useState<WealthRange>(3);
+  const wealth = useWealthChart(range);
+  const ahead = useAssignedAhead();
   const history = wealth?.history ?? [];
   const accountById = new Map(all.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
@@ -109,7 +111,9 @@ export function Home() {
 
       {health.short > 0 && (
         <Card tone="urgent">
-          <View style={{ flexDirection: 'row', gap: 10, padding: spacing.md + 2, backgroundColor: colors.negativeSoft }}>
+          <View
+            style={{ flexDirection: 'row', gap: 10, padding: spacing.md + 2, backgroundColor: colors.negativeSoft }}
+          >
             <View
               style={{
                 width: 24,
@@ -168,6 +172,15 @@ export function Home() {
               ]}
             />
           </View>
+          <RangePills
+            options={[
+              { value: 3, label: 'Next 3 months' },
+              { value: 6, label: '6 months' },
+              { value: 12, label: '1 year' },
+            ]}
+            value={range}
+            onChange={setRange}
+          />
           <LineChart
             series={wealth.series}
             projectFrom={wealth.projectFrom}
@@ -178,9 +191,6 @@ export function Home() {
             formatAxis={k}
             accessibilityLabel={wealth.accessibilityLabel}
           />
-          <Text variant="caption" tone="textTertiary">
-            {wealth.note}
-          </Text>
         </Card>
       )}
 
@@ -230,9 +240,16 @@ export function Home() {
             Assign ›
           </Text>
         </Pressable>
+        {ahead && (
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: 12, marginTop: -6 }}>
+            <AssignedAheadNote />
+          </View>
+        )}
       </Card>
 
-      <BudgetStatusCard status={status} day={now.getDate()} daysInMonth={daysInMonth} />
+      <BudgetCheckCard />
+
+      <MonthlyCard />
 
       {soon.length > 0 && (
         <Card>
@@ -245,7 +262,13 @@ export function Home() {
             const envelope = r.envelopeId ? envelopeById.get(r.envelopeId) : undefined;
             const amount = formatMoney(r.amount);
             const when =
-              days < 0 ? `Due ${formatDay(r.nextDue, day).toLowerCase()}` : days === 0 ? 'Due today' : days === 1 ? 'Tomorrow' : `In ${days} days`;
+              days < 0
+                ? `Due ${formatDay(r.nextDue, day).toLowerCase()}`
+                : days === 0
+                  ? 'Due today'
+                  : days === 1
+                    ? 'Tomorrow'
+                    : `In ${days} days`;
             const sub = onCard ? `Slip on ${account?.name ?? 'a card'}` : when;
             const ink = onCard ? 'negative' : 'text';
             return (
@@ -439,104 +462,5 @@ export function Home() {
         </Pressable>
       </Card>
     </Screen>
-  );
-}
-
-const STATUS_LOOK = {
-  ok: { label: 'On track', ink: 'positive', dot: 'positive', soft: 'positiveSoft' },
-  close: { label: 'Getting close', ink: 'caution', dot: 'cautionDot', soft: 'cautionSoft' },
-  over: { label: 'Overspent', ink: 'negative', dot: 'negativeStrong', soft: 'negativeSoft' },
-} as const;
-
-/**
- * Everyday money at a glance: what's left in the Daily envelopes this month and whether
- * spending is keeping pace with the calendar. The tick on the bar is today.
- */
-export function BudgetStatusCard({ status, day, daysInMonth }: { status: BudgetStatus; day: number; daysInMonth: number }) {
-  const colors = useColors();
-  const look = STATUS_LOOK[status.level];
-  const total = status.spent + Math.max(status.left, 0);
-  const used = total > 0 ? Math.min(1, status.spent / total) : 0;
-  const reason =
-    status.level === 'over'
-      ? status.overspent.length === 1
-        ? `${status.overspent[0].envelope.name} is over by ${formatDollars(status.overspent[0].by)}`
-        : `${status.overspent.length} envelopes are overspent`
-      : status.level === 'close'
-        ? `Spending is ahead of the month · day ${day} of ${daysInMonth}`
-        : `${formatDollars(status.spent)} spent of ${formatDollars(total)} · day ${day} of ${daysInMonth}`;
-  return (
-    <Card>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={`Budget status: ${look.label}. ${formatDollars(status.left)} left to spend. ${reason}`}
-        onPress={() => router.navigate('/budget')}
-        style={({ pressed }) => ({
-          paddingHorizontal: spacing.lg,
-          paddingVertical: spacing.md,
-          gap: spacing.sm,
-          backgroundColor: pressed ? colors.control : colors.surface,
-        })}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Text variant="footnote" tone="textSecondary" style={{ flex: 1 }}>
-            Budget status
-          </Text>
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 6,
-              paddingHorizontal: 8,
-              height: 24,
-              borderRadius: 6,
-              backgroundColor: colors[look.soft],
-            }}
-          >
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: colors[look.dot] }} />
-            <Text variant="footnote" weight="600" color={colors[look.ink]}>
-              {look.label}
-            </Text>
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-          <AnimatedNumber
-            variant="title"
-            weight="600"
-            tone={status.left < 0 ? 'negative' : 'text'}
-            value={status.left}
-            format={formatDollars}
-          />
-          <Text variant="callout" tone="textSecondary">
-            left to spend
-          </Text>
-        </View>
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.fill }}>
-          <View
-            style={{
-              width: `${used * 100}%`,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor: colors[look.dot],
-            }}
-          />
-          <View
-            style={{
-              position: 'absolute',
-              left: `${status.elapsed * 100}%`,
-              top: -3,
-              width: 2,
-              height: 12,
-              marginLeft: -1,
-              borderRadius: 1,
-              backgroundColor: colors.text,
-            }}
-          />
-        </View>
-        <Text variant="footnote" color={status.level === 'ok' ? colors.textSecondary : colors[look.ink]} numberOfLines={1}>
-          {reason}
-        </Text>
-      </Pressable>
-    </Card>
   );
 }

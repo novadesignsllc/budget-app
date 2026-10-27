@@ -161,9 +161,6 @@ export function DesktopTransactions() {
           </Text>
         </View>
       </DCard>
-      <Text variant="footnote" style={{ color: '#6B778C', marginTop: -6, paddingHorizontal: 4 }}>
-        Type in the top row and press Enter to save; Tab moves across. Click any row to edit it. Gray rows are reconciled.
-      </Text>
     </DPage>
   );
 }

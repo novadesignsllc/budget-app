@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import { generateDemo } from '@/store/demo-data';
 
-import { balanceHistory, monthlyCashFlow, projectBalances } from './history';
+import { averageMonthlyIncome, balanceHistory, monthlyCashFlow, projectBalances } from './history';
 import { computeLedger } from './ledger';
 import type { Account, Transaction } from './types';
 
@@ -69,5 +69,17 @@ describe('projections', () => {
     expect(p.map((x) => x.debt)).toEqual([15000, 0, 0, 0]);
     // Month 1 pays 20,000; month 2 pays the last 15,000; then nothing.
     expect(p.map((x) => x.cash)).toEqual([130000, 165000, 215000, 265000]);
+  });
+});
+
+describe('averageMonthlyIncome', () => {
+  const chk: Account = { id: 'chk', name: 'Checking', kind: 'checking', openingBalance: 0, openedOn: '2026-07-01', order: 0 };
+  const inc = (date: string, amount: number): Transaction => ({ id: date, date, accountId: 'chk', amount, kind: 'income', payee: 'Job', cleared: false, createdAt: 0 });
+  it('averages full months since the account opened, leaving out this month', () => {
+    const transactions = [inc('2026-07-15', 300000), inc('2026-08-15', 300000), inc('2026-09-15', 360000), inc('2026-10-01', 999999)];
+    expect(averageMonthlyIncome({ accounts: [chk], transactions }, '2026-10-20')).toBe(320000);
+  });
+  it('is zero before a full month', () => {
+    expect(averageMonthlyIncome({ accounts: [{ ...chk, openedOn: '2026-10-02' }], transactions: [] }, '2026-10-20')).toBe(0);
   });
 });

@@ -7,6 +7,8 @@ export type ParseContext = {
   envelopes: Envelope[];
   /** Normalized payee → envelope id, learned from past transactions. */
   merchantMemory: Record<string, string>;
+  /** Normalized payees whose money always goes to Ready to assign. */
+  incomePayees?: Set<string>;
   today: ISODate;
   /**
    * The text came from dictation. Speech turns "two twenty-seven" into "227", so a bare
@@ -208,6 +210,10 @@ export function envelopeFor(payee: string, ctx: Pick<ParseContext, 'envelopes' |
   return guessed ? { envelopeId: guessed, envelopeSource: 'guessed' as EnvelopeSource } : NO_ENVELOPE;
 }
 
+function isIncomePayee(payee: string, ctx: Pick<ParseContext, 'incomePayees'>): boolean {
+  return !!payee && !!ctx.incomePayees?.has(normalizePayee(payee));
+}
+
 /**
  * A draft from the two typed fields. The name is taken as written (so "7-Eleven" stays a
  * name), and it always starts as an outflow; the Outflow/Inflow toggle changes that.
@@ -215,14 +221,16 @@ export function envelopeFor(payee: string, ctx: Pick<ParseContext, 'envelopes' |
 export function draftFromFields(payee: string, amount: Cents | null, ctx: ParseContext): ParsedEntry {
   const name = payee.trim();
   const account = defaultAccount(ctx.accounts) ?? null;
-  const { envelopeId, envelopeSource } = envelopeFor(name, ctx);
+  // A paycheck payee starts as an inflow to Ready to assign.
+  const income = isIncomePayee(name, ctx);
+  const { envelopeId, envelopeSource } = income ? NO_ENVELOPE : envelopeFor(name, ctx);
   return {
     amount,
     payee: name,
     date: ctx.today,
     accountId: account?.id ?? null,
     accountMentioned: false,
-    kind: 'spend',
+    kind: income ? 'income' : 'spend',
     envelopeId,
     envelopeSource,
   };
@@ -320,10 +328,12 @@ export function parseQuickAdd(input: string, ctx: ParseContext): ParsedEntry {
     if (!saidEnvelope.bare || leavesAName) rest = without;
   }
 
-  const isIncome = direction ? direction[1].toLowerCase() === 'inflow' : sign === '+' || INCOME_RE.test(said);
   const account = found?.account ?? defaultAccount(ctx.accounts) ?? null;
 
   const payee = titleCase(stripFiller(rest));
+  const isIncome = direction
+    ? direction[1].toLowerCase() === 'inflow'
+    : sign === '+' || INCOME_RE.test(said) || isIncomePayee(payee, ctx);
 
   const kind: ParsedEntry['kind'] = isIncome
     ? 'income'

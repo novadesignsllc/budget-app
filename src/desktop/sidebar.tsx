@@ -18,7 +18,7 @@ export type SidebarTab = { name: string; href: string; label: string };
 type ItemProps = Omit<TabTriggerSlotProps, 'ref'> & { ref?: React.Ref<React.ComponentRef<typeof View>> };
 
 /**
- * The desktop's left column: the mark, Add transaction, the sections (1–5 on the
+ * The desktop's left column: the mark, Add transaction, the sections (1–7 on the
  * keyboard), every account with its balance, and whether the phone is in sync.
  */
 export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
@@ -27,7 +27,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
   const { cash, debts } = useAccounts();
   const pathname = usePathname();
 
-  // N adds a transaction, 1–5 switch sections, / jumps to the page's search.
+  // N adds a transaction, 1–7 switch sections, / jumps to the page's search.
   usePageKeys((e) => {
     if (keypadIsOpen() || desktopSheetOpen()) return;
     const n = Number(e.key);
@@ -77,9 +77,6 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
               <SideItem label={t.label} shortcut={String(i + 1)} />
             </TabTrigger>
           ))}
-          <Link href="/settings" asChild>
-            <SideItem label="Settings" />
-          </Link>
         </View>
 
         {[
@@ -138,12 +135,9 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
 
 function SideItem({ label, shortcut, isFocused: tabFocused, ref, ...props }: ItemProps & { label: string; shortcut?: string }) {
   const colors = useColors();
-  // Settings lives inside Home's stack, so it gets the highlight there instead of Home.
-  const pathname = usePathname();
-  const onSettings = pathname === '/settings';
   // An account's page highlights the account in the list below instead.
-  const onAccount = pathname.startsWith('/account/');
-  const isFocused = label === 'Settings' ? onSettings : tabFocused && !onSettings && !onAccount;
+  const pathname = usePathname();
+  const isFocused = tabFocused && !pathname.startsWith('/account/');
   return (
     <Pressable
       ref={ref}

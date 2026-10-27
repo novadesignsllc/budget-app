@@ -15,7 +15,7 @@ import { DButton, DCard, DPage, Kbd, PageTitle, Spacer } from './ui';
 
 const SHORTCUTS: [string, string][] = [
   ['N', 'New transaction'],
-  ['1 – 5', 'Home, Transactions, Budget, Debt, Recurring'],
+  ['1 – 7', 'Home, Transactions, Budget, Debt, Recurring, Income, Settings'],
   ['/', 'Search on this page'],
   ['↑ ↓', 'Pick an envelope in Budget'],
   ['← →', 'Change the month in Budget'],
@@ -33,7 +33,6 @@ export function DesktopSettings() {
   return (
     <DPage
       title="Settings"
-      back="Home"
       header={
         <>
           <PageTitle>Settings</PageTitle>

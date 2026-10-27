@@ -206,6 +206,8 @@ type Actions = {
   renamePayee: (id: string, name: string) => void;
   deletePayee: (id: string) => void;
   setPayeeEnvelope: (id: string, envelopeId: string | undefined) => void;
+  /** Money from this payee always goes to Ready to assign. */
+  setPayeeIncome: (id: string) => void;
   /** One-time move of the old merchant memory into `payees`. Does nothing once payees exist. */
   migrateMerchantMemory: () => void;
   /**
@@ -244,7 +246,8 @@ function learnPayee(payees: Payee[], name: string, envelopeId?: string): Payee[]
   if (!clean || !normalizePayee(clean)) return payees;
   const existing = findPayee(payees, clean);
   if (!existing) return [...payees, { id: newId(), name: clean, envelopeId }];
-  if (!envelopeId || existing.envelopeId === envelopeId) return payees;
+  // A paycheck payee stays with Ready to assign.
+  if (!envelopeId || existing.income || existing.envelopeId === envelopeId) return payees;
   return payees.map((p) => (p.id === existing.id ? { ...p, envelopeId } : p));
 }
 
@@ -709,7 +712,10 @@ export const useStore = create<Store>()((set, get) => ({
   deletePayee: (id) => set((s) => ({ payees: s.payees.filter((p) => p.id !== id) })),
 
   setPayeeEnvelope: (id, envelopeId) =>
-    set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId } : p)) })),
+    set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId, income: false } : p)) })),
+
+  setPayeeIncome: (id) =>
+    set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId: undefined, income: true } : p)) })),
 
   normalizeGroups: () => {
     set((s) => {

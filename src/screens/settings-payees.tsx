@@ -12,6 +12,7 @@ import { groupColor, radius, spacing, type as typeScale, useColors } from '@/the
 import { haptic } from '@/utils/haptics';
 
 const NONE = '__none__';
+const READY = '__ready__';
 const PREVIEW = 8;
 const ENVELOPE_COLUMN = 150;
 
@@ -92,6 +93,7 @@ export function PayeesCard({
   const payees = useStore((s) => s.payees);
   const envelopes = useStore((s) => s.envelopes);
   const setPayeeEnvelope = useStore((s) => s.setPayeeEnvelope);
+  const setPayeeIncome = useStore((s) => s.setPayeeIncome);
   const addPayee = useStore((s) => s.addPayee);
   const deletePayee = useStore((s) => s.deletePayee);
   const showToast = useToast((s) => s.show);
@@ -106,9 +108,10 @@ export function PayeesCard({
       .sort((a, b) => a.group.localeCompare(b.group) || a.order - b.order);
     return [
       { value: NONE, label: 'Ask each time' },
+      { value: READY, label: 'Ready to assign', dot: colors.positive },
       ...spendable.map((e) => ({ value: e.id, label: e.name, dot: groupColor(e.group), section: e.group })),
     ];
-  }, [envelopes]);
+  }, [envelopes, colors.positive]);
 
   const sorted = useMemo(() => [...payees].sort((a, b) => a.name.localeCompare(b.name)), [payees]);
   const q = searching ? query.trim().toLowerCase() : '';
@@ -147,7 +150,7 @@ export function PayeesCard({
         </Text>
       ) : (
         <>
-          <TableHeader columns={[{ label: 'Payee' }, { label: 'Default envelope', width: ENVELOPE_COLUMN }]} />
+          <TableHeader columns={[{ label: 'Payee' }, { label: 'Goes to', width: ENVELOPE_COLUMN }]} />
           {shown.length === 0 && (
             <Text variant="callout" tone="textSecondary" style={{ padding: spacing.md + 2 }}>
               No payee matches “{query.trim()}”.
@@ -205,10 +208,10 @@ export function PayeesCard({
                     <Dropdown
                       variant="inline"
                       searchable
-                      value={p.envelopeId ?? NONE}
+                      value={p.income ? READY : (p.envelopeId ?? NONE)}
                       options={options}
-                      onChange={(v) => setPayeeEnvelope(p.id, v === NONE ? undefined : v)}
-                      accessibilityLabel={`${p.name} default envelope: ${options.find((o) => o.value === (p.envelopeId ?? NONE))?.label ?? 'Ask each time'}`}
+                      onChange={(v) => (v === READY ? setPayeeIncome(p.id) : setPayeeEnvelope(p.id, v === NONE ? undefined : v))}
+                      accessibilityLabel={`${p.name} default: ${options.find((o) => o.value === (p.income ? READY : (p.envelopeId ?? NONE)))?.label ?? 'Ask each time'}`}
                     />
                   </View>
                 )}

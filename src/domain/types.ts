@@ -124,6 +124,8 @@ export type Payee = {
   id: string;
   name: string;
   envelopeId?: string;
+  /** Money from this payee always goes to Ready to assign (a paycheck), never an envelope. */
+  income?: boolean;
 };
 
 /** Money assigned to (positive) or pulled from (negative) an envelope. */

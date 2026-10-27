@@ -40,10 +40,12 @@ const TABS = [
     sfOn: 'arrow.triangle.2.circlepath',
     md: 'autorenew',
   },
+  { name: 'income', href: '/income', label: 'Income', sf: 'banknote', sfOn: 'banknote.fill', md: 'payments' },
+  { name: 'settings', href: '/settings', label: 'Settings', sf: 'gearshape', sfOn: 'gearshape.fill', md: 'settings' },
 ] as const;
 
 /** The phone tab bar puts Home in the middle. (The hidden TabList keeps Home first, so the app opens on it.) */
-const BAR_ORDER = ['recurring', 'transactions', 'home', 'budget', 'debt'] as const;
+const BAR_ORDER = ['recurring', 'transactions', 'income', 'home', 'budget', 'debt', 'settings'] as const;
 const BAR = BAR_ORDER.map((name) => TABS.find((t) => t.name === name)!);
 
 type Tab = (typeof TABS)[number];
@@ -60,7 +62,8 @@ function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
       accessibilityRole="tab"
       accessibilityLabel={tab.label}
       accessibilityState={{ selected: !!isFocused }}
-      style={{ flex: 1, alignItems: 'center', gap: 3, paddingTop: 7 }}
+      // Seven tabs: each takes its label's width plus an equal share of what's left, so none truncate.
+      style={{ flexGrow: 1, flexBasis: 'auto', alignItems: 'center', gap: 3, paddingTop: 7, paddingHorizontal: 1 }}
     >
       <Icon
         sf={isFocused ? tab.sfOn : tab.sf}

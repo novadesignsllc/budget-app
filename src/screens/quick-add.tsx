@@ -17,7 +17,7 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
-import { payeeMemory } from '@/domain/payees';
+import { incomePayees, payeeMemory } from '@/domain/payees';
 import { draftFromFields, parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type FlagColor, type ISODate } from '@/domain/types';
 import { useEntryOptions } from '@/hooks/use-entry-options';
@@ -79,8 +79,8 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const { all: accounts, cash } = useAccounts();
 
   const ctx = useMemo(
-    () => ({ accounts, envelopes, merchantMemory, today: today() }),
-    [accounts, envelopes, merchantMemory],
+    () => ({ accounts, envelopes, merchantMemory, incomePayees: incomePayees(payees), today: today() }),
+    [accounts, envelopes, merchantMemory, payees],
   );
   const parse = useCallback((input: string) => parseQuickAdd(input, { ...ctx, spoken: true }), [ctx]);
   const parsed = useMemo(

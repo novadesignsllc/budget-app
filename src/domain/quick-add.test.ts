@@ -160,3 +160,17 @@ describe('envelopes said by name', () => {
     expect(draftFromFields('Paycheck', 184216, ctx).kind).toBe('spend');
   });
 });
+
+describe('payees set to Ready to assign', () => {
+  const paid = { ...ctx, incomePayees: new Set(['acmepayroll']) };
+
+  it('typed: starts as an inflow with no envelope', () => {
+    expect(draftFromFields('Acme Payroll', 250000, paid)).toMatchObject({ kind: 'income', envelopeId: null });
+    expect(draftFromFields('Kroger', 5000, paid)).toMatchObject({ kind: 'spend', envelopeId: 'groc' });
+  });
+
+  it('dictated: the payee alone makes it income, unless "outflow" is said', () => {
+    expect(parseQuickAdd('Acme Payroll 2500', paid)).toMatchObject({ kind: 'income', envelopeId: null });
+    expect(parseQuickAdd('Acme Payroll 25 outflow', paid)).toMatchObject({ kind: 'spend' });
+  });
+});

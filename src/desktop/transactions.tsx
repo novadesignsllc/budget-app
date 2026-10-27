@@ -10,7 +10,7 @@ import { cleanAmount, showAmount } from '@/domain/amount-text';
 import { addDays, today } from '@/domain/dates';
 import { formatMoney, parseMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
-import { payeeMemory } from '@/domain/payees';
+import { incomePayees, payeeMemory } from '@/domain/payees';
 import { draftFromFields } from '@/domain/quick-add';
 import { isCashAccount, type ISODate } from '@/domain/types';
 import { useEntryOptions } from '@/hooks/use-entry-options';
@@ -198,10 +198,12 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
   const [problem, setProblem] = useState('');
 
   const memory = useMemo(() => (payees.length ? payeeMemory(payees) : legacyMemory), [payees, legacyMemory]);
-  const draft = draftFromFields(payee, null, { accounts, envelopes, merchantMemory: memory, today: day });
+  const paychecks = useMemo(() => incomePayees(payees), [payees]);
+  const draft = draftFromFields(payee, null, { accounts, envelopes, merchantMemory: memory, incomePayees: paychecks, today: day });
   const accountId = pickedAccount ?? defaultAccountId ?? draft.accountId ?? undefined;
   const account = accounts.find((a) => a.id === accountId);
-  const income = !!inText;
+  // A paycheck payee is an inflow unless an outflow is typed.
+  const income = !!inText || (draft.kind === 'income' && !outText);
   const chosenEnvelope = income ? undefined : (envelopeId ?? draft.envelopeId ?? undefined);
 
   const dateOptions = useMemo<DropdownOption<ISODate>[]>(() => {

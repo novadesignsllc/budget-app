@@ -41,9 +41,3 @@ example
 # generated native folders
 /ios
 /android
-
-# Claude Code worktrees
-.claude/worktrees/
-
-# Vercel's local link
-.vercel

@@ -15,7 +15,7 @@ import { haptic } from '@/utils/haptics';
 const CASH_KINDS: CashKind[] = ['checking', 'savings', 'cash'];
 
 /** One Type list: bank accounts first, then debts. */
-const KINDS: DropdownOption<AccountKind>[] = [
+export const KINDS: DropdownOption<AccountKind>[] = [
   { value: 'checking', label: 'Checking', section: 'Accounts' },
   { value: 'savings', label: 'Savings', section: 'Accounts' },
   { value: 'cash', label: 'Cash', section: 'Accounts' },

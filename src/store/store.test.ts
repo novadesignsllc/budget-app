@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from '@jest/globals';
 
+import { today } from '@/domain/dates';
+import { computeLedger } from '@/domain/ledger';
 import { targetFor } from '@/domain/targets';
 
 import { isLocked, resetStore, useStore } from './index';
@@ -237,5 +239,27 @@ describe('recurring envelopes', () => {
     useStore.getState().addRecurring({ ...bill(account), name: 'Spotify', kind: 'subscription', amount: 1199 });
     const s = useStore.getState();
     expect(s.envelopes.find((e) => e.id === s.recurring[0].envelopeId)).toMatchObject({ group: 'Subscriptions' });
+  });
+});
+
+describe('editing an account', () => {
+  it('changes the balance and Ready to assign when the starting balance changes', () => {
+    const { account } = setup();
+    const s = useStore.getState();
+    s.addTransaction({ date: today(), accountId: account, amount: 2500, kind: 'income', payee: 'Refund' });
+    const before = computeLedger(useStore.getState());
+    useStore.getState().updateAccount(account, { openingBalance: 150000 });
+    const after = computeLedger(useStore.getState());
+    expect(after.balance.get(account)).toBe(152500);
+    expect(after.readyToAssign - before.readyToAssign).toBe(50000);
+  });
+
+  it('keeps a debt negative and its payment envelope named after it', () => {
+    const s = useStore.getState();
+    const card = s.addAccount({ name: 'Visa', kind: 'credit_card', balance: 50000 });
+    useStore.getState().updateAccount(card, { name: 'Chase Visa', kind: 'credit_card', openingBalance: -60000 });
+    const ledger = computeLedger(useStore.getState());
+    expect(ledger.balance.get(card)).toBe(-60000);
+    expect(useStore.getState().envelopes.find((e) => e.debtAccountId === card)?.name).toBe('Chase Visa');
   });
 });

@@ -137,7 +137,7 @@ export function DesktopAccount({ id }: { id: string }) {
                   <DButton label="Transfer" onPress={() => router.push({ pathname: '/transfer', params: { from: id } })} />
                 </>
               )}
-              <DButton label="Rename" onPress={() => router.push({ pathname: '/edit-account', params: { id } })} />
+              <DButton label="Edit account" onPress={() => router.push({ pathname: '/edit-account', params: { id } })} />
               <DButton label="Reconcile" icon={{ sf: 'checkmark', md: 'check' }} variant="accent" onPress={start} />
             </>
           )}

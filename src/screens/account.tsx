@@ -193,7 +193,7 @@ export function AccountDetail({ id, header }: { id: string; header?: React.React
             onPress={() => router.push({ pathname: '/edit-account', params: { id } })}
           >
             <Text variant="footnote" weight="600" tone="accent">
-              Rename
+              Edit
             </Text>
           </Pressable>
           <View style={{ flex: 1 }} />

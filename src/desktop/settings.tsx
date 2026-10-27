@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native';
 import { backend, inDemo } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
 import { Text, type TextTone } from '@/components/text';
+import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
 import { useSession } from '@/sync/session';
 import { useSyncStatus } from '@/sync/status';
@@ -63,6 +64,7 @@ export function DesktopSettings() {
         </View>
 
         <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 320, maxWidth: 420, gap: 14 }}>
+          <ProfilesCard />
           <DCard>
             <SectionTitle>Your account</SectionTitle>
             {inDemo ? (

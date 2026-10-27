@@ -226,7 +226,7 @@ function Stat({ label, accent, children }: { label: string; accent?: boolean; ch
         gap: 2,
         paddingHorizontal: spacing.lg,
         paddingVertical: spacing.md - 2,
-        backgroundColor: accent ? '#FAF9FF' : undefined,
+        backgroundColor: accent ? colors.accentFaint : undefined,
         borderLeftWidth: accent ? 1 : 0,
         borderRightWidth: accent ? 1 : 0,
         borderColor: colors.separator,

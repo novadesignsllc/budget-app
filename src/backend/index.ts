@@ -91,7 +91,7 @@ function createNativeBackend(): Backend {
     listen: (uid, name, onDocs, onError) => {
       let delivered = false;
       return onSnapshot(
-        collection(db, 'users', uid, name),
+        collection(db, `users/${uid}/${name}`),
         { includeMetadataChanges: true },
         (snap) => {
           // After the first one, skip snapshots where only the metadata changed (a write
@@ -111,7 +111,7 @@ function createNativeBackend(): Backend {
         chunks(ops).map((group) => {
           const batch = writeBatch(db);
           for (const op of group) {
-            const ref = doc(db, 'users', uid, op.collection, op.id);
+            const ref = doc(db, `users/${uid}/${op.collection}/${op.id}`);
             if (op.data) batch.set(ref, clean(op.data));
             else batch.delete(ref);
           }

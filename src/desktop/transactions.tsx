@@ -286,7 +286,7 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
   );
 
   return (
-    <View style={{ backgroundColor: '#F7F6FF', borderBottomWidth: 1, borderBottomColor: colors.separator }}>
+    <View style={{ backgroundColor: colors.accentFaint, borderBottomWidth: 1, borderBottomColor: colors.separator }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: GAP, paddingHorizontal: 16, paddingVertical: 8 }}>
         <View style={{ width: W.date }}>
           <Dropdown variant="inline" value={date} options={dateOptions} onChange={setDate} label="Date" />

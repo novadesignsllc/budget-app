@@ -10,7 +10,7 @@ import { Text } from '@/components/text';
 import { formatMoney } from '@/domain/money';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useSyncStatus } from '@/sync/status';
-import { spacing, useColors } from '@/theme';
+import { softOf, spacing, useColors } from '@/theme';
 
 import { focusSearch, Kbd, SlipMark, usePageKeys } from './ui';
 
@@ -158,7 +158,7 @@ function SideItem({ label, shortcut, isFocused: tabFocused, ref, ...props }: Ite
         {label}
       </Text>
       {shortcut ? (
-        <Text variant="caption" color={isFocused ? '#8F84F5' : colors.textTertiary}>
+        <Text variant="caption" color={isFocused ? softOf(colors.accent, 0.65) : colors.textTertiary}>
           {shortcut}
         </Text>
       ) : null}

@@ -11,7 +11,10 @@ export type SnapshotMeta = {
   hasPendingWrites: boolean;
 };
 
-/** A set (data) or delete (null) of one document under users/{uid}/{collection}/{id}. */
+/**
+ * A set (data) or delete (null) of one document under users/{scope}/{collection}/{id}. The
+ * scope is the user's id for their first profile, or `{uid}/profiles/{profileId}` for another.
+ */
 export type WriteOp = { collection: string; id: string; data: DocData | null };
 
 export type Unsubscribe = () => void;
@@ -33,6 +36,7 @@ export type Backend = {
   deleteSignIn(): Promise<void>;
 
   listen(
+    /** The user's id, or `{uid}/profiles/{id}` for one of their other profiles. */
     uid: string,
     collection: string,
     onDocs: (docs: DocData[], meta: SnapshotMeta) => void,

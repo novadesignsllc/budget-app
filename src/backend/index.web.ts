@@ -89,7 +89,7 @@ function createWebBackend(): Backend {
 
     listen: (uid, name, onDocs, onError) =>
       onSnapshot(
-        collection(db, 'users', uid, name),
+        collection(db, `users/${uid}/${name}`),
         { includeMetadataChanges: true },
         (snap) =>
           onDocs(
@@ -103,7 +103,7 @@ function createWebBackend(): Backend {
         chunks(ops).map((group) => {
           const batch = writeBatch(db);
           for (const op of group) {
-            const ref = doc(db, 'users', uid, op.collection, op.id);
+            const ref = doc(db, `users/${uid}/${op.collection}/${op.id}`);
             if (op.data) batch.set(ref, clean(op.data));
             else batch.delete(ref);
           }

@@ -16,6 +16,8 @@ export function useIsDesktop() {
 export const QUICK_ADD_HEIGHT = 8 + 40 + 8;
 /** Tab bar row, not counting the home indicator. */
 export const TAB_BAR_HEIGHT = 7 + 22 + 3 + 13 + 4;
+/** Profile tabs under the tab bar (plus their top border), not counting the home indicator. */
+export const PROFILE_BAR_HEIGHT = 36;
 
 /**
  * Size of the bottom dock (quick-add strip + tab bar). Screens end above it, so only
@@ -25,7 +27,7 @@ export function useDock() {
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
   const paddingBottom = insets.bottom > 0 ? insets.bottom - 4 : 8;
-  const height = desktop ? 0 : QUICK_ADD_HEIGHT + TAB_BAR_HEIGHT + paddingBottom;
+  const height = desktop ? 0 : QUICK_ADD_HEIGHT + TAB_BAR_HEIGHT + PROFILE_BAR_HEIGHT + 1 + paddingBottom;
   return {
     height,
     paddingBottom,

@@ -1,4 +1,5 @@
 import { Platform, type TextStyle } from 'react-native';
+import { create } from 'zustand';
 
 /**
  * The one source of truth for visual values. Approved mockup:
@@ -35,6 +36,8 @@ const light = {
   /** Purple: actions, selection, links, the active tab. */
   accent: '#5B4CF0',
   accentSoft: '#F0EEFE',
+  /** The faintest tint, for a selected row. */
+  accentFaint: '#F7F6FF',
   blue: '#2F6FEB',
   blueSoft: '#E8EFFD',
   /** Due, flags, needs attention. */
@@ -63,9 +66,40 @@ const light = {
 export type Palette = typeof light;
 export const palettes = { light, dark: light };
 
-/** Light only for now (decided 2026-10-23). Kept as a hook so dark can come back later. */
+/**
+ * The accent of the profile you're in. Each profile can pick one of these; all keep white
+ * text readable on them (4.5:1+), and none is red, orange, yellow or green, which mean
+ * overspent, due, short and funded.
+ */
+export const ACCENTS = [
+  { name: 'Purple', hex: '#5B4CF0' },
+  { name: 'Blue', hex: '#2563EB' },
+  { name: 'Teal', hex: '#0F766E' },
+  { name: 'Magenta', hex: '#A21CAF' },
+  { name: 'Graphite', hex: '#3F4A5C' },
+] as const;
+
+export const useAccent = create<{ accent: string }>()(() => ({ accent: light.accent }));
+
+/** A solid light tint of a color, for soft backgrounds behind it. */
+function tint(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const mix = (c: number) => Math.round(255 - (255 - c) * amount);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(mix);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1).toUpperCase()}`;
+}
+
+const withAccent = new Map<string, Palette>();
+/** Light only for now (decided 2026-10-23), with the current profile's accent. */
 export function useColors(): Palette {
-  return light;
+  const accent = useAccent((s) => s.accent);
+  if (accent === light.accent) return light;
+  let palette = withAccent.get(accent);
+  if (!palette) {
+    palette = { ...light, accent, accentSoft: tint(accent, 0.09), accentFaint: tint(accent, 0.04) };
+    withAccent.set(accent, palette);
+  }
+  return palette;
 }
 
 /**

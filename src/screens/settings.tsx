@@ -9,6 +9,7 @@ import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
 import { Text, type TextTone } from '@/components/text';
+import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
 import { useSession } from '@/sync/session';
 import { useStore } from '@/store';
@@ -67,6 +68,8 @@ export function Settings() {
     <>
       <Screen>
         <ScreenTitle title="Settings" />
+
+        <ProfilesCard />
 
         <PayeesCard searching={searching} adding={adding} onDoneAdding={() => setAdding(false)} />
 

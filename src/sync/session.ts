@@ -6,6 +6,7 @@ import type { SessionUser } from '@/backend/types';
 import { resetStore, useStore } from '@/store';
 
 import { startSync } from './engine';
+import { listenToProfiles, MAIN_PROFILE, rememberedProfile, rememberProfile, scopeFor, useProfiles } from './profiles';
 import { useSyncStatus } from './status';
 
 type Session = {
@@ -18,12 +19,14 @@ type Session = {
 export const useSession = create<Session>()(() => ({ status: 'loading', user: null, dataReady: false }));
 
 let stopSync: (() => void) | undefined;
+let stopProfiles: (() => void) | undefined;
 
 function runSync(user: SessionUser) {
   stopSync?.();
   stopSync = startSync({
     backend,
-    uid: user.uid,
+    // The profile you're in decides which budget syncs.
+    uid: scopeFor(user.uid, useProfiles.getState().activeId),
     store: useStore,
     status: useSyncStatus.getState(),
     onReady: () => {
@@ -32,8 +35,24 @@ function runSync(user: SessionUser) {
       // Groups are fixed now: rename Everyday to Daily and fold custom groups into it.
       useStore.getState().normalizeGroups();
       useSession.setState({ dataReady: true });
+      useProfiles.setState({ switching: false });
     },
   });
+}
+
+/**
+ * Opens another profile: stops syncing the one you're in, clears it from the screen, and
+ * loads the other. Nothing is written to either while it switches.
+ */
+export function switchProfile(profileId: string) {
+  const user = useSession.getState().user;
+  if (!user || useProfiles.getState().activeId === profileId) return;
+  pauseSync();
+  resetStore();
+  useSyncStatus.getState().reset();
+  rememberProfile(user.uid, profileId);
+  useProfiles.setState({ activeId: profileId, switching: true });
+  runSync(user);
 }
 
 /**
@@ -55,18 +74,24 @@ export function useSessionBootstrap() {
   useEffect(() => {
     const unsubscribe = backend.onAuth((user) => {
       pauseSync();
+      stopProfiles?.();
+      stopProfiles = undefined;
       resetStore();
       useSyncStatus.getState().reset();
       if (!user) {
+        useProfiles.setState({ activeId: MAIN_PROFILE, switching: false });
         useSession.setState({ status: 'signedOut', user: null, dataReady: false });
         return;
       }
+      useProfiles.setState({ activeId: rememberedProfile(user.uid), switching: false });
+      stopProfiles = listenToProfiles(user.uid);
       useSession.setState({ status: 'signedIn', user, dataReady: false });
       runSync(user);
     });
     return () => {
       unsubscribe();
       pauseSync();
+      stopProfiles?.();
     };
   }, []);
 }

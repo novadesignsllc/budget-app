@@ -21,6 +21,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 
 - `src/domain/`: pure TypeScript money logic with colocated tests (ledger, debt payoff, quick-add parser, recurring, dates). All money is integer cents. Dates are local `YYYY-MM-DD`.
 - `src/store/`: the Zustand store. It isn't persisted itself; Firestore's on-device cache is the persistence. `sample-data.ts` is dev-only.
+- Profiles (`src/sync/profiles.ts`): up to 3 separate budgets per account. The backend's `uid` argument is really a scope: the user id for the first profile, `{uid}/profiles/{id}` for others. The accent color comes from the open profile (`useAccent` in theme); use `colors.accent`/`accentSoft`/`accentFaint`, never a hard-coded purple.
 - `src/backend/`: Firebase behind one interface. `index.ts` is React Native Firebase (iPhone), `index.web.ts` is the JS SDK with the IndexedDB cache (desktop), and `fake.ts` is an in-memory stand-in for tests and `EXPO_PUBLIC_FAKE_BACKEND=1`.
 - `src/sync/`: `engine.ts` diffs the store against Firestore and writes only what changed, applies snapshots from other devices, and holds writes back until everything has loaded once. `status.ts` drives the bottom-left sync pill. `session.ts` follows auth.
 - `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, Recurring, and Settings. Root-level routes are form sheets.

@@ -70,6 +70,7 @@ export default function RootLayout() {
               <Stack.Screen name="reconcile" options={sheetStyle} />
               <Stack.Screen name="fix-balance" options={sheetStyle} />
               <Stack.Screen name="edit-account" options={sheetStyle} />
+              <Stack.Screen name="edit-profile" options={sheetStyle} />
               <Stack.Screen name="reset-account" options={sheetStyle} />
               <Stack.Screen name="delete-account" options={sheetStyle} />
               <Stack.Screen name="envelope/[id]" options={sheetStyle} />

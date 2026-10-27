@@ -611,7 +611,7 @@ function EnvelopeRow({
       style={{
         paddingHorizontal: 16,
         paddingVertical: 10,
-        backgroundColor: selected ? '#F7F6FF' : 'transparent',
+        backgroundColor: selected ? colors.accentFaint : 'transparent',
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: GAP }}>

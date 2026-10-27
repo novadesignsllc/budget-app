@@ -44,11 +44,12 @@ export const STARTERS: { name: string; group: string }[] = [
 ];
 
 /**
- * Assigned, Spent and Left share one width and one gap, so every row and section lines up
- * and a four-digit amount like $5,082 fits with room to spare. Names get "…" first.
+ * Assigned, Spent and Left share one width and one gap, and every label and amount is
+ * centered in its column, so the three read as even steps whatever their length. A
+ * four-digit amount like $5,082 fits with room to spare. Names get "…" first.
  */
-const COL = 64;
-const COL_GAP = 6;
+const COL = 60;
+const COL_GAP = 10;
 /** Inside each box, digits sit this far from its right edge. */
 const COL_PAD = 6;
 const EMPTY: EnvelopeMonth = {
@@ -349,12 +350,17 @@ export function Budget() {
               ENVELOPE
             </Text>
             {['ASSIGNED', 'SPENT', 'LEFT'].map((l) => (
-              // Sized to its text so ASSIGNED never wraps or cuts off; its right edge lines up with the digits below.
-              <View key={l} style={{ width: COL, marginLeft: COL_GAP, alignSelf: 'stretch' }}>
-                <Text variant="label" tone="textTertiary" style={{ position: 'absolute', right: COL_PAD, top: 0 }}>
-                  {l}
-                </Text>
-              </View>
+              // A size down from the usual label, so ASSIGNED fits its column on one line.
+              <Text
+                key={l}
+                variant="label"
+                tone="textTertiary"
+                align="center"
+                numberOfLines={1}
+                style={{ width: COL, marginLeft: COL_GAP, fontSize: 10, letterSpacing: 0.4 }}
+              >
+                {l}
+              </Text>
             ))}
           </View>
         )}
@@ -482,9 +488,12 @@ export function LeftCell({
   onEditingChange,
   onMoveBack,
   width = COL,
+  align = 'right',
 }: {
   /** The box's width; the phone's columns are COL, the desktop's wider. */
   width?: number;
+  /** The phone centers its columns; the desktop table lines digits up on the right. */
+  align?: 'right' | 'center';
   row: EnvelopeMonth;
   bar: TargetBar | null;
   past: boolean;
@@ -546,9 +555,9 @@ export function LeftCell({
         })}
       >
         <Text
-          variant="row"
+          variant={align === 'center' ? 'footnote' : 'row'}
           weight="600"
-          align="right"
+          align={align}
           tone={pill ? undefined : tone}
           color={pill?.fg}
           style={{ fontVariant: ['tabular-nums'] }}
@@ -691,6 +700,8 @@ function EnvelopeRow({
             exact
             cents={row.assigned}
             width={COL}
+            align="center"
+            variant="footnote"
             accessibilityLabel={`Assigned to ${envelope.name}`}
             muted={past}
             onEditingChange={onEditingChange}
@@ -717,11 +728,11 @@ function EnvelopeRow({
           />
           </View>
           <Text
-            variant="row"
+            variant="footnote"
             tone="textSecondary"
-            align="right"
+            align="center"
             numberOfLines={1}
-            style={{ width: COL, marginLeft: COL_GAP, paddingRight: COL_PAD, fontVariant: ['tabular-nums'] }}
+            style={{ width: COL, marginLeft: COL_GAP, fontVariant: ['tabular-nums'] }}
           >
             {formatDollars(row.spent, 'up')}
           </Text>
@@ -730,6 +741,7 @@ function EnvelopeRow({
             bar={bar}
             past={past}
             tone={leftTone}
+            align="center"
             onEditingChange={onEditingChange}
             onMoveBack={onMoveBack}
           />

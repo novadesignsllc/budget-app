@@ -10,6 +10,7 @@ import { Text } from './text';
 
 /** Inner padding of the box; the box reaches this far past the column so the digits line up. */
 const PAD = 6;
+const JUSTIFY = { left: 'flex-start', right: 'flex-end', center: 'center' } as const;
 
 /**
  * A whole-dollar amount you tap to edit in place: a soft purple chip that brings up the
@@ -34,9 +35,9 @@ export function InlineAmount({
   onEditingChange?: (editing: boolean, view: React.ComponentRef<typeof View> | null) => void;
   accessibilityLabel: string;
   width?: number;
-  /** Right for table columns; left for a stat under a label. */
-  align?: 'left' | 'right';
-  variant?: 'row' | 'callout';
+  /** Right for table columns; left for a stat under a label; center for an even column. */
+  align?: 'left' | 'right' | 'center';
+  variant?: 'row' | 'callout' | 'footnote';
   /** Grey instead of purple (a past month). */
   muted?: boolean;
   /** Shortcuts above the keys, like Fill target. */
@@ -65,13 +66,13 @@ export function InlineAmount({
   const boxStyle = {
     width: exact ? width : width + PAD,
     height: 24,
-    ...(exact ? {} : align === 'right' ? { marginRight: -PAD } : { marginLeft: -PAD }),
+    ...(exact || align === 'center' ? {} : align === 'right' ? { marginRight: -PAD } : { marginLeft: -PAD }),
     paddingHorizontal: PAD - 1.5,
     borderRadius: 6,
     borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+    justifyContent: JUSTIFY[align],
   } as const;
   const textStyle = {
     ...typeScale[variant],
@@ -81,7 +82,7 @@ export function InlineAmount({
   } as const;
 
   return (
-    <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }}>
+    <View ref={box} collapsable={false} style={{ width, alignItems: JUSTIFY[align] }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel}, ${formatDollars(cents)}. Edit`}

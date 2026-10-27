@@ -26,7 +26,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, Recurring, and Settings. Root-level routes are form sheets.
 - `src/screens/`: screen bodies. `src/components/`: shared UI.
 - `components/app-tabs.tsx` is one headless tab layout for every platform: on phones a bottom dock (quick-add bar plus a scrolling text tab strip with the Settings gear pinned right), and on desktop web (900px and wider) the sidebar in `desktop/sidebar.tsx`.
-- `src/desktop/` holds the desktop screens (Home, Transactions, Budget), chosen in each tab's `index.tsx` with `useIsDesktop()`. They reuse the domain, store, hooks and shared pieces (LeftCell, LeftMath, InlineAmount, the number pad); only layout lives there. Approved mockup: https://claude.ai/artifact/C4As4Qujw8RrGKWLkTHUp4. Shortcuts: N new transaction, 1–5 sections, / search, arrows in Budget.
+- `src/desktop/` holds the desktop version of every page (Home, Transactions, Budget, envelope, Debt, debt and account registers, Recurring, Settings), chosen in each route file with `useIsDesktop()`; `register.tsx` is the shared transaction table and `ui.tsx` the page frame (header, back link, tab title). They reuse the domain, store, hooks and shared pieces (LeftCell, LeftMath, InlineAmount, the number pad); only layout lives there. Approved mockup: https://claude.ai/artifact/C4As4Qujw8RrGKWLkTHUp4. Shortcuts: N new transaction, 1–5 sections, / search, arrows in Budget.
 - Screen actions (search, add, month, strategy) sit bottom right in `ScreenActions` on the phone screens.
 
 ## Sync rules

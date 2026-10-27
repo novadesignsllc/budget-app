@@ -1,7 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import Animated from 'react-native-reanimated';
 
 import { AnimatedNumber } from '@/components/animated-number';
 import { Card, CardHeader } from '@/components/card';
@@ -27,7 +26,7 @@ import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
-import { barLevel, envelopeStatus, groupSummary, moneyLeftBar, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { envelopeStatus, groupSummary, leftPillState, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -470,9 +469,9 @@ export function Budget() {
 }
 
 /**
- * The Left amount: a colored pill when the envelope has a target, a plain number when it
- * doesn't. It's never typed into. Tapping it offers to move money back to Ready to
- * assign: all of it, or an amount typed on the number pad.
+ * The Left amount, always a colored pill (see leftPillState): yellow means a target needs
+ * money, green means good to spend, red means overspent. It's never typed into. Tapping
+ * it offers to move money back to Ready to assign: all of it, or an amount you type.
  */
 export function LeftCell({
   row,
@@ -512,7 +511,8 @@ export function LeftCell({
     },
     onClose: () => onEditingChange(false, null),
   });
-  const pill = bar && !past ? LEFT_PILL[bar.state](colors) : null;
+  // A past month stays grey, so it never passes for this month.
+  const pill = past ? null : LEFT_PILL[leftPillState(row, bar)](colors);
   return (
     <View ref={cell} collapsable={false} style={{ width, marginLeft: COL_GAP }}>
       <ActionMenu
@@ -600,10 +600,7 @@ export function LeftMath({ row }: { row: EnvelopeMonth }) {
   );
 }
 
-/**
- * The Left pill for an envelope with a target: green funded, yellow short, grey at zero,
- * red over. Envelopes without a target show a plain number, so a pill means "has a target".
- */
+/** The Left pill's colors for each state: green funded or money to spend, yellow short, grey at zero, red over. */
 export const LEFT_PILL: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => { bg: string; fg: string }> = {
   funded: (c) => ({ bg: c.positiveSoft, fg: c.positive }),
   short: (c) => ({ bg: c.cautionSoft, fg: c.caution }),
@@ -645,16 +642,13 @@ function EnvelopeRow({
 }) {
   const colors = useColors();
   const swiping = useSwipeGuard();
-  const left = moneyLeftBar(row, envelope);
-  const level = barLevel(row);
   const red = overspent && !past;
   const leftTone = red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text';
   return (
     <View
       style={{
-        gap: 6,
         paddingHorizontal: spacing.md + 2,
-        paddingVertical: 9,
+        paddingVertical: 11,
         borderBottomWidth: last ? 0 : 1,
         borderBottomColor: colors.hairline,
         backgroundColor: colors.surface,
@@ -737,27 +731,6 @@ function EnvelopeRow({
             onEditingChange={onEditingChange}
             onMoveBack={onMoveBack}
           />
-        </View>
-        <View
-          style={{
-            height: 3,
-            borderRadius: 2,
-            backgroundColor: level === 'over' ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
-          }}
-        >
-          {left.progress > 0 && (
-            <Animated.View
-              style={{
-                width: `${Math.min(1, left.progress) * 100}%`,
-                height: 3,
-                borderRadius: 2,
-                // Green over half left, yellow half or less. Purple stays for things you tap.
-                backgroundColor: past ? colors.textTertiary : level === 'plenty' ? colors.positive : colors.cautionDot,
-                transitionProperty: 'width',
-                transitionDuration: 300,
-              }}
-            />
-          )}
         </View>
     </View>
   );

@@ -142,6 +142,17 @@ export function envelopeStatus(
   return { subtitle, tone, progress: budget > 0 ? spent / budget : 0, overspent: false, need, fillLabel: 'Fill' };
 }
 
+/**
+ * The Left pill's color. With a target it follows the target (yellow short, green funded,
+ * grey spent to zero, red over). Without one: green when there's money to spend, red when
+ * overspent, grey at zero. So yellow always means "this target needs money".
+ */
+export function leftPillState(row: Pick<EnvelopeMonth, 'available'>, bar: TargetBar | null): TargetBar['state'] {
+  if (bar) return bar.state;
+  if (row.available < 0) return 'over';
+  return row.available >= 100 ? 'funded' : 'empty';
+}
+
 export function groupSummary(group: string, total: Cents): string {
   if (group === 'Savings') return `${m(total)} saved`;
   if (group === DEBT_GROUP) return `${m(total)} ready to pay`;

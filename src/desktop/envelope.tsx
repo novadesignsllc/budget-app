@@ -16,8 +16,8 @@ import { useLedger } from '@/hooks/use-ledger';
 import { LeftMath } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
-import { groupColor, spacing, useColors } from '@/theme';
-import { barLevel, envelopeStatus, moneyLeftBar } from '@/utils/envelope-status';
+import { groupColor, spacing } from '@/theme';
+import { envelopeStatus } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 
 import { MonthDivider, RegisterHeader, RegisterRow } from './register';
@@ -30,7 +30,6 @@ const EMPTY = { assigned: 0, activity: 0, spent: 0, carriedIn: 0, available: 0 }
  * the month's numbers on the right, with a way to cover overspending from another envelope.
  */
 export function DesktopEnvelope({ id, month: monthParam }: { id: string; month?: MonthKey }) {
-  const colors = useColors();
   const month = monthParam ?? currentMonth();
   const budget = useBudgetMonth(month);
   const ledger = useLedger();
@@ -64,9 +63,6 @@ export function DesktopEnvelope({ id, month: monthParam }: { id: string; month?:
   const debt = debtAccount ? { owed, target: debtTarget(debtAccount, owed) } : undefined;
   const status = envelopeStatus(envelope, row, month, debt);
   const past = month < currentMonth();
-  const left = moneyLeftBar(row, envelope);
-  const level = barLevel(row);
-  const barColor = past ? colors.textTertiary : level === 'over' ? colors.negativeStrong : level === 'plenty' ? colors.positive : colors.cautionDot;
   const date = assignDateFor(month, today());
 
   const donors = envelopes
@@ -152,9 +148,6 @@ export function DesktopEnvelope({ id, month: monthParam }: { id: string; month?:
             <Text variant="callout" tone={status.tone}>
               {status.subtitle}
             </Text>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: 'hidden' }}>
-              <View style={{ width: `${(level === 'over' ? 1 : Math.min(1, left.progress)) * 100}%`, height: 6, backgroundColor: barColor }} />
-            </View>
             <View style={{ marginHorizontal: -9 }}>
               <LeftMath row={row} />
             </View>

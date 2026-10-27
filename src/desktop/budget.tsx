@@ -25,14 +25,7 @@ import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import {
-  barLevel,
-  envelopeStatus,
-  groupSummary,
-  moneyLeftBar,
-  targetBar,
-  type TargetBar,
-} from '@/utils/envelope-status';
+import { envelopeStatus, groupSummary, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -524,17 +517,13 @@ function EnvelopeRow({
   onCustomAmount: () => void;
 }) {
   const colors = useColors();
-  const level = barLevel(row);
-  const left = moneyLeftBar(row, envelope);
   const red = row.available < 0 && !past;
   // The name and target select the row; Assigned and Left are their own buttons beside them.
   return (
     <View
       style={{
         paddingHorizontal: 16,
-        paddingTop: 8,
-        paddingBottom: 9,
-        gap: 6,
+        paddingVertical: 10,
         backgroundColor: selected ? '#F7F6FF' : 'transparent',
       }}
     >
@@ -605,24 +594,6 @@ function EnvelopeRow({
           onCustomAmount={onCustomAmount}
         />
       </View>
-      <View
-        style={{
-          height: 3,
-          borderRadius: 2,
-          backgroundColor: level === 'over' ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill,
-        }}
-      >
-        {left.progress > 0 && (
-          <View
-            style={{
-              width: `${Math.min(1, left.progress) * 100}%`,
-              height: 3,
-              borderRadius: 2,
-              backgroundColor: past ? colors.textTertiary : level === 'plenty' ? colors.positive : colors.cautionDot,
-            }}
-          />
-        )}
-      </View>
     </View>
   );
 }
@@ -664,15 +635,6 @@ function Inspector({
     [transactions, envelope.id, month],
   );
   const leftColor = row.available < 0 ? colors.negative : row.available < 100 ? colors.textSecondary : colors.positive;
-  const barColor = !bar
-    ? colors.fill
-    : bar.state === 'over'
-      ? colors.negativeStrong
-      : bar.state === 'short'
-        ? colors.cautionDot
-        : bar.state === 'empty'
-          ? colors.textTertiary
-          : colors.positive;
 
   return (
     <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 300, maxWidth: 380, gap: 14 }}>
@@ -735,17 +697,6 @@ function Inspector({
             {bar ? `${targetKindOf(envelope) === 'goal' && !envelope.debtAccountId ? 'Goal' : 'Spending'}` : 'None set'}
           </Text>
         </View>
-        {bar && (
-          <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: 'hidden' }}>
-            <View
-              style={{
-                width: `${(bar.state === 'short' ? bar.progress : 1) * 100}%`,
-                height: 6,
-                backgroundColor: barColor,
-              }}
-            />
-          </View>
-        )}
         <Text variant="callout" weight="600" color={colors[label.tone]}>
           {label.text}
         </Text>

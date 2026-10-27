@@ -8,7 +8,6 @@ import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
 import { InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
-import { ProgressBar } from '@/components/progress-bar';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
@@ -24,7 +23,7 @@ import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import { barLevel, envelopeStatus, moneyLeftBar } from '@/utils/envelope-status';
+import { envelopeStatus } from '@/utils/envelope-status';
 import { haptic } from '@/utils/haptics';
 
 export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: MonthKey }) {
@@ -86,15 +85,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
     : undefined;
   const status = envelopeStatus(envelope, row, month, debt);
   const past = month < currentMonth();
-  const left = moneyLeftBar(row, envelope);
-  const level = barLevel(row);
-  const barColor = past
-    ? colors.textTertiary
-    : level === 'over'
-      ? colors.negativeStrong
-      : level === 'plenty'
-        ? colors.positive
-        : colors.cautionDot;
   const date = assignDateFor(month, today());
   const accountById = new Map(openAccounts.map((a) => [a.id, a]));
   // The last three months; older ones load on request so the page opens quickly.
@@ -128,11 +118,6 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
                 {status.subtitle}
               </Text>
             </View>
-            <ProgressBar
-              value={level === 'over' ? 1 : left.progress}
-              color={barColor}
-              height={3}
-            />
           </View>
           <View style={{ flexDirection: 'row', borderTopWidth: 1, borderTopColor: colors.separator }}>
             <Stat label="Carried in">{formatDollars(row.carriedIn)}</Stat>

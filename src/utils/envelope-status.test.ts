@@ -3,7 +3,7 @@ import { describe, expect, it } from '@jest/globals';
 import type { EnvelopeMonth } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 
-import { barLevel, moneyLeftBar, targetBar } from './envelope-status';
+import { barLevel, leftPillState, moneyLeftBar, targetBar } from './envelope-status';
 
 const MONTH = '2026-10';
 const groceries: Envelope = { id: 'g', name: 'Groceries', group: 'Daily', order: 0, targets: { [MONTH]: 40000 } };
@@ -57,5 +57,23 @@ describe('barLevel', () => {
     expect(barLevel(row({ available: 5000, spent: 35000 }))).toBe('low');
     expect(barLevel(row({ available: 0, spent: 40000 }))).toBe('empty');
     expect(barLevel(row({ available: -500, spent: 40500 }))).toBe('over');
+  });
+});
+
+describe('leftPillState', () => {
+  const short = { state: 'short' as const, progress: 0.4 };
+  it('follows the target when there is one', () => {
+    expect(leftPillState({ available: 50000 }, short)).toBe('short');
+    expect(leftPillState({ available: 0 }, { state: 'empty', progress: 0 })).toBe('empty');
+  });
+  it('is green with money to spend and no target', () => {
+    expect(leftPillState({ available: 2500 }, null)).toBe('funded');
+  });
+  it('is red when overspent with no target', () => {
+    expect(leftPillState({ available: -1300 }, null)).toBe('over');
+  });
+  it('is grey at zero (under a dollar) with no target', () => {
+    expect(leftPillState({ available: 0 }, null)).toBe('empty');
+    expect(leftPillState({ available: 45 }, null)).toBe('empty');
   });
 });

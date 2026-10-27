@@ -7,7 +7,6 @@ import { useToast } from '@/components/toast';
 import { budgetStatus } from '@/domain/budget-status';
 import { addDays, daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetHealth } from '@/domain/health';
-import { balanceHistory } from '@/domain/history';
 import { formatDollars, formatMoney } from '@/domain/money';
 import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
@@ -16,6 +15,7 @@ import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { payoffLabel } from '@/screens/debt';
 import { BudgetStatusCard, Home, todayTitle } from '@/screens/home';
 import { isListed, newestFirst } from '@/screens/transactions';
+import { useWealthChart } from '@/hooks/use-wealth-chart';
 import { useStore } from '@/store';
 import { chartCash, chartDebt, spacing, useColors } from '@/theme';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
@@ -24,7 +24,6 @@ import { shortDate } from './budget';
 import { DButton, DCard, DPage, PageTitle } from './ui';
 
 const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
-const monthLong = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
 const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' });
 const k = (cents: number) => `$${Math.round(cents / 100000)}k`;
 function monthDate(key: string) {
@@ -37,7 +36,6 @@ export function DesktopHome() {
   const colors = useColors();
   const ledger = useLedger();
   const { all } = useAccounts();
-  const accounts = useStore((s) => s.accounts);
   const transactions = useStore((s) => s.transactions);
   const recurring = useStore((s) => s.recurring);
   const envelopes = useStore((s) => s.envelopes);
@@ -46,6 +44,7 @@ export function DesktopHome() {
   const showToast = useToast((s) => s.show);
   const thisMonth = useBudgetMonth(currentMonth());
   const { comparison } = useDebtPlan();
+  const wealth = useWealthChart();
 
   // No accounts yet: the phone's getting-started card works here too.
   if (all.length === 0) return <Home />;
@@ -56,7 +55,7 @@ export function DesktopHome() {
   const daysLeft = daysInMonth - now.getDate();
   const health = budgetHealth(ledger);
   const status = budgetStatus(envelopes, thisMonth.envelopes, now.getDate(), daysInMonth);
-  const history = balanceHistory({ accounts, transactions }, 12, day);
+  const history = wealth?.history ?? [];
   const soon = [...dueForApproval(recurring, day), ...upcoming(recurring, day, 7)];
   const accountById = new Map(all.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
@@ -69,7 +68,6 @@ export function DesktopHome() {
   const latest = history[history.length - 1];
   const standing = latest ? latest.cash - latest.debt : ledger.cashTotal - ledger.debtTotal;
   const change = first && latest ? standing - (first.cash - first.debt) : 0;
-  const ticks = history.length <= 7 ? history : [0, 0.25, 0.5, 0.75, 1].map((f) => history[Math.round(f * (history.length - 1))]);
 
   const plan = comparison?.plan;
   const nextDebt = plan?.perDebt
@@ -107,7 +105,7 @@ export function DesktopHome() {
       )}
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'flex-start' }}>
-        {history.length > 1 && (
+        {wealth && (
           <DCard padded style={{ flexGrow: 2, flexShrink: 1, flexBasis: 560, minWidth: 0 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.md }}>
               <View style={{ gap: 2 }}>
@@ -127,22 +125,24 @@ export function DesktopHome() {
                 items={[
                   { label: 'Cash', color: chartCash, value: formatMoney(latest.cash, { whole: true }) },
                   { label: 'Debt', color: chartDebt, value: formatMoney(latest.debt, { whole: true }) },
+                  { label: 'Projected', color: colors.textTertiary, dashed: true },
                 ]}
               />
             </View>
             <LineChart
-              height={200}
-              series={[
-                { id: 'debt', label: 'Debt', color: chartDebt, values: history.map((h) => h.debt) },
-                { id: 'cash', label: 'Cash', color: chartCash, values: history.map((h) => h.cash) },
-              ]}
+              height={220}
+              series={wealth.series}
+              projectFrom={wealth.projectFrom}
               directLabels={false}
-              xTicks={ticks.map((t) => monthShort.format(monthDate(t.month)))}
-              pointLabel={(i) => monthLong.format(monthDate(history[i].month))}
+              xTicks={wealth.ticks}
+              pointLabel={wealth.pointLabel}
               formatValue={(v) => formatMoney(v, { whole: true })}
               formatAxis={k}
-              accessibilityLabel={`Cash went from ${formatMoney(first.cash, { whole: true })} to ${formatMoney(latest.cash, { whole: true })} and debt from ${formatMoney(first.debt, { whole: true })} to ${formatMoney(latest.debt, { whole: true })} over the last ${history.length} months.`}
+              accessibilityLabel={wealth.accessibilityLabel}
             />
+            <Text variant="footnote" tone="textTertiary">
+              {wealth.note}
+            </Text>
           </DCard>
         )}
 

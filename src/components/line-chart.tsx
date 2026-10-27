@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useReducedMotion } from 'react-native-reanimated';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 
 import { fontFamily, radius, spacing, useColors } from '@/theme';
 
@@ -41,6 +41,7 @@ export function LineChart({
   formatAxis,
   accessibilityLabel,
   directLabels = true,
+  projectFrom,
 }: {
   series: ChartSeries[];
   height?: number;
@@ -52,6 +53,8 @@ export function LineChart({
   formatAxis: (v: number) => string;
   accessibilityLabel: string;
   directLabels?: boolean;
+  /** The first index that's a projection: from the point before it on, lines are dashed. */
+  projectFrom?: number;
 }) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
@@ -66,22 +69,30 @@ export function LineChart({
   const x = (i: number) => (width * i) / (count - 1);
   const y = (v: number) => PAD_TOP + plotH - (v / max) * plotH;
 
+  // Solid up to today, dashed after it.
+  const actualEnd = projectFrom === undefined ? Infinity : projectFrom - 1;
   const paths = useMemo(
     () =>
       series.map((s) => {
-        let d = '';
-        let pen = false;
-        let last: { i: number; v: number } | null = null;
-        s.values.forEach((v, i) => {
-          if (v === null) {
-            pen = false;
-            return;
-          }
-          d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `;
-          pen = true;
-          last = { i, v };
-        });
-        return { ...s, d, last: last as { i: number; v: number } | null };
+        const trace = (from: number, to: number) => {
+          let d = '';
+          let pen = false;
+          let last: { i: number; v: number } | null = null;
+          s.values.forEach((v, i) => {
+            if (i < from || i > to) return;
+            if (v === null) {
+              pen = false;
+              return;
+            }
+            d += `${pen ? 'L' : 'M'}${x(i).toFixed(1)} ${y(v).toFixed(1)} `;
+            pen = true;
+            last = { i, v };
+          });
+          return { d, last: last as { i: number; v: number } | null };
+        };
+        const solid = trace(0, actualEnd);
+        const dashed = projectFrom === undefined ? { d: '' } : trace(actualEnd, Infinity);
+        return { ...s, d: solid.d, last: solid.last, projected: dashed.d };
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [series, width, max, height],
@@ -166,9 +177,33 @@ export function LineChart({
               {active !== null && (
                 <Line x1={x(active)} x2={x(active)} y1={0} y2={height} stroke="rgba(20,40,80,0.25)" strokeDasharray="3 3" />
               )}
+              {projectFrom !== undefined && projectFrom < count && (
+                <>
+                  {/* The future, lightly shaded, with today marked where the dashes start. */}
+                  <Rect x={x(actualEnd)} y={0} width={width - x(actualEnd)} height={height} fill="rgba(20,40,80,0.025)" />
+                  <Line x1={x(actualEnd)} x2={x(actualEnd)} y1={0} y2={height} stroke="rgba(20,40,80,0.18)" strokeWidth={1} />
+                  <SvgText x={x(actualEnd) + 4} y={PAD_TOP + 2} fill={colors.textTertiary} fontSize={9} fontFamily={fontFamily}>
+                    Projected
+                  </SvgText>
+                </>
+              )}
               {paths.map((p) => (
                 <Path key={p.id} d={p.d} fill="none" stroke={p.color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
               ))}
+              {paths.map((p) =>
+                p.projected ? (
+                  <Path
+                    key={`${p.id}-p`}
+                    d={p.projected}
+                    fill="none"
+                    stroke={p.color}
+                    strokeWidth={2}
+                    strokeDasharray="5 4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                ) : null,
+              )}
               {paths.map((p) =>
                 p.last ? (
                   <Circle key={`${p.id}-end`} cx={x(p.last.i)} cy={y(p.last.v)} r={4} fill={p.color} stroke="#FFFFFF" strokeWidth={2} />
@@ -248,12 +283,19 @@ export function LineChart({
 }
 
 /** Legend: a short line in the series color, the name, and an optional value. */
-export function ChartLegend({ items }: { items: { label: string; color: string; value?: string }[] }) {
+export function ChartLegend({ items }: { items: { label: string; color: string; value?: string; dashed?: boolean }[] }) {
   return (
     <View style={{ gap: 4, alignItems: 'flex-end' }}>
       {items.map((i) => (
         <View key={i.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <View style={{ width: 12, height: 2, backgroundColor: i.color }} />
+          {i.dashed ? (
+            <View style={{ width: 12, flexDirection: 'row', gap: 2 }}>
+              <View style={{ width: 5, height: 2, backgroundColor: i.color }} />
+              <View style={{ width: 5, height: 2, backgroundColor: i.color }} />
+            </View>
+          ) : (
+            <View style={{ width: 12, height: 2, backgroundColor: i.color }} />
+          )}
           <Text variant="footnote" tone="textSecondary">
             {i.label}
             {i.value ? (

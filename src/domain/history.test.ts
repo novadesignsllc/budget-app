@@ -2,7 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 
 import { generateDemo } from '@/store/demo-data';
 
-import { balanceHistory } from './history';
+import { balanceHistory, monthlyCashFlow, projectBalances } from './history';
 import { computeLedger } from './ledger';
 import type { Account, Transaction } from './types';
 
@@ -34,5 +34,40 @@ describe('balanceHistory', () => {
       { month: '2026-09', cash: 800, debt: 5000 },
       { month: '2026-10', cash: 1300, debt: 4000 },
     ]);
+  });
+});
+
+describe('projections', () => {
+  const chk: Account = { id: 'chk', name: 'Checking', kind: 'checking', openingBalance: 100000, openedOn: '2026-06-01', order: 0 };
+  const card: Account = { id: 'card', name: 'Card', kind: 'credit_card', openingBalance: -50000, openedOn: '2026-06-01', order: 1 };
+  const t = (date: string, amount: number, kind: Transaction['kind'], extra: Partial<Transaction> = {}): Transaction => ({
+    id: `${date}${amount}`, date, accountId: 'chk', amount, kind, payee: 'x', cleared: false, createdAt: 0, ...extra,
+  });
+  const txns = [
+    t('2026-07-01', 300000, 'income'), t('2026-07-10', -200000, 'spend'),
+    t('2026-08-01', 300000, 'income'), t('2026-08-10', -220000, 'spend'),
+    t('2026-09-01', 300000, 'income'), t('2026-09-10', -180000, 'spend'),
+    // A card payment and a balance fix don't count as cash flow.
+    t('2026-09-15', -40000, 'transfer', { transferAccountId: 'card' }),
+    t('2026-09-20', -5000, 'adjustment'),
+    // This month isn't over, so it's left out.
+    t('2026-10-02', -999999, 'spend'),
+  ];
+
+  it('averages the last three full months, leaving out debt payments and fixes', () => {
+    expect(monthlyCashFlow({ accounts: [chk, card], transactions: txns }, '2026-10-20')).toBe(100000);
+  });
+
+  it('only counts full months the account existed', () => {
+    const late: Account = { ...chk, openedOn: '2026-08-15' };
+    // Only September is a full month here: +300,000 − 180,000.
+    expect(monthlyCashFlow({ accounts: [late, card], transactions: txns }, '2026-10-20')).toBe(120000);
+  });
+
+  it('pays debt down on the plan and keeps the payment in cash once it’s gone', () => {
+    const p = projectBalances({ cash: 100000, debtBalances: [30000, 15000, 0], monthlyPayment: 20000, cashFlow: 50000, months: 4 });
+    expect(p.map((x) => x.debt)).toEqual([15000, 0, 0, 0]);
+    // Month 1 pays 20,000; month 2 pays the last 15,000; then nothing.
+    expect(p.map((x) => x.cash)).toEqual([130000, 165000, 215000, 265000]);
   });
 });

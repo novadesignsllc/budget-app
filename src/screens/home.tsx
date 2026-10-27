@@ -17,12 +17,12 @@ import { useToast } from '@/components/toast';
 import { addDays, daysBetween, formatDay, fromISODate, today } from '@/domain/dates';
 import { budgetStatus, type BudgetStatus } from '@/domain/budget-status';
 import { budgetHealth } from '@/domain/health';
-import { balanceHistory } from '@/domain/history';
 import { formatDollars, formatMoney } from '@/domain/money';
 import { dueForApproval, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { useWealthChart } from '@/hooks/use-wealth-chart';
 import { useStore } from '@/store';
 import { isListed, newestFirst } from '@/screens/transactions';
 import { loadSampleData } from '@/store/sample-data';
@@ -41,7 +41,6 @@ export function todayTitle(d: Date) {
   return `${weekday.format(d)}, ${monthName.format(d)} ${n}${suffix}`;
 }
 const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
-const monthLong = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
 const k = (cents: number) => `$${Math.round(cents / 100000)}k`;
 
 function monthDate(key: string) {
@@ -53,7 +52,6 @@ export function Home() {
   const colors = useColors();
   const ledger = useLedger();
   const { cash, all } = useAccounts();
-  const accounts = useStore((s) => s.accounts);
   const transactions = useStore((s) => s.transactions);
   const recurring = useStore((s) => s.recurring);
   const envelopes = useStore((s) => s.envelopes);
@@ -68,7 +66,8 @@ export function Home() {
   const now = fromISODate(day);
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const status = budgetStatus(envelopes, thisMonth.envelopes, now.getDate(), daysInMonth);
-  const history = balanceHistory({ accounts, transactions }, 12, day);
+  const wealth = useWealthChart();
+  const history = wealth?.history ?? [];
   const accountById = new Map(all.map((a) => [a.id, a]));
   const envelopeById = new Map(envelopes.map((e) => [e.id, e]));
   const title = todayTitle(fromISODate(day));
@@ -97,9 +96,6 @@ export function Home() {
   const latest = history[history.length - 1];
   const standing = latest ? latest.cash - latest.debt : ledger.cashTotal - ledger.debtTotal;
   const change = first && latest ? standing - (first.cash - first.debt) : 0;
-  // Every month when there are few; otherwise five evenly spaced.
-  const ticks =
-    history.length <= 7 ? history : [0, 0.25, 0.5, 0.75, 1].map((f) => history[Math.round(f * (history.length - 1))]);
 
   function approveItem(r: Recurring) {
     approve(r.id);
@@ -149,7 +145,7 @@ export function Home() {
         </Card>
       )}
 
-      {history.length > 1 && (
+      {wealth && (
         <Card padded>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ gap: 2 }}>
@@ -166,23 +162,25 @@ export function Home() {
             </View>
             <ChartLegend
               items={[
-                { label: 'Cash', color: chartCash, value: formatMoney(latest.cash, { whole: true }) },
-                { label: 'Debt', color: chartDebt, value: formatMoney(latest.debt, { whole: true }) },
+                { label: 'Cash', color: chartCash, value: formatMoney(wealth.latest.cash, { whole: true }) },
+                { label: 'Debt', color: chartDebt, value: formatMoney(wealth.latest.debt, { whole: true }) },
+                { label: 'Projected', color: colors.textTertiary, dashed: true },
               ]}
             />
           </View>
           <LineChart
-            series={[
-              { id: 'debt', label: 'Debt', color: chartDebt, values: history.map((h) => h.debt) },
-              { id: 'cash', label: 'Cash', color: chartCash, values: history.map((h) => h.cash) },
-            ]}
+            series={wealth.series}
+            projectFrom={wealth.projectFrom}
             directLabels={false}
-            xTicks={ticks.map((t) => monthShort.format(monthDate(t.month)))}
-            pointLabel={(i) => monthLong.format(monthDate(history[i].month))}
+            xTicks={wealth.ticks}
+            pointLabel={wealth.pointLabel}
             formatValue={(v) => formatMoney(v, { whole: true })}
             formatAxis={k}
-            accessibilityLabel={`Cash went from ${formatMoney(first.cash, { whole: true })} to ${formatMoney(latest.cash, { whole: true })} and debt from ${formatMoney(first.debt, { whole: true })} to ${formatMoney(latest.debt, { whole: true })} over the last ${history.length} months.`}
+            accessibilityLabel={wealth.accessibilityLabel}
           />
+          <Text variant="caption" tone="textTertiary">
+            {wealth.note}
+          </Text>
         </Card>
       )}
 

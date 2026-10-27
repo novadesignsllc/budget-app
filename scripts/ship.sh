@@ -52,18 +52,23 @@ if [[ "$web_only" == false ]]; then
 fi
 
 echo "› Publishing the website (Vercel builds it from GitHub)"
+newest() { vercel ls slip 2>&1 | grep -m1 -oE 'https://slip-[a-z0-9]+-[^ ]+\.vercel\.app' || true; }
+before=$(command -v vercel >/dev/null && newest || true)
 git push
 
-# Wait for Vercel to finish building, so "Done" means the site has it.
+# Wait for Vercel to pick up this push and finish building it, so "Done" means the site has it.
 if command -v vercel >/dev/null; then
-  sleep 10
-  for _ in $(seq 1 45); do
-    state=$(vercel ls slip 2>&1 | grep -m1 -oE 'Ready|Error|Canceled|Building|Queued|Initializing' || true)
-    [[ "$state" == "Ready" || "$state" == "Error" || "$state" == "Canceled" ]] && break
+  state=""
+  for _ in $(seq 1 60); do
     sleep 8
+    line=$(vercel ls slip 2>&1 | grep -m1 -E 'https://slip-' || true)
+    url=$(echo "$line" | grep -oE 'https://slip-[a-z0-9]+-[^ ]+\.vercel\.app' || true)
+    [[ -z "$url" || "$url" == "$before" ]] && continue
+    state=$(echo "$line" | grep -oE 'Ready|Error|Canceled|Building|Queued|Initializing' || true)
+    [[ "$state" == "Ready" || "$state" == "Error" || "$state" == "Canceled" ]] && break
   done
   if [[ "$state" != "Ready" ]]; then
-    echo "✗ The website build didn't finish (${state:-unknown}). Check: vercel ls slip" >&2
+    echo "✗ The website build didn't finish (${state:-not started}). Check: vercel ls slip" >&2
     exit 1
   fi
 fi

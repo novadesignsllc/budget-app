@@ -202,7 +202,10 @@ export function targetGaps(
     .filter((g) => g.need > 0);
 }
 
-/** You can always look back, but not ahead of the current calendar month. */
+/** How far ahead you can budget: a year of months after this one. */
+export const MONTHS_AHEAD = 12;
+
+/** You can always look back, and plan up to MONTHS_AHEAD months ahead. */
 export function canGoToMonth(month: MonthKey, today: ISODate): boolean {
-  return month <= monthOf(today);
+  return month <= addMonthKey(monthOf(today), MONTHS_AHEAD);
 }

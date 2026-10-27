@@ -38,7 +38,7 @@ export function InlineAmount({
   accessibilityLabel: string;
   width?: number;
   /** Right for table columns; left for a stat under a label. */
-  align?: 'left' | 'right';
+  align?: 'left' | 'right' | 'center';
   variant?: 'row' | 'callout';
   /** Grey instead of purple (a past month). */
   muted?: boolean;
@@ -76,7 +76,7 @@ export function InlineAmount({
     borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+    justifyContent: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start',
   } as const;
   const textStyle = {
     ...typeScale[variant],
@@ -89,7 +89,7 @@ export function InlineAmount({
   if (desktop) {
     const shown = String(Math.max(0, whole));
     return (
-      <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }}>
+      <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start' }}>
         <View
           style={[
             boxStyle,
@@ -119,7 +119,7 @@ export function InlineAmount({
   }
 
   return (
-    <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : 'flex-start' }}>
+    <View ref={box} collapsable={false} style={{ width, alignItems: align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start' }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${accessibilityLabel}, ${formatDollars(cents)}. Edit`}

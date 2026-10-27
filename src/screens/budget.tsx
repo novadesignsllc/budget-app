@@ -19,7 +19,14 @@ import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
 import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
-import { assignDateFor, formatMonth, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
+import {
+  assignDateFor,
+  formatMonth,
+  MONTHS_AHEAD,
+  targetGaps,
+  type EnvelopeMonth,
+  type MonthKey,
+} from '@/domain/months';
 import { envelopePool, type Pool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -50,7 +57,7 @@ export const STARTERS: { name: string; group: string }[] = [
  */
 const COL = 64;
 const COL_GAP = 6;
-/** Inside each box, digits sit this far from its right edge. */
+/** Inner padding of the Left pill box. */
 const COL_PAD = 6;
 const EMPTY: EnvelopeMonth = {
   assigned: 0,
@@ -94,10 +101,10 @@ export function Budget() {
   const [confirmUnassign, setConfirmUnassign] = useState(false);
   // The row being edited and the amount typed so far, for the live "to assign" preview.
   // Years are section labels in the menu, so each option only needs the month name.
-  const monthOptions = useMonthOptions().map((o) => ({
-    ...o,
-    label: monthOnly.format(asDate(o.value)),
-  }));
+  // Past months sit under their year, so they only need the month's name; months ahead keep the year.
+  const monthOptions = useMonthOptions({ ahead: MONTHS_AHEAD }).map((o) =>
+    o.section === 'Ahead' ? o : { ...o, label: monthOnly.format(asDate(o.value)) },
+  );
 
   const groups = useMemo(() => {
     const visible = envelopes.filter((e) => !e.hidden);
@@ -117,6 +124,8 @@ export function Budget() {
   const groupY = useRef<Record<string, number>>({});
   // A past month is drawn in greys so it never passes for this month.
   const past = month < thisMonth;
+  // A later month: money assigned here is set aside now and counts in that month.
+  const ahead = month > thisMonth;
   const hueFor = (group: string) => (past ? colors.textTertiary : groupColor(group));
   const date = assignDateFor(month, today());
   // Debt payments aim for what each debt's page says: the minimum or a custom amount.
@@ -270,6 +279,46 @@ export function Budget() {
           </View>
         )}
 
+        {ahead && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: spacing.md,
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
+              borderRadius: radius.card,
+              backgroundColor: colors.accentSoft,
+            }}
+          >
+            <Icon sf="calendar.badge.plus" md="event_upcoming" size={18} color={colors.accent} />
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text variant="body" weight="600" tone="accent">
+                Planning ahead: {monthOnly.format(asDate(month))}
+              </Text>
+              <Text variant="footnote" tone="textSecondary">
+                What you assign here comes out of today’s money.
+              </Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setMonth(thisMonth)}
+              style={({ pressed }) => ({
+                height: 30,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.button,
+                justifyContent: 'center',
+                backgroundColor: colors.surface,
+                opacity: pressed ? 0.8 : 1,
+              })}
+            >
+              <Text variant="callout" weight="600">
+                Back to {monthOnly.format(asDate(thisMonth))}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {pools ? (
           <SplitToAssign
             pools={pools}
@@ -377,9 +426,15 @@ export function Budget() {
               ENVELOPE
             </Text>
             {['ASSIGNED', 'SPENT', 'LEFT'].map((l) => (
-              // Sized to its text so ASSIGNED never wraps or cuts off; its right edge lines up with the digits below.
+              // Centered over its column; it may run a little past the box (ASSIGNED is wider) without wrapping.
               <View key={l} style={{ width: COL, marginLeft: COL_GAP, alignSelf: 'stretch' }}>
-                <Text variant="label" tone="textTertiary" style={{ position: 'absolute', right: COL_PAD, top: 0 }}>
+                <Text
+                  variant="label"
+                  tone="textTertiary"
+                  align="center"
+                  numberOfLines={1}
+                  style={{ position: 'absolute', left: -12, right: -12, top: 0 }}
+                >
                   {l}
                 </Text>
               </View>
@@ -592,7 +647,7 @@ export function LeftCell({
         <Text
           variant="row"
           weight="600"
-          align="right"
+          align="center"
           tone={pill ? undefined : tone}
           color={pill?.fg}
           style={{ fontVariant: ['tabular-nums'] }}
@@ -741,6 +796,7 @@ function EnvelopeRow({
         <View style={{ marginLeft: COL_GAP }}>
           <InlineAmount
             exact
+            align="center"
             cents={row.assigned}
             width={COL}
             accessibilityLabel={`Assigned to ${envelope.name}`}
@@ -771,9 +827,9 @@ function EnvelopeRow({
         <Text
           variant="row"
           tone="textSecondary"
-          align="right"
+          align="center"
           numberOfLines={1}
-          style={{ width: COL, marginLeft: COL_GAP, paddingRight: COL_PAD, fontVariant: ['tabular-nums'] }}
+          style={{ width: COL, marginLeft: COL_GAP, fontVariant: ['tabular-nums'] }}
         >
           {formatDollars(row.spent, 'up')}
         </Text>
@@ -944,7 +1000,11 @@ function SplitToAssign({
           />
         )}
         <Text variant="footnote" color={soft} numberOfLines={1}>
-          {left < 0 ? `short · ${pools[p].accountsLabel}` : left === 0 ? pools[p].accountsLabel : `to assign · ${pools[p].accountsLabel}`}
+          {left < 0
+            ? `short · ${pools[p].accountsLabel}`
+            : left === 0
+              ? pools[p].accountsLabel
+              : `to assign · ${pools[p].accountsLabel}`}
         </Text>
       </View>
     );
@@ -985,14 +1045,14 @@ function SplitToAssign({
                   short === 'savings' ? 'Savings envelopes' : 'spending envelopes'
                 }. Move money over from ${other === 'savings' ? 'savings' : 'checking'}, or take it out of an envelope.`}
           </Text>
-          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {/* Stacked, so a four-digit amount always fits on the phone. */}
+          <View style={{ gap: spacing.sm }}>
             {shorts.length === 1 && (
               <Pressable
                 accessibilityRole="button"
                 onPress={() => coverShortfall(pools, short)}
                 style={({ pressed }) => ({
-                  flex: 1,
-                  height: 38,
+                  height: 40,
                   borderRadius: radius.control,
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -1009,8 +1069,7 @@ function SplitToAssign({
               accessibilityRole="button"
               onPress={() => onFixEnvelopes(short)}
               style={({ pressed }) => ({
-                flex: 1,
-                height: 38,
+                height: 40,
                 borderRadius: radius.control,
                 borderWidth: 1,
                 borderColor: colors.borderStrong,

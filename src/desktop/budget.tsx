@@ -15,7 +15,15 @@ import { today } from '@/domain/dates';
 import { textCents } from '@/domain/keypad';
 import { debtTarget } from '@/domain/debt';
 import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
-import { addMonthKey, assignDateFor, monthOf, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
+import {
+  addMonthKey,
+  assignDateFor,
+  MONTHS_AHEAD,
+  monthOf,
+  targetGaps,
+  type EnvelopeMonth,
+  type MonthKey,
+} from '@/domain/months';
 import { targetFor, targetKindOf } from '@/domain/targets';
 import { envelopePool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
@@ -81,6 +89,9 @@ export function DesktopBudget() {
   const [movingId, setMovingId] = useState<string | null>(null);
 
   const past = month < thisMonth;
+  // Budgeting ahead: up to MONTHS_AHEAD months after this one.
+  const ahead = month > thisMonth;
+  const lastMonth = addMonthKey(thisMonth, MONTHS_AHEAD);
   const rta = budget.readyToAssign;
   // Spending and savings, once there's a savings account; null means one pool.
   const { pools, readyFor } = usePools(budget);
@@ -184,7 +195,7 @@ export function DesktopBudget() {
     if (e.key === 'ArrowDown') setSelectedId(flat[Math.min(flat.length - 1, i + 1)].envelope.id);
     else if (e.key === 'ArrowUp') setSelectedId(flat[Math.max(0, i - 1)].envelope.id);
     else if (e.key === 'ArrowLeft') setMonth((m) => addMonthKey(m, -1));
-    else if (e.key === 'ArrowRight') setMonth((m) => (m < thisMonth ? addMonthKey(m, 1) : m));
+    else if (e.key === 'ArrowRight') setMonth((m) => (m < lastMonth ? addMonthKey(m, 1) : m));
     else return;
     e.preventDefault();
   });
@@ -242,7 +253,7 @@ export function DesktopBudget() {
               label="Next month"
               glyph="chevron_right"
               sf="chevron.right"
-              disabled={!past}
+              disabled={month >= lastMonth}
               onPress={() => setMonth(addMonthKey(month, 1))}
             />
           </View>
@@ -281,7 +292,16 @@ export function DesktopBudget() {
           ) : (
             <ReadyPill cents={rta} past={past} />
           )}
-          {past && (
+          {ahead && (
+            <View
+              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.accentSoft }}
+            >
+              <Text variant="callout" weight="600" tone="accent">
+                Planning ahead
+              </Text>
+            </View>
+          )}
+          {(past || ahead) && (
             <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />
           )}
           <Spacer />
@@ -346,13 +366,14 @@ export function DesktopBudget() {
               >
                 <ColumnLabel flex>Envelope</ColumnLabel>
                 <ColumnLabel width={TARGET_COL}>Target</ColumnLabel>
-                <ColumnLabel width={COL} right>
+                <ColumnLabel width={COL} center>
                   Assigned
                 </ColumnLabel>
-                <ColumnLabel width={COL} right>
+                <ColumnLabel width={COL} center>
                   Spent
                 </ColumnLabel>
-                <ColumnLabel width={COL + 6} right>
+                {/* The Left pill sits 6pt in from its column's edge; center over the pill. */}
+                <ColumnLabel width={COL + 6} center inset={6}>
                   Left
                 </ColumnLabel>
               </View>
@@ -395,7 +416,7 @@ export function DesktopBudget() {
                       <View style={{ width: TARGET_COL }} />
                       <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
                       <GroupSum>{formatDollars(sum('spent'), 'up')}</GroupSum>
-                      <View style={{ width: COL + 6, alignItems: 'flex-end', paddingRight: 6 }}>
+                      <View style={{ width: COL + 6, alignItems: 'center', paddingLeft: 6 }}>
                         <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1}>
                           {groupSummary(g.name, left)}
                         </Text>
@@ -619,6 +640,7 @@ function EnvelopeRow({
         <View>
           <InlineAmount
             exact
+            align="center"
             cents={row.assigned}
             width={COL}
             accessibilityLabel={`Assigned to ${envelope.name}`}
@@ -638,12 +660,7 @@ function EnvelopeRow({
             ]}
           />
         </View>
-        <Text
-          variant="body"
-          tone="textSecondary"
-          align="right"
-          style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}
-        >
+        <Text variant="body" tone="textSecondary" align="center" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
           {formatDollars(row.spent, 'up')}
         </Text>
         <LeftCell
@@ -891,7 +908,7 @@ function Inspector({
           }}
         >
           <Text variant="callout" weight="700">
-            {past ? monthOnly.format(asDate(month)) : 'This month'}
+            {month === currentMonth() ? 'This month' : monthOnly.format(asDate(month))}
           </Text>
           <Pressable
             accessibilityRole="link"
@@ -992,12 +1009,15 @@ function MonthStep({
 function ColumnLabel({
   children,
   width,
-  right,
+  center,
+  inset = 0,
   flex,
 }: {
   children: string;
   width?: number;
-  right?: boolean;
+  center?: boolean;
+  /** Space before the label, so it centers over a box that doesn't start at the column's edge. */
+  inset?: number;
   flex?: boolean;
 }) {
   return (
@@ -1005,8 +1025,8 @@ function ColumnLabel({
       variant="label"
       caps
       color="#6B778C"
-      align={right ? 'right' : 'left'}
-      style={[flex ? { flex: 1 } : { width }, right && { paddingRight: 6 }]}
+      align={center ? 'center' : 'left'}
+      style={[flex ? { flex: 1 } : { width }, inset ? { paddingLeft: inset } : null]}
     >
       {children}
     </Text>
@@ -1015,12 +1035,7 @@ function ColumnLabel({
 
 function GroupSum({ children }: { children: string }) {
   return (
-    <Text
-      variant="footnote"
-      tone="textSecondary"
-      align="right"
-      style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}
-    >
+    <Text variant="footnote" tone="textSecondary" align="center" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
       {children}
     </Text>
   );

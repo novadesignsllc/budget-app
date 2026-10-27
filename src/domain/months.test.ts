@@ -102,10 +102,11 @@ describe('targets by month', () => {
 });
 
 describe('month helpers', () => {
-  it('never goes past the current month', () => {
+  it('goes back any distance and up to a year ahead', () => {
     expect(canGoToMonth('2026-10', '2026-10-23')).toBe(true);
     expect(canGoToMonth('2020-01', '2026-10-23')).toBe(true);
-    expect(canGoToMonth('2026-11', '2026-10-23')).toBe(false);
+    expect(canGoToMonth('2026-11', '2026-10-23')).toBe(true);
+    expect(canGoToMonth('2027-11', '2026-10-23')).toBe(false);
   });
 
   it('steps across years', () => {
@@ -163,5 +164,59 @@ describe('spending and savings pools', () => {
     };
     const pools = computeMonth(fromSavings, '2026-10').pools!;
     expect(pools.savings.readyToAssign).toBe(20000 - 25000);
+  });
+});
+
+describe('assigning months ahead', () => {
+  // Assigned in October (createdAt), for November and December.
+  const madeInOctober = new Date(2026, 9, 10).getTime();
+  const ahead = (envelopeId: string, amount: number, date: string): Allocation => ({
+    ...al(envelopeId, amount, date),
+    createdAt: madeInOctober,
+  });
+  const planned = {
+    ...input,
+    allocations: [...input.allocations, ahead('groc', 15000, '2026-11-01'), ahead('save', 5000, '2026-12-01')],
+  };
+
+  it('takes money assigned ahead out of this month, so it can’t be spent twice', () => {
+    const now = computeMonth(input, '2026-10');
+    const withPlan = computeMonth(planned, '2026-10');
+    expect(withPlan.readyToAssign).toBe(now.readyToAssign - 20000);
+    // This month's envelopes don't change: the money isn't theirs until its month.
+    expect(withPlan.envelopes.get('groc')).toEqual(now.envelopes.get('groc'));
+  });
+
+  it('shows it in the month it was assigned to, on top of what carries over', () => {
+    const oct = computeMonth(planned, '2026-10');
+    const nov = computeMonth(planned, '2026-11');
+    expect(nov.envelopes.get('groc')).toMatchObject({ carriedIn: oct.envelopes.get('groc')!.available, assigned: 15000, spent: 0 });
+    // Nothing new comes in by November, so Ready to assign is the same as October's.
+    expect(nov.readyToAssign).toBe(oct.readyToAssign);
+    expect(computeMonth(planned, '2026-12').envelopes.get('save')!.assigned).toBe(5000);
+  });
+
+  it('keeps every future month adding up to the cash', () => {
+    for (const m of ['2026-10', '2026-11', '2026-12', '2027-01']) {
+      const b = computeMonth(planned, m);
+      const sum = [...b.envelopes.values()].reduce((s, r) => s + r.available, 0);
+      const later = planned.allocations
+        .filter((a) => a.date > monthEnd(m) && a.createdAt <= new Date(Number(m.slice(0, 4)), Number(m.slice(5)), 0, 23, 59, 59, 999).getTime())
+        .reduce((s, a) => s + a.amount, 0);
+      expect(b.readyToAssign + sum + later).toBe(b.cash);
+    }
+  });
+
+  it('takes savings assigned ahead out of the savings side only', () => {
+    const savings: Account = { id: 'sav', name: 'Savings', kind: 'savings', openingBalance: 30000, openedOn: '2026-09-01', order: 2 };
+    const before = computeMonth({ ...input, accounts: [checking, visa, savings] }, '2026-10').pools!;
+    const after = computeMonth({ ...planned, accounts: [checking, visa, savings] }, '2026-10').pools!;
+    expect(after.savings.readyToAssign).toBe(before.savings.readyToAssign - 5000);
+    expect(after.spending.readyToAssign).toBe(before.spending.readyToAssign - 15000);
+  });
+
+  it('lets you go a year ahead, not further', () => {
+    expect(canGoToMonth('2027-10', '2026-10-27')).toBe(true);
+    expect(canGoToMonth('2027-11', '2026-10-27')).toBe(false);
   });
 });

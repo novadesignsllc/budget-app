@@ -388,6 +388,12 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
   const now = computeMonth({ accounts, envelopes, transactions, allocations }, thisMonth);
   const leave = 4237;
   if (now.readyToAssign > leave) assign(env('Emergency Fund').id, now.readyToAssign - leave, monthStart(thisMonth));
+  // Savings envelopes are backed by the savings account: move over whatever they're short,
+  // so the demo opens with spending and savings both in balance.
+  const pools = computeMonth({ accounts, envelopes, transactions, allocations }, thisMonth).pools;
+  if (pools && pools.savings.readyToAssign < 0) {
+    transfer(monthStart(thisMonth), checking, savings, -pools.savings.readyToAssign);
+  }
 
   const payees: Payee[] = [...payeeNames.entries()]
     .sort((a, b) => a[1].localeCompare(b[1]))

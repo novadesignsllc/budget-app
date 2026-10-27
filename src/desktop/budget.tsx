@@ -17,12 +17,14 @@ import { debtTarget } from '@/domain/debt';
 import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
 import { addMonthKey, assignDateFor, monthOf, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
 import { targetFor, targetKindOf } from '@/domain/targets';
+import { envelopePool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
+import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools } from '@/hooks/use-pools';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary, targetBar, type TargetBar } from '@/utils/envelope-status';
@@ -80,6 +82,9 @@ export function DesktopBudget() {
 
   const past = month < thisMonth;
   const rta = budget.readyToAssign;
+  // Spending and savings, once there's a savings account; null means one pool.
+  const { pools, readyFor } = usePools(budget);
+  const envelopeById = new Map(envelopes.map((e) => [e.id, e] as const));
   const date = assignDateFor(month, today());
 
   const groups = useMemo(() => {
@@ -120,12 +125,16 @@ export function DesktopBudget() {
   const starters = startersDone || past ? [] : STARTERS.filter((s) => !existing.has(s.name.toLowerCase()));
 
   function fill(entries: { envelopeId: string; amount: number }[], message: string) {
-    // Whole dollars only: the cents in Ready to assign stay put.
-    let left = floorDollars(rta);
+    // Whole dollars only: the cents in Ready to assign stay put. Each envelope draws on its own pool.
+    const left: Record<string, number> = pools
+      ? { spending: floorDollars(pools.spending.readyToAssign), savings: floorDollars(pools.savings.readyToAssign) }
+      : { all: floorDollars(rta) };
+    const poolOf = (id: string) => (pools ? envelopePool(envelopeById.get(id) ?? { group: '' }) : 'all');
     const capped = entries
       .map((e) => {
-        const amount = Math.min(e.amount, Math.max(left, 0));
-        left -= amount;
+        const k = poolOf(e.envelopeId);
+        const amount = Math.min(e.amount, Math.max(left[k], 0));
+        left[k] -= amount;
         return { ...e, amount, date };
       })
       .filter((e) => e.amount > 0);
@@ -212,14 +221,6 @@ export function DesktopBudget() {
     );
   }
 
-  const rtaLeft = floorDollars(rta);
-  const rtaLook =
-    past || rtaLeft === 0
-      ? { bg: colors.control, fg: colors.textSecondary }
-      : rtaLeft < 0
-        ? { bg: colors.negativeSoft, fg: colors.negative }
-        : { bg: colors.positiveSoft, fg: colors.positive };
-
   return (
     <DPage
       title={`Budget · ${monthYear.format(asDate(month))}`}
@@ -245,41 +246,41 @@ export function DesktopBudget() {
               onPress={() => setMonth(addMonthKey(month, 1))}
             />
           </View>
-          <View
-            accessibilityRole="summary"
-            style={{
-              flexDirection: 'row',
-              alignItems: 'baseline',
-              gap: spacing.sm,
-              paddingHorizontal: 14,
-              paddingVertical: 6,
-              borderRadius: 10,
-              backgroundColor: rtaLook.bg,
-            }}
-          >
-            {rtaLeft === 0 ? (
-              <Text variant="body" weight="600" color={rtaLook.fg}>
-                All money assigned
-              </Text>
-            ) : (
-              <>
-                <Text
-                  style={{
-                    fontSize: 20,
-                    lineHeight: 24,
-                    fontWeight: '700',
-                    color: rtaLook.fg,
-                    fontVariant: ['tabular-nums'],
-                  }}
-                >
-                  {formatDollars(Math.abs(rtaLeft))}
-                </Text>
-                <Text variant="callout" weight="600" color={rtaLook.fg}>
-                  {rtaLeft < 0 ? 'assigned more than you have' : 'ready to assign'}
-                </Text>
-              </>
-            )}
-          </View>
+          {pools ? (
+            <>
+              <ReadyPill cents={pools.spending.readyToAssign} past={past} what="spending" />
+              <ReadyPill cents={pools.savings.readyToAssign} past={past} what="savings" />
+              {!past &&
+                (['spending', 'savings'] as const)
+                  .filter((p) => floorDollars(pools[p].readyToAssign) < 0)
+                  .slice(0, 1)
+                  .map((p) => (
+                    <View key={p} style={{ flexDirection: 'row', gap: spacing.sm }}>
+                      {floorDollars(pools[p === 'savings' ? 'spending' : 'savings'].readyToAssign) >= 0 && (
+                        <DButton
+                          label={`Move ${formatDollars(moveToCover(pools[p]))} from ${p === 'savings' ? 'checking' : 'savings'}`}
+                          variant="accent"
+                          onPress={() => coverShortfall(pools, p)}
+                        />
+                      )}
+                      <DButton
+                        label="Fix in envelopes"
+                        onPress={() => {
+                          // Open "move money back" on the fullest envelope in that pool.
+                          const fullest = flat
+                            .filter((r) => envelopePool(r.envelope) === p && r.row.available >= 100)
+                            .sort((a, b) => b.row.available - a.row.available)[0];
+                          if (!fullest) return;
+                          setSelectedId(fullest.envelope.id);
+                          setMovingId(fullest.envelope.id);
+                        }}
+                      />
+                    </View>
+                  ))}
+            </>
+          ) : (
+            <ReadyPill cents={rta} past={past} />
+          )}
           {past && (
             <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />
           )}
@@ -288,7 +289,7 @@ export function DesktopBudget() {
           <DButton
             label="Auto-assign"
             icon={{ sf: 'bolt.fill', md: 'bolt' }}
-            disabled={gaps.length === 0 || rta < 100}
+            disabled={!gaps.some((g) => readyFor(envelopeById.get(g.envelopeId) ?? { group: '' }) >= 100)}
             onPress={() =>
               fill(
                 orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
@@ -385,6 +386,11 @@ export function DesktopBudget() {
                         <Text variant="section" style={{ fontSize: 15 }}>
                           {g.name}
                         </Text>
+                        {pools && (
+                          <Text variant="footnote" style={{ color: '#6B778C' }}>
+                            {POOL_SOURCE[envelopePool({ group: g.name })]}
+                          </Text>
+                        )}
                       </View>
                       <View style={{ width: TARGET_COL }} />
                       <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
@@ -453,7 +459,12 @@ export function DesktopBudget() {
             row={selected.row}
             month={month}
             past={past}
-            rta={rta}
+            rta={readyFor(selected.envelope)}
+            source={
+              pools
+                ? `${POOL_NAME[envelopePool(selected.envelope)]} · ${pools[envelopePool(selected.envelope)].accountsLabel}`
+                : undefined
+            }
             debt={debtFor(selected.envelope)}
             onFill={(need) =>
               fill([{ envelopeId: selected.envelope.id, amount: need }], `Filled ${selected.envelope.name}`)
@@ -465,6 +476,58 @@ export function DesktopBudget() {
         )}
       </View>
     </DPage>
+  );
+}
+
+/**
+ * Ready to assign in the header: green with money waiting, red when more is assigned than
+ * the account holds, grey when it's all assigned. `what` names the pool when there are two.
+ */
+function ReadyPill({ cents, past, what }: { cents: number; past: boolean; what?: 'spending' | 'savings' }) {
+  const colors = useColors();
+  const left = floorDollars(cents);
+  const look =
+    past || left === 0
+      ? { bg: colors.control, fg: colors.textSecondary }
+      : left < 0
+        ? { bg: colors.negativeSoft, fg: colors.negative }
+        : { bg: colors.positiveSoft, fg: colors.positive };
+  const label =
+    left === 0
+      ? what
+        ? `${what === 'spending' ? 'Spending' : 'Savings'} all assigned`
+        : 'All money assigned'
+      : left < 0
+        ? what
+          ? `${what} short`
+          : 'assigned more than you have'
+        : what
+          ? `${what} to assign`
+          : 'ready to assign';
+  return (
+    <View
+      accessibilityRole="summary"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: spacing.sm,
+        paddingHorizontal: 14,
+        paddingVertical: 6,
+        borderRadius: 10,
+        backgroundColor: look.bg,
+      }}
+    >
+      {left !== 0 && (
+        <Text
+          style={{ fontSize: 20, lineHeight: 24, fontWeight: '700', color: look.fg, fontVariant: ['tabular-nums'] }}
+        >
+          {left < 0 ? `−${formatDollars(-left)}` : formatDollars(left)}
+        </Text>
+      )}
+      <Text variant={left === 0 ? 'body' : 'callout'} weight="600" color={look.fg}>
+        {label}
+      </Text>
+    </View>
   );
 }
 
@@ -605,6 +668,7 @@ function Inspector({
   month,
   past,
   rta,
+  source,
   debt,
   onFill,
   onMoveBack,
@@ -616,6 +680,8 @@ function Inspector({
   month: MonthKey;
   past: boolean;
   rta: number;
+  /** Which pool and account this envelope's money comes from, when there are two. */
+  source?: string;
   debt?: { owed: number; target: number };
   onFill: (need: number) => void;
   onMoveBack: (cents: number) => void;
@@ -686,6 +752,26 @@ function Inspector({
         <View style={{ marginHorizontal: -9 }}>
           <LeftMath row={row} />
         </View>
+        {source && (
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              gap: spacing.md,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              borderRadius: 10,
+              backgroundColor: colors.background,
+            }}
+          >
+            <Text variant="callout" tone="textSecondary">
+              Comes from
+            </Text>
+            <Text variant="callout" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+              {source}
+            </Text>
+          </View>
+        )}
       </DCard>
 
       <DCard padded>

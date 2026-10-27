@@ -20,10 +20,12 @@ import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
 import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
 import { assignDateFor, formatMonth, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
+import { envelopePool, type Pool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
+import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools, type PoolView } from '@/hooks/use-pools';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary, leftPillState, targetBar, type TargetBar } from '@/utils/envelope-status';
@@ -109,6 +111,10 @@ export function Budget() {
   }, [envelopes, groupOrder]);
 
   const rta = budget.readyToAssign;
+  // Spending and savings, once there's a savings account; null means one pool.
+  const { pools, readyFor } = usePools(budget);
+  const envelopeById = new Map(envelopes.map((e) => [e.id, e] as const));
+  const groupY = useRef<Record<string, number>>({});
   // A past month is drawn in greys so it never passes for this month.
   const past = month < thisMonth;
   const hueFor = (group: string) => (past ? colors.textTertiary : groupColor(group));
@@ -124,12 +130,16 @@ export function Budget() {
   const spendable = envelopes.filter((e) => !e.debtAccountId);
 
   function fill(entries: { envelopeId: string; amount: number }[], message: string) {
-    // Whole dollars only: the cents in Ready to assign stay put.
-    let left = floorDollars(rta);
+    // Whole dollars only: the cents in Ready to assign stay put. Each envelope draws on its own pool.
+    const left: Record<string, number> = pools
+      ? { spending: floorDollars(pools.spending.readyToAssign), savings: floorDollars(pools.savings.readyToAssign) }
+      : { all: floorDollars(rta) };
+    const poolOf = (id: string) => (pools ? envelopePool(envelopeById.get(id) ?? { group: '' }) : 'all');
     const capped = entries
       .map((e) => {
-        const amount = Math.min(e.amount, Math.max(left, 0));
-        left -= amount;
+        const k = poolOf(e.envelopeId);
+        const amount = Math.min(e.amount, Math.max(left[k], 0));
+        left[k] -= amount;
         return { ...e, amount, date };
       })
       .filter((e) => e.amount > 0);
@@ -192,7 +202,9 @@ export function Budget() {
 
   function confirmSorting() {
     if (!sorting) return;
-    reorderEnvelopes(sorting.filter((g) => g.items.length).map((g) => ({ name: g.name, ids: g.items.map((i) => i.id) })));
+    reorderEnvelopes(
+      sorting.filter((g) => g.items.length).map((g) => ({ name: g.name, ids: g.items.map((i) => i.id) })),
+    );
     haptic('success');
     setSorting(null);
     showToast({ message: 'Order saved' });
@@ -207,7 +219,12 @@ export function Budget() {
         </Screen>
         <ScreenActions>
           <ActionButton label="Cancel" onPress={() => setSorting(null)} />
-          <ActionButton label="Confirm" variant="accent" icon={{ sf: 'checkmark', md: 'check' }} onPress={confirmSorting} />
+          <ActionButton
+            label="Confirm"
+            variant="accent"
+            icon={{ sf: 'checkmark', md: 'check' }}
+            onPress={confirmSorting}
+          />
         </ScreenActions>
       </>
     );
@@ -253,7 +270,19 @@ export function Budget() {
           </View>
         )}
 
-        <LeftToAssign cents={rta} past={past} />
+        {pools ? (
+          <SplitToAssign
+            pools={pools}
+            past={past}
+            onFixEnvelopes={(pool) => {
+              const first = groups.find((g) => envelopePool({ group: g.name }) === pool);
+              const y = first ? groupY.current[first.name] : undefined;
+              if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - spacing.md), animated: true });
+            }}
+          />
+        ) : (
+          <LeftToAssign cents={rta} past={past} />
+        )}
 
         {groups.length > 0 && (
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -261,7 +290,7 @@ export function Budget() {
               icon={{ sf: 'bolt.fill', md: 'bolt' }}
               title="Auto-assign"
               tint={past ? colors.textSecondary : colors.accent}
-              disabled={gaps.length === 0 || rta < 100}
+              disabled={!gaps.some((g) => readyFor(envelopeById.get(g.envelopeId) ?? { group: '' }) >= 100)}
               onPress={() => {
                 haptic('light');
                 fill(
@@ -363,78 +392,89 @@ export function Budget() {
           const total = g.items.reduce((a, e) => a + floorDollars(budget.envelopes.get(e.id)?.available ?? 0), 0);
           const hue = hueFor(g.name);
           return (
-            <Card key={g.name}>
-              <CardHeader title={g.name} dot={hue} detail={groupSummary(g.name, total)} />
-              {g.items.map((e, i) => {
-                const row = budget.envelopes.get(e.id) ?? EMPTY;
-                const status = envelopeStatus(e, row, month, debtFor(e));
-                const canFill = status.need > 0 && rta >= 100;
-                return (
-                  <SwipeRow
-                    key={e.id}
-                    left={
-                      canFill
-                        ? {
-                            label: `${status.fillLabel} ${formatDollars(Math.min(status.need, rta))}`,
-                            sf: 'plus',
-                            md: 'add',
-                            color: past ? colors.textSecondary : colors.positive,
-                            onTrigger: () =>
-                              fill(
-                                [{ envelopeId: e.id, amount: status.need }],
-                                `${status.fillLabel === 'Cover' ? 'Covered' : 'Filled'} ${e.name}`,
-                              ),
-                          }
-                        : undefined
-                    }
-                    right={
-                      // A debt's payment envelope has nothing to edit: its name and target come from the debt.
-                      e.debtAccountId
-                        ? undefined
-                        : {
-                            label: 'Edit',
-                            sf: 'slider.horizontal.3',
-                            md: 'tune',
-                            color: past ? colors.textTertiary : colors.accent,
-                            onTrigger: () =>
-                              router.push({
-                                pathname: '/envelope/[id]',
-                                params: { id: e.id, month },
-                              }),
-                          }
-                    }
-                  >
-                    <EnvelopeRow
-                      envelope={e}
-                      row={row}
-                      overspent={status.overspent}
-                      bar={targetBar(e, row, month, debtFor(e))}
-                      need={past ? 0 : status.need}
-                      last={i === g.items.length - 1}
-                      past={past}
-                      onEditingChange={(on, view) => {
-                        revealAboveKeyboard(on ? view : null);
-                      }}
-                      onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
-                      onMoveBack={(cents) => {
-                        const ids = assignMany([{ envelopeId: e.id, amount: -cents, date }]);
-                        showToast({
-                          message: `Moved ${formatDollars(cents)} back to Ready to assign`,
-                          actionLabel: 'Undo',
-                          onAction: () => removeAllocations(ids),
-                        });
-                      }}
-                      onPress={() =>
-                        router.push({
-                          pathname: '/budget/[id]',
-                          params: { id: e.id, month },
-                        })
+            <View key={g.name} onLayout={(e) => (groupY.current[g.name] = e.nativeEvent.layout.y)}>
+              <Card>
+                <CardHeader
+                  title={g.name}
+                  dot={hue}
+                  detail={
+                    pools
+                      ? `${groupSummary(g.name, total)} · ${POOL_SOURCE[envelopePool({ group: g.name })]}`
+                      : groupSummary(g.name, total)
+                  }
+                />
+                {g.items.map((e, i) => {
+                  const row = budget.envelopes.get(e.id) ?? EMPTY;
+                  const status = envelopeStatus(e, row, month, debtFor(e));
+                  const ready = readyFor(e);
+                  const canFill = status.need > 0 && ready >= 100;
+                  return (
+                    <SwipeRow
+                      key={e.id}
+                      left={
+                        canFill
+                          ? {
+                              label: `${status.fillLabel} ${formatDollars(Math.min(status.need, ready))}`,
+                              sf: 'plus',
+                              md: 'add',
+                              color: past ? colors.textSecondary : colors.positive,
+                              onTrigger: () =>
+                                fill(
+                                  [{ envelopeId: e.id, amount: status.need }],
+                                  `${status.fillLabel === 'Cover' ? 'Covered' : 'Filled'} ${e.name}`,
+                                ),
+                            }
+                          : undefined
                       }
-                    />
-                  </SwipeRow>
-                );
-              })}
-            </Card>
+                      right={
+                        // A debt's payment envelope has nothing to edit: its name and target come from the debt.
+                        e.debtAccountId
+                          ? undefined
+                          : {
+                              label: 'Edit',
+                              sf: 'slider.horizontal.3',
+                              md: 'tune',
+                              color: past ? colors.textTertiary : colors.accent,
+                              onTrigger: () =>
+                                router.push({
+                                  pathname: '/envelope/[id]',
+                                  params: { id: e.id, month },
+                                }),
+                            }
+                      }
+                    >
+                      <EnvelopeRow
+                        envelope={e}
+                        row={row}
+                        overspent={status.overspent}
+                        bar={targetBar(e, row, month, debtFor(e))}
+                        need={past ? 0 : status.need}
+                        last={i === g.items.length - 1}
+                        past={past}
+                        onEditingChange={(on, view) => {
+                          revealAboveKeyboard(on ? view : null);
+                        }}
+                        onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
+                        onMoveBack={(cents) => {
+                          const ids = assignMany([{ envelopeId: e.id, amount: -cents, date }]);
+                          showToast({
+                            message: `Moved ${formatDollars(cents)} back to Ready to assign`,
+                            actionLabel: 'Undo',
+                            onAction: () => removeAllocations(ids),
+                          });
+                        }}
+                        onPress={() =>
+                          router.push({
+                            pathname: '/budget/[id]',
+                            params: { id: e.id, month },
+                          })
+                        }
+                      />
+                    </SwipeRow>
+                  );
+                })}
+              </Card>
+            </View>
           );
         })}
 
@@ -574,7 +614,12 @@ export function LeftMath({ row }: { row: EnvelopeMonth }) {
   const colors = useColors();
   const line = (label: string, cents: number, opts: { sign?: boolean; bold?: boolean } = {}) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', height: 22 }}>
-      <Text variant="footnote" tone={opts.bold ? 'text' : 'textSecondary'} weight={opts.bold ? '600' : '400'} style={{ flex: 1 }}>
+      <Text
+        variant="footnote"
+        tone={opts.bold ? 'text' : 'textSecondary'}
+        weight={opts.bold ? '600' : '400'}
+        style={{ flex: 1 }}
+      >
         {label}
       </Text>
       <Text
@@ -590,7 +635,16 @@ export function LeftMath({ row }: { row: EnvelopeMonth }) {
   // Money in and out besides spending (a refund, a slip's payment) also counts.
   const other = row.activity + row.spent;
   return (
-    <View style={{ paddingHorizontal: 9, paddingTop: 6, paddingBottom: 8, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: colors.hairline }}>
+    <View
+      style={{
+        paddingHorizontal: 9,
+        paddingTop: 6,
+        paddingBottom: 8,
+        marginBottom: 4,
+        borderBottomWidth: 1,
+        borderBottomColor: colors.hairline,
+      }}
+    >
       {line('From earlier months', row.carriedIn, { sign: true })}
       {line('Assigned this month', row.assigned, { sign: true })}
       {line('Spent this month', -row.spent, { sign: true })}
@@ -654,37 +708,37 @@ function EnvelopeRow({
         backgroundColor: colors.surface,
       }}
     >
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`${envelope.name}, ${formatDollars(row.available)} left. Open`}
-            onPress={() => !swiping() && onPress()}
-            hitSlop={{ top: 9, bottom: 9 }}
-            style={({ pressed }) => ({
-              flex: 1,
-              minWidth: 0,
-              // Room between a long name's "…" and the Assigned chip.
-              paddingRight: 2,
-              opacity: pressed ? 0.5 : 1,
-            })}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
-              <Text style={{ width: 20, textAlign: 'center', fontSize: 16, lineHeight: 20, opacity: past ? 0.6 : 1 }}>
-                {envelopeEmoji(envelope)}
-              </Text>
-              <Text
-                variant="body"
-                weight="500"
-                tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={{ flex: 1, minWidth: 0 }}
-              >
-                {envelope.name}
-              </Text>
-            </View>
-          </Pressable>
-          <View style={{ marginLeft: COL_GAP }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${envelope.name}, ${formatDollars(row.available)} left. Open`}
+          onPress={() => !swiping() && onPress()}
+          hitSlop={{ top: 9, bottom: 9 }}
+          style={({ pressed }) => ({
+            flex: 1,
+            minWidth: 0,
+            // Room between a long name's "…" and the Assigned chip.
+            paddingRight: 2,
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <Text style={{ width: 20, textAlign: 'center', fontSize: 16, lineHeight: 20, opacity: past ? 0.6 : 1 }}>
+              {envelopeEmoji(envelope)}
+            </Text>
+            <Text
+              variant="body"
+              weight="500"
+              tone={red ? 'negative' : past ? 'textSecondary' : 'text'}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={{ flex: 1, minWidth: 0 }}
+            >
+              {envelope.name}
+            </Text>
+          </View>
+        </Pressable>
+        <View style={{ marginLeft: COL_GAP }}>
           <InlineAmount
             exact
             cents={row.assigned}
@@ -713,25 +767,25 @@ function EnvelopeRow({
               },
             ]}
           />
-          </View>
-          <Text
-            variant="row"
-            tone="textSecondary"
-            align="right"
-            numberOfLines={1}
-            style={{ width: COL, marginLeft: COL_GAP, paddingRight: COL_PAD, fontVariant: ['tabular-nums'] }}
-          >
-            {formatDollars(row.spent, 'up')}
-          </Text>
-          <LeftCell
-            row={row}
-            bar={bar}
-            past={past}
-            tone={leftTone}
-            onEditingChange={onEditingChange}
-            onMoveBack={onMoveBack}
-          />
         </View>
+        <Text
+          variant="row"
+          tone="textSecondary"
+          align="right"
+          numberOfLines={1}
+          style={{ width: COL, marginLeft: COL_GAP, paddingRight: COL_PAD, fontVariant: ['tabular-nums'] }}
+        >
+          {formatDollars(row.spent, 'up')}
+        </Text>
+        <LeftCell
+          row={row}
+          bar={bar}
+          past={past}
+          tone={leftTone}
+          onEditingChange={onEditingChange}
+          onMoveBack={onMoveBack}
+        />
+      </View>
     </View>
   );
 }
@@ -820,7 +874,14 @@ function ControlRow({
       })}
     >
       <View
-        style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: soft, alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 8,
+          backgroundColor: soft,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         <Icon sf={icon.sf} md={icon.md} size={14} color={tint} weight="semibold" />
       </View>
@@ -828,6 +889,144 @@ function ControlRow({
         {title}
       </Text>
     </Pressable>
+  );
+}
+
+/**
+ * The top of the budget once there's a savings account: spending money (checking) on the
+ * left and savings on the right, each with what's left to assign. A side that's short
+ * turns red and says how to fix it: move money over from the other account, or take it
+ * back out of an envelope.
+ */
+function SplitToAssign({
+  pools,
+  past,
+  onFixEnvelopes,
+}: {
+  pools: Record<Pool, PoolView>;
+  past: boolean;
+  onFixEnvelopes: (pool: Pool) => void;
+}) {
+  const colors = useColors();
+  const shorts = (['spending', 'savings'] as const).filter((p) => !past && floorDollars(pools[p].readyToAssign) < 0);
+  const half = (p: Pool, i: number) => {
+    const left = floorDollars(pools[p].readyToAssign);
+    const look = past || left === 0 ? 'zero' : left < 0 ? 'short' : 'ok';
+    const ink = look === 'short' ? colors.negative : look === 'ok' ? colors.positive : colors.textSecondary;
+    const soft = look === 'short' ? '#7A271A' : look === 'ok' ? '#2E6B45' : colors.textSecondary;
+    return (
+      <View
+        key={p}
+        accessibilityRole="summary"
+        style={{
+          flex: 1,
+          gap: 2,
+          paddingHorizontal: spacing.md + 2,
+          paddingVertical: spacing.md + 2,
+          backgroundColor: look === 'short' ? colors.negativeSoft : look === 'ok' ? '#E9F6EE' : '#E9EDF3',
+          borderLeftWidth: i ? 1 : 0,
+          borderLeftColor: colors.separator,
+        }}
+      >
+        <Text variant="label" caps color={soft}>
+          {POOL_NAME[p]}
+        </Text>
+        {left === 0 ? (
+          <Text variant="section" color={ink} style={{ lineHeight: 32 }}>
+            All assigned
+          </Text>
+        ) : (
+          <AnimatedNumber
+            variant="display"
+            color={ink}
+            value={left}
+            format={(v) => (v < 0 ? `−${formatDollars(-v)}` : formatDollars(v))}
+          />
+        )}
+        <Text variant="footnote" color={soft} numberOfLines={1}>
+          {left < 0 ? `short · ${pools[p].accountsLabel}` : left === 0 ? pools[p].accountsLabel : `to assign · ${pools[p].accountsLabel}`}
+        </Text>
+      </View>
+    );
+  };
+  const short = shorts[0];
+  const other: Pool | undefined = short === 'savings' ? 'spending' : short === 'spending' ? 'savings' : undefined;
+  return (
+    <View
+      style={{
+        borderRadius: radius.card,
+        borderWidth: 1,
+        borderColor: colors.border,
+        overflow: 'hidden',
+        backgroundColor: colors.surface,
+      }}
+    >
+      <View style={{ flexDirection: 'row' }}>{(['spending', 'savings'] as const).map(half)}</View>
+      {short && other && (
+        <View
+          accessibilityLiveRegion="polite"
+          style={{
+            gap: spacing.md - 2,
+            padding: spacing.md + 2,
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(180,35,24,0.18)',
+            backgroundColor: colors.negativeTint,
+          }}
+        >
+          <Text variant="callout" color="#7A271A">
+            <Text variant="callout" weight="600" tone="negative">
+              {shorts.length === 2
+                ? 'You’re overspent in spending and savings. '
+                : `You’re overspent in ${short === 'savings' ? 'savings' : 'spending'}. `}
+            </Text>
+            {shorts.length === 2
+              ? 'Both hold less than their envelopes. Take money back out of envelopes until they match.'
+              : `${pools[short].accountsLabel} holds ${formatMoney(-pools[short].readyToAssign)} less than your ${
+                  short === 'savings' ? 'Savings envelopes' : 'spending envelopes'
+                }. Move money over from ${other === 'savings' ? 'savings' : 'checking'}, or take it out of an envelope.`}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            {shorts.length === 1 && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => coverShortfall(pools, short)}
+                style={({ pressed }) => ({
+                  flex: 1,
+                  height: 38,
+                  borderRadius: radius.control,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: colors.accent,
+                  opacity: pressed ? 0.85 : 1,
+                })}
+              >
+                <Text variant="callout" weight="600" tone="onInk" numberOfLines={1}>
+                  Move {formatDollars(moveToCover(pools[short]))} from {other === 'savings' ? 'savings' : 'checking'}
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onFixEnvelopes(short)}
+              style={({ pressed }) => ({
+                flex: 1,
+                height: 38,
+                borderRadius: radius.control,
+                borderWidth: 1,
+                borderColor: colors.borderStrong,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? colors.control : colors.surface,
+              })}
+            >
+              <Text variant="callout" weight="600" numberOfLines={1}>
+                Fix in envelopes
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 

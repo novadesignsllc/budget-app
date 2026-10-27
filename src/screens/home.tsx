@@ -198,18 +198,36 @@ export function Home() {
             backgroundColor: pressed ? colors.control : colors.surface,
           })}
         >
-          <View style={{ flex: 1 }}>
-            <Text variant="footnote" tone="textSecondary">
-              Ready to assign
-            </Text>
-            <AnimatedNumber
-              variant="title"
-              weight="600"
-              tone={ledger.readyToAssign < 0 ? 'negative' : 'text'}
-              value={ledger.readyToAssign}
-              format={formatDollars}
-            />
-          </View>
+          {thisMonth.pools ? (
+            // Spending (checking) and savings, each with what's waiting for a job.
+            (['spending', 'savings'] as const).map((p) => (
+              <View key={p} style={{ flex: 1 }}>
+                <Text variant="footnote" tone="textSecondary">
+                  {p === 'spending' ? 'Spending to assign' : 'Savings to assign'}
+                </Text>
+                <AnimatedNumber
+                  variant="title"
+                  weight="600"
+                  tone={thisMonth.pools![p].readyToAssign < 0 ? 'negative' : 'text'}
+                  value={thisMonth.pools![p].readyToAssign}
+                  format={formatDollars}
+                />
+              </View>
+            ))
+          ) : (
+            <View style={{ flex: 1 }}>
+              <Text variant="footnote" tone="textSecondary">
+                Ready to assign
+              </Text>
+              <AnimatedNumber
+                variant="title"
+                weight="600"
+                tone={ledger.readyToAssign < 0 ? 'negative' : 'text'}
+                value={ledger.readyToAssign}
+                format={formatDollars}
+              />
+            </View>
+          )}
           <Text variant="callout" weight="600" tone="accent">
             Assign ›
           </Text>

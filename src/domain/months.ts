@@ -1,3 +1,4 @@
+import { accountPool, envelopePool, type Pool } from './pools';
 import { targetFor, targetNeed } from './targets';
 import { isCashAccount, type Account, type Allocation, type Cents, type Envelope, type ISODate, type Transaction } from './types';
 
@@ -64,6 +65,12 @@ export type BudgetMonth = {
   cash: Cents;
   /** Cash without a job as of this month: cash minus envelopes minus money set aside for later months. */
   readyToAssign: Cents;
+  /**
+   * The same split by pool once there's a savings account: checking and cash against
+   * every envelope but Savings, savings accounts against the Savings envelopes. The two
+   * add up to the totals above. Null means one pool (no savings account yet).
+   */
+  pools: Record<Pool, { cash: Cents; readyToAssign: Cents }> | null;
 };
 
 /**
@@ -96,10 +103,15 @@ export function computeMonth(
   // later paychecks, didn't exist yet.
   const [ey, em] = month.split('-').map(Number);
   const endTime = new Date(ey, em, 0, 23, 59, 59, 999).getTime();
+  const savingsEnvelopes = new Set(input.envelopes.filter((e) => envelopePool(e) === 'savings').map((e) => e.id));
   let assignedLater = 0;
+  let savingsLater = 0;
   for (const al of input.allocations) {
     if (al.date > end) {
-      if (al.createdAt <= endTime) assignedLater += al.amount;
+      if (al.createdAt <= endTime) {
+        assignedLater += al.amount;
+        if (savingsEnvelopes.has(al.envelopeId)) savingsLater += al.amount;
+      }
       continue;
     }
     const r = row(al.envelopeId);
@@ -108,8 +120,14 @@ export function computeMonth(
   }
 
   let cash = 0;
+  let savingsCash = 0;
+  let split = false;
   for (const a of input.accounts) {
-    if (isCashAccount(a) && a.openedOn <= end) cash += a.openingBalance;
+    if (isCashAccount(a) && a.openedOn <= end) {
+      cash += a.openingBalance;
+      if (accountPool(a) === 'savings') savingsCash += a.openingBalance;
+    }
+    if (accountPool(a) === 'savings' && !a.closed && a.openedOn <= end) split = true;
   }
 
   const touch = (id: string, amount: Cents, date: ISODate) => {
@@ -125,7 +143,10 @@ export function computeMonth(
     if (t.date > end) continue;
     const account = accountById.get(t.accountId);
     if (!account) continue;
-    if (isCashAccount(account)) cash += t.amount;
+    if (isCashAccount(account)) {
+      cash += t.amount;
+      if (accountPool(account) === 'savings') savingsCash += t.amount;
+    }
     if (!t.envelopeId) continue;
     touch(t.envelopeId, t.amount, t.date);
     if (!isCashAccount(account)) {
@@ -140,12 +161,22 @@ export function computeMonth(
   }
 
   let total = 0;
-  for (const r of rows.values()) {
+  let savingsTotal = 0;
+  for (const [id, r] of rows) {
     r.available = r.carriedIn + r.assigned + r.activity;
     total += r.available;
+    if (savingsEnvelopes.has(id)) savingsTotal += r.available;
   }
 
-  return { month, envelopes: rows, cash, readyToAssign: cash - total - assignedLater };
+  const readyToAssign = cash - total - assignedLater;
+  const savingsReady = savingsCash - savingsTotal - savingsLater;
+  const pools = split
+    ? {
+        spending: { cash: cash - savingsCash, readyToAssign: readyToAssign - savingsReady },
+        savings: { cash: savingsCash, readyToAssign: savingsReady },
+      }
+    : null;
+  return { month, envelopes: rows, cash, readyToAssign, pools };
 }
 
 /**

@@ -86,3 +86,12 @@ describe('generateDemo', () => {
     expect(docs.transactions.length).toBe(demo.transactions.length);
   });
 });
+
+describe('demo spending and savings', () => {
+  it('opens with both pools in balance this month', () => {
+    const pools = computeMonth(demo, monthOf(AS_OF)).pools!;
+    expect(pools.savings.readyToAssign).toBeGreaterThanOrEqual(0);
+    expect(pools.spending.readyToAssign).toBeGreaterThanOrEqual(0);
+  });
+});
+

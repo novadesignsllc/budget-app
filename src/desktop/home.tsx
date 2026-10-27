@@ -159,17 +159,26 @@ export function DesktopHome() {
                 backgroundColor: hovered ? colors.control : colors.surface,
               })}
             >
-              <View style={{ flex: 1 }}>
-                <Text variant="footnote" tone="textSecondary">
-                  Ready to assign
-                </Text>
-                <Text
-                  style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', fontVariant: ['tabular-nums'] }}
-                  tone={ledger.readyToAssign < 0 ? 'negative' : 'text'}
-                >
-                  {formatDollars(ledger.readyToAssign)}
-                </Text>
-              </View>
+              {(thisMonth.pools
+                ? (['spending', 'savings'] as const).map((p) => ({
+                    key: p,
+                    label: p === 'spending' ? 'Spending to assign' : 'Savings to assign',
+                    cents: thisMonth.pools![p].readyToAssign,
+                  }))
+                : [{ key: 'all', label: 'Ready to assign', cents: ledger.readyToAssign }]
+              ).map((x) => (
+                <View key={x.key} style={{ flex: 1 }}>
+                  <Text variant="footnote" tone="textSecondary">
+                    {x.label}
+                  </Text>
+                  <Text
+                    style={{ fontSize: 22, lineHeight: 28, fontWeight: '700', fontVariant: ['tabular-nums'] }}
+                    tone={x.cents < 0 ? 'negative' : 'text'}
+                  >
+                    {formatDollars(x.cents)}
+                  </Text>
+                </View>
+              ))}
               <Text variant="callout" weight="600" tone="accent">
                 Assign ›
               </Text>

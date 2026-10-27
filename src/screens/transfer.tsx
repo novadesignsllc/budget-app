@@ -15,7 +15,8 @@ import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
 /** Moves money between accounts. Paying a debt is a transfer from cash to that debt. */
-export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?: string }) {
+/** `amount` fills in the amount (plain text like "120.00"), e.g. to cover a short savings pool. */
+export function Transfer({ from: fromParam, to: toParam, amount: amountParam }: { from?: string; to?: string; amount?: string }) {
   const ledger = useLedger();
   const { cash, all } = useAccounts();
   const envelopes = useStore((s) => s.envelopes);
@@ -26,7 +27,7 @@ export function Transfer({ from: fromParam, to: toParam }: { from?: string; to?:
   const isPayment = !!to && !isCashAccount(to);
   const envelope = isPayment ? envelopes.find((e) => e.debtAccountId === to!.id) : undefined;
   const ready = envelope ? (ledger.available.get(envelope.id) ?? 0) : 0;
-  const [amountText, setAmountText] = useState(isPayment && ready > 0 ? (ready / 100).toFixed(2) : '');
+  const [amountText, setAmountText] = useState(amountParam ?? (isPayment && ready > 0 ? (ready / 100).toFixed(2) : ''));
   const [date, setDate] = useState(today());
   const amount = parseMoney(amountText);
 

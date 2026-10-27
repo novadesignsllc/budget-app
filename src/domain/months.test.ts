@@ -123,3 +123,45 @@ describe('month helpers', () => {
     expect(formatMonth('2025-10', 2026)).toBe('October 2025');
   });
 });
+
+describe('spending and savings pools', () => {
+  const savings: Account = { id: 'sav', name: 'Savings', kind: 'savings', openingBalance: 30000, openedOn: '2026-09-01', order: 2 };
+  const split = { ...input, accounts: [checking, visa, savings] };
+
+  it('stays one pool until there is a savings account', () => {
+    expect(computeMonth(input, '2026-10').pools).toBeNull();
+  });
+
+  it('splits Ready to assign by account and envelope, and the halves add up', () => {
+    const oct = computeMonth(split, '2026-10');
+    const pools = oct.pools!;
+    // Savings: $300 in the account minus the $100 in Emergency.
+    expect(pools.savings).toEqual({ cash: 30000, readyToAssign: 20000 });
+    expect(pools.spending.cash).toBe(oct.cash - 30000);
+    expect(pools.spending.readyToAssign + pools.savings.readyToAssign).toBe(oct.readyToAssign);
+  });
+
+  it('moves money between the pools when you transfer checking to savings', () => {
+    const moved = {
+      ...split,
+      transactions: [
+        ...split.transactions,
+        tx({ accountId: 'chk', amount: -50000, kind: 'transfer', transferAccountId: 'sav', date: '2026-10-07' }),
+        tx({ accountId: 'sav', amount: 50000, kind: 'transfer', transferAccountId: 'chk', date: '2026-10-07' }),
+      ],
+    };
+    const before = computeMonth(split, '2026-10').pools!;
+    const after = computeMonth(moved, '2026-10').pools!;
+    expect(after.savings.readyToAssign - before.savings.readyToAssign).toBe(50000);
+    expect(after.spending.readyToAssign - before.spending.readyToAssign).toBe(-50000);
+  });
+
+  it('shows savings short when spending envelopes are paid from savings', () => {
+    const fromSavings = {
+      ...split,
+      transactions: [...split.transactions, tx({ accountId: 'sav', amount: -25000, kind: 'spend', envelopeId: 'groc', date: '2026-10-08' })],
+    };
+    const pools = computeMonth(fromSavings, '2026-10').pools!;
+    expect(pools.savings.readyToAssign).toBe(20000 - 25000);
+  });
+});

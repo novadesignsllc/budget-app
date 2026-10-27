@@ -174,6 +174,7 @@ export function DesktopBudget() {
   if (sorting) {
     return (
       <DPage
+        title="Sort envelopes"
         scrollRef={scrollRef}
         onScroll={onScroll}
         scrollEnabled={!dragging}
@@ -210,6 +211,7 @@ export function DesktopBudget() {
 
   return (
     <DPage
+      title={`Budget · ${monthYear.format(asDate(month))}`}
       scrollRef={scrollRef}
       onScroll={onScroll}
       header={

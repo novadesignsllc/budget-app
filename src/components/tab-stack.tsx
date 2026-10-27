@@ -58,7 +58,7 @@ function AppHeader({ options, back, navigation }: NativeStackHeaderProps) {
 
 /**
  * The stack inside each tab: our flat header with a centered title. With `desktopPage`,
- * the tab's first screen draws its own header on a computer.
+ * every screen in the tab draws its own header on a computer.
  */
 export function TabStack({ title, desktopPage }: { title: string; desktopPage?: boolean }) {
   const colors = useColors();
@@ -67,10 +67,12 @@ export function TabStack({ title, desktopPage }: { title: string; desktopPage?: 
     <Stack
       screenOptions={{
         header: (props) => <AppHeader {...props} />,
+        // Desktop pages draw their own header, with a back link when there's somewhere to go back to.
+        headerShown: !(desktop && desktopPage),
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title, headerShown: !(desktop && desktopPage) }} />
+      <Stack.Screen name="index" options={{ title }} />
     </Stack>
   );
 }

@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { formatPickedDate } from '@/components/date-picker';
@@ -12,21 +12,17 @@ import { formatMoney, parseMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
 import { payeeMemory } from '@/domain/payees';
 import { draftFromFields } from '@/domain/quick-add';
-import { isCashAccount, type Account, type Envelope, type ISODate, type Transaction } from '@/domain/types';
+import { isCashAccount, type ISODate } from '@/domain/types';
 import { useEntryOptions } from '@/hooks/use-entry-options';
 import { useAccounts } from '@/hooks/use-ledger';
 import { isListed, newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
-import { flagHues, spacing, type as typeScale, useColors } from '@/theme';
+import { spacing, type as typeScale, useColors } from '@/theme';
 import { useMonthOptions } from '@/utils/month-options';
 
-import { shortDate } from './budget';
+import { FLEX, GAP, Pill, RegisterHeader, RegisterRow, W } from './register';
 import { DButton, DCard, DPage, PageTitle, SearchField, Spacer } from './ui';
 
-/** Column widths, shared by the header, the entry row and every transaction. */
-const W = { date: 76, out: 110, in: 110 } as const;
-const FLEX = { payee: 1.4, envelope: 1, account: 1, note: 1.4 } as const;
-const GAP = 12;
 /** A search across every month shows this many at most. */
 const SEARCH_LIMIT = 300;
 
@@ -77,6 +73,7 @@ export function DesktopTransactions() {
 
   return (
     <DPage
+      title="Transactions"
       header={
         <>
           <PageTitle>Transactions</PageTitle>
@@ -109,29 +106,7 @@ export function DesktopTransactions() {
       </View>
 
       <DCard style={{ minWidth: 900 }}>
-        <View
-          style={{
-            flexDirection: 'row',
-            gap: GAP,
-            paddingHorizontal: 16,
-            paddingVertical: 10,
-            backgroundColor: colors.tableHeader,
-            borderBottomWidth: 1,
-            borderBottomColor: colors.separator,
-          }}
-        >
-          <Label width={W.date}>Date</Label>
-          <Label flex={FLEX.payee}>Payee</Label>
-          <Label flex={FLEX.envelope}>Envelope</Label>
-          <Label flex={FLEX.account}>Account</Label>
-          <Label flex={FLEX.note}>Note</Label>
-          <Label width={W.out} right>
-            Outflow
-          </Label>
-          <Label width={W.in} right>
-            Inflow
-          </Label>
-        </View>
+        <RegisterHeader columns={{}} />
 
         <EntryRow defaultAccountId={accountId} />
 
@@ -145,8 +120,9 @@ export function DesktopTransactions() {
           </Text>
         ) : (
           shown.map((t) => (
-            <TxnRow
+            <RegisterRow
               key={t.id}
+              columns={{}}
               t={t}
               account={accountById.get(t.accountId)}
               other={t.transferAccountId ? accountById.get(t.transferAccountId) : undefined}
@@ -393,105 +369,5 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
         </Text>
       ) : null}
     </View>
-  );
-}
-
-/** What the Envelope column says for money that doesn't come from an envelope. */
-function envelopeText(t: Transaction, envelope?: Envelope, other?: Account): { text: string; tone: 'text' | 'positive' | 'textSecondary' | 'orange' } {
-  if (envelope) return { text: envelope.name, tone: 'textSecondary' };
-  if (t.kind === 'income') return { text: 'Ready to assign', tone: 'positive' };
-  if (t.kind === 'transfer') return { text: other ? `Transfer · ${other.name}` : 'Transfer', tone: 'textSecondary' };
-  if (t.kind === 'interest') return { text: 'Interest', tone: 'textSecondary' };
-  if (t.kind === 'adjustment') return { text: 'Balance adjustment', tone: 'textSecondary' };
-  return { text: 'No envelope', tone: 'orange' };
-}
-
-function TxnRow({ t, account, other, envelope }: { t: Transaction; account?: Account; other?: Account; envelope?: Envelope }) {
-  const colors = useColors();
-  const done = !!t.reconciled;
-  const env = envelopeText(t, envelope, other);
-  const ink = done ? colors.textTertiary : colors.text;
-  const sub = done ? '#A3ADBD' : colors.textSecondary;
-  const outColor = done ? colors.textTertiary : t.kind === 'slip' ? colors.negative : colors.text;
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${t.payee}, ${formatMoney(t.amount)}, ${shortDate(t.date)}. Edit`}
-      onPress={() => router.push(`/transaction/${t.id}`)}
-      style={({ hovered }: { hovered?: boolean }) => ({
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: GAP,
-        minHeight: 40,
-        paddingHorizontal: 16,
-        borderTopWidth: 1,
-        borderTopColor: colors.hairline,
-        backgroundColor: hovered ? (done ? '#EEF1F6' : '#FAFBFD') : done ? '#F6F7FA' : 'transparent',
-      })}
-    >
-      <Text variant="callout" color={sub} style={{ width: W.date }}>
-        {shortDate(t.date)}
-      </Text>
-      <View style={{ flex: FLEX.payee, minWidth: 0, justifyContent: 'center' }}>
-        {/* The flag sits in the gutter, so payees line up with the column. */}
-        {t.flagged && (
-          <View
-            accessibilityLabel="Flagged"
-            style={{ position: 'absolute', left: -14, width: 8, height: 8, borderRadius: 4, backgroundColor: flagHues[t.flagColor ?? 'red'] }}
-          />
-        )}
-        <Text variant="body" weight="500" color={ink} numberOfLines={1}>
-          {t.payee}
-        </Text>
-      </View>
-      <Text variant="callout" color={done ? '#A3ADBD' : colors[env.tone]} numberOfLines={1} style={{ flex: FLEX.envelope }}>
-        {env.text}
-      </Text>
-      <Text variant="callout" color={sub} numberOfLines={1} style={{ flex: FLEX.account }}>
-        {account?.name ?? ''}
-      </Text>
-      <Text variant="callout" color={sub} numberOfLines={1} style={{ flex: FLEX.note }}>
-        {t.memo ?? ''}
-      </Text>
-      <Text variant="body" color={outColor} align="right" style={{ width: W.out, fontVariant: ['tabular-nums'] }}>
-        {t.amount < 0 ? formatMoney(-t.amount) : ''}
-      </Text>
-      <Text variant="body" color={done ? colors.textTertiary : colors.positive} align="right" style={{ width: W.in, fontVariant: ['tabular-nums'] }}>
-        {t.amount > 0 ? formatMoney(t.amount) : ''}
-      </Text>
-    </Pressable>
-  );
-}
-
-/** A filter pill. Pills are for filters only; selectors are dropdowns. */
-function Pill({ label, on, onPress }: { label: string; on: boolean; onPress: () => void }) {
-  const colors = useColors();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      onPress={onPress}
-      style={({ hovered }: { hovered?: boolean }) => ({
-        height: 30,
-        paddingHorizontal: 12,
-        borderRadius: 15,
-        justifyContent: 'center',
-        borderWidth: on ? 0 : 1,
-        borderColor: colors.borderStrong,
-        backgroundColor: on ? colors.ink : hovered ? colors.control : colors.surface,
-      })}
-    >
-      <Text variant="callout" weight={on ? '600' : '500'} color={on ? colors.onInk : colors.text}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function Label({ children, width, flex, right }: { children: string; width?: number; flex?: number; right?: boolean }) {
-  return (
-    <Text variant="label" caps color="#6B778C" align={right ? 'right' : 'left'} style={flex ? { flex } : { width }}>
-      {children}
-    </Text>
   );
 }

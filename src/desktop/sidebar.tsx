@@ -1,4 +1,4 @@
-import { Link, router } from 'expo-router';
+import { Link, router, usePathname } from 'expo-router';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
 import { Pressable, ScrollView, View } from 'react-native';
 
@@ -25,6 +25,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
   const colors = useColors();
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
+  const pathname = usePathname();
 
   // N adds a transaction, 1–5 switch sections, / jumps to the page's search.
   usePageKeys((e) => {
@@ -102,6 +103,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
                         paddingHorizontal: 10,
                         paddingVertical: 6,
                         borderRadius: 8,
+                        backgroundColor: pathname === `/${g.debt ? 'debt' : 'account'}/${a.id}` ? colors.accentSoft : 'transparent',
                       }}
                     >
                       <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
@@ -128,8 +130,14 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
   );
 }
 
-function SideItem({ label, shortcut, isFocused, ref, ...props }: ItemProps & { label: string; shortcut?: string }) {
+function SideItem({ label, shortcut, isFocused: tabFocused, ref, ...props }: ItemProps & { label: string; shortcut?: string }) {
   const colors = useColors();
+  // Settings lives inside Home's stack, so it gets the highlight there instead of Home.
+  const pathname = usePathname();
+  const onSettings = pathname === '/settings';
+  // An account's page highlights the account in the list below instead.
+  const onAccount = pathname.startsWith('/account/');
+  const isFocused = label === 'Settings' ? onSettings : tabFocused && !onSettings && !onAccount;
   return (
     <Pressable
       ref={ref}

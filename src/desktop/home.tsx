@@ -85,6 +85,7 @@ export function DesktopHome() {
 
   return (
     <DPage
+      title="Home"
       header={
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.md }}>
           <PageTitle>{todayTitle(now)}</PageTitle>

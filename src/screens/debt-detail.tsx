@@ -22,7 +22,8 @@ export function DebtDetail({ id }: { id: string }) {
   return <AccountDetail id={id} header={<DebtHeader id={id} />} />;
 }
 
-function DebtHeader({ id }: { id: string }) {
+/** The debt's payoff card and its details form. The desktop shows it beside the register. */
+export function DebtHeader({ id, activityTitle = true }: { id: string; activityTitle?: boolean }) {
   const ledger = useLedger();
   const account = useStore((s) => s.accounts.find((a) => a.id === id));
   const updateAccount = useStore((s) => s.updateAccount);
@@ -153,9 +154,11 @@ function DebtHeader({ id }: { id: string }) {
         />
       </FormCard>
 
-      <Text variant="section" style={{ marginTop: 4 }}>
-        Activity
-      </Text>
+      {activityTitle && (
+        <Text variant="section" style={{ marginTop: 4 }}>
+          Activity
+        </Text>
+      )}
     </View>
   );
 }

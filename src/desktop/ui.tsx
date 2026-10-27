@@ -1,3 +1,4 @@
+import { router, Stack } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Pressable, ScrollView, TextInput, View, type ScrollViewProps, type ViewStyle } from 'react-native';
 import Svg, { Line, Rect } from 'react-native-svg';
@@ -50,12 +51,18 @@ export function Kbd({ children, onAccent }: { children: string; onAccent?: boole
  * scrolling under it.
  */
 export function DPage({
+  title,
+  back,
   header,
   children,
   scrollRef,
   contentStyle,
   ...props
 }: Omit<ScrollViewProps, 'contentContainerStyle'> & {
+  /** The browser tab's title. */
+  title: string;
+  /** A "‹ Budget" link before the header, for pages opened from another page. */
+  back?: string;
   header: React.ReactNode;
   children: React.ReactNode;
   scrollRef?: React.Ref<React.ComponentRef<typeof ScrollView>>;
@@ -64,6 +71,7 @@ export function DPage({
   const colors = useColors();
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <Stack.Screen options={{ title }} />
       <View
         style={{
           flexDirection: 'row',
@@ -77,6 +85,7 @@ export function DPage({
           borderBottomColor: colors.separator,
         }}
       >
+        {back ? <BackLink label={back} /> : null}
         {header}
       </View>
       <ScrollView
@@ -88,6 +97,34 @@ export function DPage({
         {children}
       </ScrollView>
     </View>
+  );
+}
+
+/** Goes back to the page this one was opened from (or the label's section when opened directly). */
+function BackLink({ label }: { label: string }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`Back to ${label}`}
+      onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+      style={({ hovered }: { hovered?: boolean }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 2,
+        height: 32,
+        paddingLeft: 4,
+        paddingRight: 10,
+        marginLeft: -6,
+        borderRadius: 8,
+        backgroundColor: hovered ? colors.control : 'transparent',
+      })}
+    >
+      <Icon sf="chevron.left" md="chevron_left" size={16} color={colors.accent} weight="semibold" />
+      <Text variant="body" weight="600" tone="accent">
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 

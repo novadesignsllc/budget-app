@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 # Ships one change everywhere: checks it, sends it to both phones as an over-the-air
-# update, then builds and publishes the website. Same code, same data, one command.
+# update, then pushes to GitHub, which makes Vercel rebuild the website
+# (https://slip-budget.vercel.app). Same code, same data, one command.
 #
 #   ./scripts/ship.sh "What changed"
-#   ./scripts/ship.sh --web          (website only, e.g. to try something on the computer first)
+#   ./scripts/ship.sh --web          (website only: just the push)
+#
+# Commit first; this ships what's committed.
 #
 # Native changes (new native libraries, app.json) still need a store build; this warns
 # instead of shipping an update the installed apps can't run.
-# (Not an npm script: package.json scripts count toward the native fingerprint.)
+# Not an npm script: package.json scripts count toward the native fingerprint, and so
+# does .gitignore (keep local-only ignores in .git/info/exclude).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -19,6 +23,11 @@ fi
 msg="${1:-}"
 if [[ "$web_only" == false && -z "$msg" ]]; then
   echo 'Usage: ./scripts/ship.sh "What changed"' >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "✗ There are uncommitted changes. Commit them first, so the phones and the website get the same code." >&2
   exit 1
 fi
 
@@ -42,9 +51,7 @@ if [[ "$web_only" == false ]]; then
   npx eas-cli update --channel production --environment production --platform all --non-interactive -m "$msg"
 fi
 
-echo "› Publishing the website"
-rm -rf dist
-npx expo export --platform web
-npx eas-cli deploy --prod --non-interactive
+echo "› Publishing the website (Vercel builds it from GitHub)"
+git push
 
-echo "✓ Done. Phones pick it up on the next two opens; the website on the next refresh."
+echo "✓ Done. Phones pick it up on the next two opens; the website in about a minute."

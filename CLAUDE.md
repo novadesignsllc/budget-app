@@ -25,7 +25,9 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `src/sync/`: `engine.ts` diffs the store against Firestore and writes only what changed, applies snapshots from other devices, and holds writes back until everything has loaded once. `status.ts` drives the bottom-left sync pill. `session.ts` follows auth.
 - `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, Recurring, and Settings. Root-level routes are form sheets.
 - `src/screens/`: screen bodies. `src/components/`: shared UI.
-- `components/app-tabs.tsx` is one headless tab layout for every platform: on phones a bottom dock (quick-add bar plus a scrolling text tab strip with the Settings gear pinned right), and on desktop web a sidebar. Screen actions (search, add, month, strategy) sit bottom right in `ScreenActions`.
+- `components/app-tabs.tsx` is one headless tab layout for every platform: on phones a bottom dock (quick-add bar plus a scrolling text tab strip with the Settings gear pinned right), and on desktop web (900px and wider) the sidebar in `desktop/sidebar.tsx`.
+- `src/desktop/` holds the desktop screens (Home, Transactions, Budget), chosen in each tab's `index.tsx` with `useIsDesktop()`. They reuse the domain, store, hooks and shared pieces (LeftCell, LeftMath, InlineAmount, the number pad); only layout lives there. Approved mockup: https://claude.ai/artifact/C4As4Qujw8RrGKWLkTHUp4. Shortcuts: N new transaction, 1–5 sections, / search, arrows in Budget.
+- Screen actions (search, add, month, strategy) sit bottom right in `ScreenActions` on the phone screens.
 
 ## Sync rules
 
@@ -41,8 +43,8 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `npx expo start --web`: desktop and web preview against the real Firebase
 - `EXPO_PUBLIC_FAKE_BACKEND=1 npx expo start --web`: same, with the fake backend (any email and password signs in; `window.__fakeBackend.setOnline(false)` simulates no signal)
 - `npx expo start`: the iPhone dev build connects to this. Expo Go doesn't work: native Firebase needs a dev build.
-- `./scripts/ship.sh "What changed"`: the normal way to ship. Runs the checks, sends an over-the-air update to both phones, and publishes the website (https://slip-budget.expo.app, EAS Hosting). It stops if the native fingerprint no longer matches the installed builds. `./scripts/ship.sh --web` publishes only the website.
-- Don't add npm scripts: package.json `scripts` count toward the native fingerprint, so editing them breaks updates to the installed apps.
+- `./scripts/ship.sh "What changed"`: the normal way to ship, after committing. Runs the checks, sends an over-the-air update to both phones, and pushes to GitHub; Vercel rebuilds the website (https://slip-budget.vercel.app, project `slip`) from every push to main. It stops if the native fingerprint no longer matches the installed builds. `./scripts/ship.sh --web` only pushes.
+- Don't edit package.json `scripts` or `.gitignore`: both count toward the native fingerprint, so changing them breaks updates to the installed apps. Local-only ignores go in `.git/info/exclude`.
 - `eas build -p ios --profile production --auto-submit`: build and send to TestFlight
 - `eas build -p ios --profile development`: dev build for live reloading. Register the phone first with `eas device:create`.
 

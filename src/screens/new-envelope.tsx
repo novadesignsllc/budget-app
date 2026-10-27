@@ -12,7 +12,15 @@ import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 
-import { EmojiHeader, GroupPicker, TargetKindRow, targetLabel } from './envelope-settings';
+import {
+  BuilderMonthlyRow,
+  defaultTargetDate,
+  EmojiHeader,
+  GroupPicker,
+  TargetDateRow,
+  TargetKindRow,
+  targetLabel,
+} from './envelope-settings';
 import { SheetHeader } from '@/components/sheet-header';
 import { targetKindOf } from '@/domain/targets';
 import type { TargetKind } from '@/domain/types';
@@ -27,6 +35,7 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
   // Follows the group (Savings is a goal) until picked.
   const [pickedKind, setPickedKind] = useState<TargetKind>();
   const kind = pickedKind ?? targetKindOf({ group });
+  const [date, setDate] = useState<MonthKey>(defaultTargetDate(month));
   // Only set once the user picks one; until then the name decides.
   const [emoji, setEmoji] = useState<string>();
   const shown = envelopeEmoji({ name, emoji });
@@ -59,6 +68,8 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
           mode="whole"
           placeholder="$0"
         />
+        {kind === 'builder' && <TargetDateRow month={month} value={date} onChange={setDate} />}
+        {kind === 'builder' && <BuilderMonthlyRow amount={target} date={date} carriedIn={0} month={month} />}
       </FormCard>
       <Button
         title={duplicate ? 'You already have this envelope' : 'Create envelope'}
@@ -72,6 +83,7 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
             month,
             emoji,
             targetKind: kind,
+            ...(kind === 'builder' ? { targetDate: date } : {}),
           });
           haptic('success');
           closeSheet();

@@ -26,7 +26,7 @@ import {
   type EnvelopeMonth,
   type MonthKey,
 } from '@/domain/months';
-import { isSnoozed, targetFor, targetKindOf, targetSetFor } from '@/domain/targets';
+import { builderEnded, isSnoozed, targetFor, targetKindName, targetKindOf, targetSetFor } from '@/domain/targets';
 import { envelopePool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
@@ -37,7 +37,7 @@ import { newestFirst } from '@/screens/transactions';
 import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools } from '@/hooks/use-pools';
 import { isManagedGroup, useStore } from '@/store';
 import { groupColor, spacing, useColors } from '@/theme';
-import { envelopeStatus, groupSummary, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { envelopeStatus, groupSummary, monthName, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -561,11 +561,19 @@ function targetLabel(
     return { text: 'No target', tone: 'textTertiary' };
   }
   const amount = formatDollars(ceilDollars(target));
-  const base = e.debtAccountId
-    ? `${amount} a month`
-    : targetKindOf(e) === 'goal'
-      ? `Save ${amount} a month`
-      : `${amount} a month`;
+  const kind = e.debtAccountId ? 'spending' : targetKindOf(e);
+  if (kind === 'builder') {
+    const by = e.targetDate ? ` by ${monthName(e.targetDate)}` : '';
+    if (row.carriedIn + row.assigned >= target) return { text: `${amount}${by} · reached`, tone: 'textSecondary' };
+    if (builderEnded(e, month)) return { text: `${amount} · ended ${monthName(e.targetDate!)}`, tone: 'textSecondary' };
+    if (need >= 100) return { text: `${amount}${by} · ${formatDollars(need)} this month`, tone: 'caution' };
+    return { text: `${amount}${by} · on track`, tone: 'textSecondary' };
+  }
+  if (kind === 'bank') {
+    if (need >= 100) return { text: `Keep ${amount} · ${formatDollars(need)} to refill`, tone: 'caution' };
+    return { text: `Keep ${amount} · full`, tone: 'textSecondary' };
+  }
+  const base = kind === 'goal' ? `Save ${amount} a month` : `${amount} a month`;
   if (e.debtAccountId && debt && debt.owed <= 0) return { text: 'Paid off', tone: 'textSecondary' };
   if (need >= 100) return { text: `${base} · ${formatDollars(need)} short`, tone: 'caution' };
   if (row.available < 100 && row.spent > 0) return { text: `${base} · paid`, tone: 'textSecondary' };
@@ -805,7 +813,9 @@ function Inspector({
           </Text>
           <Text variant="callout" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
             {bar
-              ? `${targetKindOf(envelope) === 'goal' && !envelope.debtAccountId ? 'Goal' : 'Spending'}`
+              ? envelope.debtAccountId
+                ? 'Payment'
+                : targetKindName(targetKindOf(envelope))
               : snoozed
                 ? 'Snoozed'
                 : 'None set'}

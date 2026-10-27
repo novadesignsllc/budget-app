@@ -46,7 +46,11 @@ export type Account = {
 export const GROUPS = ['Daily', 'Savings'] as const;
 export type BudgetGroup = (typeof GROUPS)[number];
 
-export type TargetKind = 'spending' | 'goal';
+/**
+ * What a target means. Stored values never change meaning: 'spending' is Maximum and
+ * 'goal' is Save each month, as they always were.
+ */
+export type TargetKind = 'spending' | 'goal' | 'bank' | 'builder';
 
 export type Envelope = {
   id: string;
@@ -64,11 +68,14 @@ export type Envelope = {
    */
   targets?: Record<string, Cents | null>;
   /**
-   * What the target means. Spending: the most to spend each month, so it refills up to
-   * the target. Goal: put the target in every month and let it build. Unset follows the
-   * group: Savings is a goal, everything else is spending.
+   * What the target means. Spending (Maximum): the most to spend each month, so it refills
+   * up to the target. Goal (Save each month): put the target in every month. Bank: always
+   * keep the target in it, refilling whatever was spent. Builder: reach the target by
+   * `targetDate`. Unset follows the group: Savings is a goal, everything else is spending.
    */
   targetKind?: TargetKind;
+  /** Builder targets: the month (`YYYY-MM`) the amount should be reached by. */
+  targetDate?: string;
   /** Legacy single target, used before any `targets` entry. */
   monthlyTarget?: Cents;
   /** Months (`YYYY-MM`) whose target is snoozed: it counts as no target for just that month. */

@@ -195,9 +195,9 @@ export function targetGaps(
     .map((e) => ({ e, target: e.debtAccountId ? (debtTargets.get(e.id) ?? null) : targetFor(e, budget.month) }))
     .filter(({ target }) => target !== null && target > 0)
     .map(({ e, target }) => {
-      const row = budget.envelopes.get(e.id) ?? { assigned: 0, carriedIn: 0 };
+      const row = budget.envelopes.get(e.id) ?? { assigned: 0, carriedIn: 0, available: 0 };
       // Debt payments always want the full amount this month.
-      const need = e.debtAccountId ? target! - row.assigned : targetNeed(e, target!, row);
+      const need = e.debtAccountId ? target! - row.assigned : targetNeed(e, target!, row, budget.month);
       // Whole dollars, rounded up: Auto-assign never leaves a target a few cents short.
       return { envelopeId: e.id, need: ceilDollars(need) };
     })

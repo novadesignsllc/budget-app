@@ -5,14 +5,16 @@ import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
 import { SnoozeRow } from '@/components/snooze-row';
-import { ActionList, AmountRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
+import { ActionList, AmountRow, FormCard, FormRow, InputRow } from '@/components/form';
 import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
-import { parseMoney } from '@/domain/money';
-import { monthOf, type MonthKey } from '@/domain/months';
-import { targetSetFor, targetKindOf } from '@/domain/targets';
+import { ceilDollars, formatDollars, parseMoney } from '@/domain/money';
+import { addMonthKey, monthOf, type MonthKey } from '@/domain/months';
+import { builderMonthly, monthsThrough, TARGET_KINDS, targetKindOf, targetSetFor } from '@/domain/targets';
+import { useBudgetMonth } from '@/hooks/use-budget-month';
+import { monthName } from '@/utils/envelope-status';
 import { GROUPS, type BudgetGroup, type TargetKind } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
@@ -77,26 +79,59 @@ export function EmojiHeader({ emoji, onChange }: { emoji: string; onChange: (emo
   );
 }
 
-/** Savings targets are what goes in each month; Bills and Daily targets are the month's budget. */
+/** What the target amount is called for each type. */
 export function targetLabel(kind: TargetKind) {
-  return kind === 'goal' ? 'Each month' : 'Monthly limit';
+  return kind === 'goal' ? 'Each month' : kind === 'bank' ? 'Keep in it' : kind === 'builder' ? 'Amount' : 'Monthly max';
 }
 
-/**
- * Spending: the target is the most to spend each month, and it refills up to that.
- * Goal: the target goes in every month and keeps building.
- */
+/** Maximum, Bank, Builder or Save each month. */
 export function TargetKindRow({ value, onChange }: { value: TargetKind; onChange: (kind: TargetKind) => void }) {
   return (
-    <SegmentRow<TargetKind>
+    <Dropdown<TargetKind>
+      variant="row"
       label="Target"
       value={value}
-      options={[
-        { value: 'spending', label: 'Spending' },
-        { value: 'goal', label: 'Goal' },
-      ]}
+      options={TARGET_KINDS.map((k) => ({ value: k.kind, label: k.name, description: k.description }))}
       onChange={onChange}
     />
+  );
+}
+
+/** A builder starts out aiming six months ahead. */
+export function defaultTargetDate(month: MonthKey): MonthKey {
+  return addMonthKey(month, 6);
+}
+
+/** Builder: the month to reach the amount by, from this month to five years out. */
+export function TargetDateRow({ month, value, onChange }: { month: MonthKey; value: MonthKey; onChange: (m: MonthKey) => void }) {
+  const first = value < month ? value : month;
+  const options = Array.from({ length: Math.max(60, monthsThrough(first, value)) }, (_, i) => {
+    const m = addMonthKey(first, i);
+    return { value: m, label: monthName(m) };
+  });
+  return <Dropdown<MonthKey> variant="row" label="By" value={value} options={options} onChange={onChange} />;
+}
+
+/** Builder: what that works out to this month, as the amount and date change. */
+export function BuilderMonthlyRow({
+  amount,
+  date,
+  carriedIn,
+  month,
+}: {
+  amount: string;
+  date: MonthKey;
+  carriedIn: number;
+  month: MonthKey;
+}) {
+  const target = parseMoney(amount) ?? 0;
+  const monthly = builderMonthly({ targetDate: date }, ceilDollars(target), carriedIn, month);
+  return (
+    <FormRow label="This month">
+      <Text variant="body" weight="600" tone={target ? 'text' : 'textTertiary'} style={{ fontVariant: ['tabular-nums'] }}>
+        {target ? formatDollars(monthly) : '—'}
+      </Text>
+    </FormRow>
   );
 }
 
@@ -114,6 +149,8 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const [target, setTarget] = useState(current ? String(Math.ceil(current / 100)) : '');
   const [confirmHide, setConfirmHide] = useState(false);
   const [kind, setKind] = useState<TargetKind>(envelope ? targetKindOf(envelope) : 'spending');
+  const [date, setDate] = useState<MonthKey>(envelope?.targetDate ?? defaultTargetDate(month));
+  const carriedIn = useBudgetMonth(month).envelopes.get(id)?.carriedIn ?? 0;
   // Only set once the user picks one; until then the name decides.
   const [emoji, setEmoji] = useState<string | undefined>(envelope?.emoji);
 
@@ -169,6 +206,10 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             placeholder="$0"
           />
         )}
+        {!fixed && kind === 'builder' && <TargetDateRow month={month} value={date} onChange={setDate} />}
+        {!fixed && kind === 'builder' && (
+          <BuilderMonthlyRow amount={target} date={date} carriedIn={carriedIn} month={month} />
+        )}
       </FormCard>
       {/* The snooze switch saves right away, not with Save. */}
       {!isDebt && targetSetFor(envelope, month) ? (
@@ -186,6 +227,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             group: fixed ? envelope.group : group,
             ...(emoji && emoji !== envelope.emoji ? { emoji } : {}),
             ...(!fixed && kind !== targetKindOf(envelope) ? { targetKind: kind } : {}),
+            ...(!fixed && kind === 'builder' && date !== envelope.targetDate ? { targetDate: date } : {}),
           });
           const next = parseMoney(target);
           if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);

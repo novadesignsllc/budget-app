@@ -7,18 +7,69 @@ export function targetKindOf(envelope: Pick<Envelope, 'targetKind' | 'group'>): 
   return envelope.targetKind ?? (envelope.group === 'Savings' ? 'goal' : 'spending');
 }
 
+/** The target types in the order they're offered, with their names. */
+export const TARGET_KINDS: { kind: TargetKind; name: string; description: string }[] = [
+  { kind: 'spending', name: 'Maximum', description: 'The most to spend each month' },
+  { kind: 'bank', name: 'Bank', description: 'Always keep this much in it' },
+  { kind: 'builder', name: 'Builder', description: 'Reach an amount by a date' },
+  { kind: 'goal', name: 'Save each month', description: 'Put this much in every month' },
+];
+
+export function targetKindName(kind: TargetKind): string {
+  return TARGET_KINDS.find((k) => k.kind === kind)?.name ?? 'Maximum';
+}
+
+/** Months from `from` through `to`, counting both: October through December is 3. */
+export function monthsThrough(from: MonthKey, to: MonthKey): number {
+  const [fy, fm] = from.split('-').map(Number);
+  const [ty, tm] = to.split('-').map(Number);
+  return (ty - fy) * 12 + (tm - fm) + 1;
+}
+
+/** A builder whose date has gone by. It asks for nothing more until it gets a new date. */
+export function builderEnded(envelope: Pick<Envelope, 'targetDate'>, month: MonthKey): boolean {
+  return !!envelope.targetDate && envelope.targetDate < month;
+}
+
 /**
- * What an envelope still needs this month to meet its target. A spending target refills
- * the envelope up to the limit (money carried in counts); a goal wants the full amount
- * assigned every month so it keeps building.
+ * Builder: what this month should get so the envelope reaches `target` by its date, from
+ * what it started the month with. Zero once it's there, or after the date.
+ */
+export function builderMonthly(
+  envelope: Pick<Envelope, 'targetDate'>,
+  target: Cents,
+  carriedIn: Cents,
+  month: MonthKey,
+): Cents {
+  const left = target - carriedIn;
+  if (left <= 0 || builderEnded(envelope, month)) return 0;
+  const months = envelope.targetDate ? Math.max(1, monthsThrough(month, envelope.targetDate)) : 1;
+  return ceilDollars(Math.ceil(left / months));
+}
+
+/**
+ * What an envelope still needs this month to meet its target.
+ * - Maximum (spending) refills up to the target; money carried in counts.
+ * - Save each month (goal) wants the full amount assigned every month.
+ * - Bank keeps the target in the envelope: whatever was spent is needed back.
+ * - Builder spreads what's left to reach the target over the months until its date.
  */
 export function targetNeed(
-  envelope: Pick<Envelope, 'targetKind' | 'group'>,
+  envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate'>,
   target: Cents,
-  row: { assigned: Cents; carriedIn: Cents },
+  row: { assigned: Cents; carriedIn: Cents; available: Cents },
+  month: MonthKey,
 ): Cents {
-  const have = targetKindOf(envelope) === 'goal' ? row.assigned : row.carriedIn + row.assigned;
-  return Math.max(0, target - have);
+  switch (targetKindOf(envelope)) {
+    case 'goal':
+      return Math.max(0, target - row.assigned);
+    case 'bank':
+      return Math.max(0, target - row.available);
+    case 'builder':
+      return Math.max(0, builderMonthly(envelope, target, row.carriedIn, month) - row.assigned);
+    default:
+      return Math.max(0, target - row.carriedIn - row.assigned);
+  }
 }
 
 /**

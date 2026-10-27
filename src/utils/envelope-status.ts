@@ -1,6 +1,6 @@
 import { ceilDollars, formatDollars } from '@/domain/money';
 import type { EnvelopeMonth, MonthKey } from '@/domain/months';
-import { targetFor, targetKindOf, targetNeed } from '@/domain/targets';
+import { builderEnded, targetFor, targetKindOf, targetNeed } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
 import { DEBT_GROUP } from '@/store';
 
@@ -57,7 +57,7 @@ export function targetBar(
   const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
   if (target <= 0) return null;
   if (row.available < 0) return { state: 'over', progress: 1 };
-  const need = e.debtAccountId ? Math.max(0, target - row.assigned) : targetNeed(e, target, row);
+  const need = e.debtAccountId ? Math.max(0, target - row.assigned) : targetNeed(e, target, row, month);
   if (need >= 100) {
     // How much of the target is in: a spending limit counts what's in the envelope.
     const have = target - need;
@@ -66,6 +66,13 @@ export function targetBar(
   if (row.available < 100) return { state: 'empty', progress: 0 };
   const month$ = row.available + row.spent;
   return { state: 'funded', progress: month$ > 0 ? row.available / month$ : 1 };
+}
+
+const monthFormat = new Intl.DateTimeFormat('en-US', { month: 'short', year: 'numeric' });
+/** "Dec 2026" */
+export function monthName(key: string): string {
+  const [y, mo] = key.split('-').map(Number);
+  return monthFormat.format(new Date(y, mo - 1, 1));
 }
 
 // The budget shows whole dollars: amounts round down, spending rounds up.
@@ -113,9 +120,40 @@ export function envelopeStatus(
   }
 
   const target = targetFor(e, month) ?? 0;
-  const need = ceilDollars(targetNeed(e, target, row));
+  const need = ceilDollars(targetNeed(e, target, row, month));
 
-  if (targetKindOf(e) === 'goal') {
+  const kind = targetKindOf(e);
+  if (kind === 'bank' && target) {
+    return {
+      subtitle: need > 0 ? `${m(need)} to refill to ${m(target)}` : `Full at ${m(target)}`,
+      tone: need > 0 ? 'accent' : 'positive',
+      progress: Math.min(1, available / target),
+      overspent: false,
+      need,
+      fillLabel: 'Fill',
+    };
+  }
+  if (kind === 'builder' && target) {
+    const have = row.carriedIn + assigned;
+    const by = e.targetDate ? ` by ${monthName(e.targetDate)}` : '';
+    return {
+      subtitle:
+        have >= target
+          ? `Reached ${m(target)}`
+          : builderEnded(e, month)
+            ? `Ended in ${monthName(e.targetDate!)}`
+            : need > 0
+              ? `${m(need)} this month to reach ${m(target)}${by}`
+              : `On track for ${m(target)}${by}`,
+      tone: have >= target ? 'positive' : need > 0 ? 'accent' : 'textSecondary',
+      progress: Math.min(1, Math.max(0, have / target)),
+      overspent: false,
+      need,
+      fillLabel: 'Fill',
+    };
+  }
+
+  if (kind === 'goal') {
     return {
       subtitle: target ? `+${m(assigned)} of ${m(target)} this month` : `+${m(assigned)} this month`,
       tone: target && assigned >= target ? 'positive' : 'textSecondary',

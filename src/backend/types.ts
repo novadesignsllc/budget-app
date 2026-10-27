@@ -59,5 +59,12 @@ export function authErrorMessage(error: unknown): string {
   if (code.includes('network')) return 'No connection. Try again when you’re online.';
   if (code.includes('too-many-requests')) return 'Too many tries. Wait a minute and try again.';
   if (code.includes('canceled') || code.includes('ERR_REQUEST_CANCELED')) return '';
+  // The web's Apple window.
+  if (code.includes('popup-closed-by-user') || code.includes('cancelled-popup-request')) return '';
+  if (code.includes('popup-blocked')) return 'Your browser blocked the Apple window. Allow pop-ups for this site and try again.';
+  if (code.includes('unauthorized-domain')) return 'Sign-in isn’t set up for this web address yet.';
+  if (code.includes('account-exists-with-different-credential')) {
+    return 'That email already has an account. Sign in with your email and password.';
+  }
   return 'Something went wrong. Try again.';
 }

@@ -21,6 +21,7 @@ import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 import { setKeypadHeight } from '@/utils/keyboard';
 
+import { SIDEBAR_WIDTH, useIsDesktop } from './dock';
 import { Icon } from './icon';
 import { Text } from './text';
 
@@ -96,23 +97,43 @@ function done() {
 
 const HostContext = createContext<string>('root');
 
+/** Mounted hosts, oldest first; the last is the sheet on top. */
+const hosts: { id: string; root: boolean }[] = [];
+
+/**
+ * A field belongs to the nearest host, except one whose component sits above its sheet's
+ * host (a sheet screen's own fields): those would land on the root, behind the sheet, so
+ * they go to whatever is on top.
+ */
+function hostFor(nearest: string) {
+  const isRoot = nearest === 'root' || hosts.some((h) => h.id === nearest && h.root);
+  return isRoot ? (hosts.at(-1)?.id ?? nearest) : nearest;
+}
+
 /**
  * Where the pad draws: one at the root for the tabs, one inside each sheet (a sheet sits
  * above the root, so the root's pad would be hidden behind it). Fields use the nearest.
  */
-export function KeypadHost({ children }: { children: React.ReactNode }) {
+export function KeypadHost({ children, root }: { children: React.ReactNode; root?: boolean }) {
   const id = useId();
+  useEffect(() => {
+    const entry = { id, root: !!root };
+    hosts.push(entry);
+    return () => {
+      hosts.splice(hosts.indexOf(entry), 1);
+    };
+  }, [id, root]);
   return (
     <HostContext value={id}>
       <View style={{ flex: 1 }}>
         {children}
-        <KeypadLayer host={id} />
+        <KeypadLayer host={id} root={root} />
       </View>
     </HostContext>
   );
 }
 
-function KeypadLayer({ host }: { host: string }) {
+function KeypadLayer({ host, root }: { host: string; root?: boolean }) {
   const session = useKeypadStore((s) => (s.session?.host === host ? s.session : null));
   const open = !!session;
 
@@ -150,14 +171,18 @@ function KeypadLayer({ host }: { host: string }) {
       {!session.live && (
         <Pressable accessibilityLabel="Cancel" onPress={closeKeypad} style={StyleSheet.absoluteFill} />
       )}
-      <KeypadPanel session={session} />
+      <KeypadPanel session={session} root={root} />
     </View>
   );
 }
 
-function KeypadPanel({ session }: { session: Session }) {
+/** On a computer the pad floats as a small card instead of spanning the window. */
+const DESKTOP_PAD_WIDTH = 400;
+
+function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const desktop = useIsDesktop();
   const math = hasMath(session.expr);
 
   const key = (k: KeypadKey, content: React.ReactNode, label: string) => (
@@ -190,22 +215,39 @@ function KeypadPanel({ session }: { session: Session }) {
   const op = (k: '+' | '-' | '=', glyph: string, label: string) =>
     key(k, <Text style={{ fontSize: 28, lineHeight: 32, fontWeight: '500', color: colors.accent }}>{glyph}</Text>, label);
 
+  // Inside a sheet's card the pad docks to the card's bottom edge, like on a phone.
+  const floating = desktop && root;
+  const lift = floating ? spacing.lg : 0;
   return (
     <View
-      onLayout={(e) => setKeypadHeight(e.nativeEvent.layout.height)}
-      style={{
-        position: 'absolute',
-        left: 0,
-        right: 0,
-        bottom: 0,
-        paddingTop: spacing.sm,
-        paddingHorizontal: spacing.sm,
-        paddingBottom: Math.max(insets.bottom, spacing.sm),
-        gap: 2,
-        backgroundColor: colors.surface,
-        borderTopWidth: 1,
-        borderTopColor: colors.separator,
-      }}
+      onLayout={(e) => setKeypadHeight(e.nativeEvent.layout.height + lift)}
+      style={[
+        {
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          paddingTop: spacing.sm,
+          paddingHorizontal: spacing.sm,
+          paddingBottom: Math.max(insets.bottom, spacing.sm),
+          gap: 2,
+          backgroundColor: colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: colors.separator,
+        },
+        floating && {
+          bottom: lift,
+          // Centered under the page, past the sidebar.
+          left: '50%',
+          right: undefined,
+          width: DESKTOP_PAD_WIDTH,
+          marginLeft: SIDEBAR_WIDTH / 2 - DESKTOP_PAD_WIDTH / 2,
+          borderWidth: 1,
+          borderColor: colors.separator,
+          borderRadius: radius.card,
+          boxShadow: '0 12px 40px rgba(11,18,32,0.18)',
+        },
+      ]}
     >
       {session.actions?.length ? (
         <View style={{ flexDirection: 'row', gap: spacing.sm, paddingHorizontal: 4, paddingBottom: 6 }}>
@@ -395,7 +437,7 @@ export function useKeypadField({
     useKeypadStore.setState({
       session: {
         field,
-        host,
+        host: hostFor(host),
         mode,
         unit,
         negative,

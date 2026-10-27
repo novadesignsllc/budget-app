@@ -8,7 +8,7 @@ import { formatMoney } from '@/domain/money';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { spacing, useColors } from '@/theme';
 
-import { useDock, useIsDesktop } from './dock';
+import { SIDEBAR_WIDTH, useDock, useIsDesktop } from './dock';
 import { Icon } from './icon';
 import { QuickAddBar } from './quick-add-bar';
 import { Text } from './text';
@@ -92,7 +92,7 @@ function Sidebar() {
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
   return (
-    <View style={{ width: 260, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
+    <View style={{ width: SIDEBAR_WIDTH, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
       <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl }}>
         <Text variant="title" style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
           Slip

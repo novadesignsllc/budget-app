@@ -1,11 +1,12 @@
-import { createContext, use, useRef } from 'react';
-import { ScrollView, View, type ScrollViewProps } from 'react-native';
+import { createContext, use, useEffect, useRef } from 'react';
+import { Pressable, ScrollView, View, type ScrollViewProps } from 'react-native';
 
+import { closeSheet } from '@/utils/close-sheet';
 import { keyboardTopIn } from '@/utils/keyboard';
 
-import { gutter, maxContentWidth, spacing } from '@/theme';
+import { gutter, maxContentWidth, radius, spacing, useColors } from '@/theme';
 
-import { useDock } from './dock';
+import { useDock, useIsDesktop } from './dock';
 import { KeypadHost, useKeypadOpen } from './keypad';
 import { MenuHost } from './menu-host';
 
@@ -65,6 +66,7 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
   const frameRef = useRef<React.ComponentRef<typeof View>>(null);
   const offset = useRef(0);
   const keypadOpen = useKeypadOpen();
+  const desktop = useIsDesktop();
   // Measured against the sheet itself, so the sheet's own offset on screen cancels out.
   const reveal: Reveal = (view) =>
     frameRef.current?.measureInWindow((_sx: number, sheetY: number, _sw: number, sheetH: number) =>
@@ -73,9 +75,9 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
         if (over > 0) scrollRef.current?.scrollTo({ y: offset.current + over, animated: true });
       }),
     );
-  return (
+  const sheet = (
     <SheetReveal value={reveal}>
-      <View ref={frameRef} collapsable={false} style={{ flex: 1 }}>
+      <View ref={frameRef} collapsable={false} style={desktop ? { flexShrink: 1 } : { flex: 1 }}>
         <KeypadHost>
           <MenuHost>
             <ScrollView
@@ -105,5 +107,46 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
         </KeypadHost>
       </View>
     </SheetReveal>
+  );
+  return desktop ? <SheetDialog keypadOpen={keypadOpen}>{sheet}</SheetDialog> : sheet;
+}
+
+/**
+ * On a computer a sheet is a centered card over the page, the way a phone's sheet sits over
+ * the screen. Clicking outside it or pressing Escape closes it.
+ */
+function SheetDialog({ children, keypadOpen }: { children: React.ReactNode; keypadOpen: boolean }) {
+  const colors = useColors();
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      // Escape closes the number pad first.
+      if (e.key === 'Escape' && !keypadOpen) closeSheet();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keypadOpen]);
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl }}>
+      <Pressable
+        accessibilityLabel="Close"
+        onPress={closeSheet}
+        style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(11,18,32,0.32)' }}
+      />
+      <View
+        style={{
+          width: '100%',
+          maxWidth: 560,
+          maxHeight: '100%',
+          flexShrink: 1,
+          overflow: 'hidden',
+          borderRadius: radius.card + 4,
+          backgroundColor: colors.background,
+          boxShadow: '0 24px 64px rgba(11,18,32,0.24)',
+        }}
+      >
+        {children}
+      </View>
+    </View>
   );
 }

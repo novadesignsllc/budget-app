@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { useIsDesktop } from '@/components/dock';
 import { KeypadHost } from '@/components/keypad';
 import { SyncIndicator } from '@/components/sync-indicator';
 import { ToastHost } from '@/components/toast';
@@ -25,6 +26,7 @@ export default function RootLayout() {
   const status = useSession((s) => s.status);
   const dataReady = useSession((s) => s.dataReady);
   const colors = useColors();
+  const desktop = useIsDesktop();
   const base = DefaultTheme;
 
   // Keep the splash up until we know who's signed in and their data has loaded,
@@ -37,11 +39,11 @@ export default function RootLayout() {
 
   // One height only: full. With a shorter detent, iOS raises the sheet for the keyboard and
   // drops it again when the keyboard closes (like tapping a dropdown), so the whole menu jumps.
-  const sheetStyle = {
-    ...sheet,
-    sheetAllowedDetents: [1],
-    contentStyle: { backgroundColor: colors.background },
-  };
+  // On a computer, sheets are cards over the page (SheetScreen draws the card), so the
+  // screen underneath stays visible.
+  const sheetStyle = desktop
+    ? ({ headerShown: false, presentation: 'transparentModal', contentStyle: { backgroundColor: 'transparent' } } as const)
+    : { ...sheet, sheetAllowedDetents: [1], contentStyle: { backgroundColor: colors.background } };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -58,7 +60,7 @@ export default function RootLayout() {
           },
         }}
       >
-        <KeypadHost>
+        <KeypadHost root>
           <Stack screenOptions={{ contentStyle: { backgroundColor: colors.background } }}>
             <Stack.Protected guard={status === 'signedIn'}>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />

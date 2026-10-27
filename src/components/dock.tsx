@@ -3,6 +3,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { spacing } from '@/theme';
 
+/** Width of the desktop sidebar. */
+export const SIDEBAR_WIDTH = 260;
+
 /** Desktop web shows a sidebar instead of the bottom dock. */
 export function useIsDesktop() {
   const { width } = useWindowDimensions();

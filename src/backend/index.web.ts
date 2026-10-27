@@ -4,10 +4,13 @@ import {
   deleteUser,
   EmailAuthProvider,
   getAuth,
+  OAuthProvider,
   onAuthStateChanged,
   reauthenticateWithCredential,
+  reauthenticateWithPopup,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import {
@@ -26,6 +29,18 @@ import { fakeBackend } from './fake';
 import { chunks, clean } from './firestore-shared';
 import { isDemoMode } from './mode';
 import type { Backend } from './types';
+
+/**
+ * Sign in with Apple on the web goes through a popup and needs the Apple web setup in the
+ * Firebase console (a Services ID), so it's switched on once that's done.
+ */
+const webApple = process.env.EXPO_PUBLIC_WEB_APPLE_SIGN_IN === '1';
+
+function appleProvider() {
+  const provider = new OAuthProvider('apple.com');
+  provider.addScope('email');
+  return provider;
+}
 
 function createWebBackend(): Backend {
   const app = initializeApp({
@@ -50,13 +65,22 @@ function createWebBackend(): Backend {
       await createUserWithEmailAndPassword(auth, email.trim(), password);
     },
     sendPasswordReset: (email) => sendPasswordResetEmail(auth, email.trim()),
-    appleSignInAvailable: false,
-    signInWithApple: () => Promise.reject(new Error('Sign in with Apple is only on iPhone.')),
+    appleSignInAvailable: webApple,
+    signInWithApple: async () => {
+      await signInWithPopup(auth, appleProvider());
+    },
     signOut: () => signOut(auth),
-    signInMethod: () => (auth.currentUser?.providerData.some((p) => p.providerId === 'password') ? 'password' : null),
+    signInMethod: () => {
+      const providers = auth.currentUser?.providerData.map((p) => p.providerId) ?? [];
+      return providers.includes('password') ? 'password' : providers.includes('apple.com') ? 'apple' : null;
+    },
     reauthenticate: async (password) => {
       const user = auth.currentUser;
       if (!user) throw Object.assign(new Error('Not signed in'), { code: 'auth/no-current-user' });
+      if (password === undefined && user.providerData.some((p) => p.providerId === 'apple.com')) {
+        await reauthenticateWithPopup(user, appleProvider());
+        return;
+      }
       await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email ?? '', password ?? ''));
     },
     deleteSignIn: async () => {

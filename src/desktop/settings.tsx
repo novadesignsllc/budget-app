@@ -7,6 +7,7 @@ import { setDemoMode } from '@/backend/mode';
 import { Text, type TextTone } from '@/components/text';
 import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
+import { DarkModeRow } from '@/components/dark-mode-row';
 import { useSession } from '@/sync/session';
 import { useSyncStatus } from '@/sync/status';
 import { useColors } from '@/theme';
@@ -64,6 +65,11 @@ export function DesktopSettings() {
 
         <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 320, maxWidth: 420, gap: 14 }}>
           <ProfilesCard />
+          <DCard>
+            <SectionTitle>Appearance</SectionTitle>
+            <DarkModeRow paddingHorizontal={18} />
+            <View style={{ height: 6 }} />
+          </DCard>
           <DCard>
             <SectionTitle>Your account</SectionTitle>
             {inDemo ? (

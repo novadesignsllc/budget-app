@@ -145,7 +145,7 @@ function SheetDialog({ children, keypadOpen }: { children: React.ReactNode; keyp
       <Pressable
         accessibilityLabel="Close"
         onPress={closeSheet}
-        style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(11,18,32,0.32)' }}
+        style={{ position: 'absolute', inset: 0, backgroundColor: colors.backdrop }}
       />
       <View
         style={{

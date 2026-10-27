@@ -303,7 +303,7 @@ function ItemRow({ name, first, lifted }: { name: string; first: boolean; lifted
       <Text variant="body" weight={lifted ? '600' : '400'} numberOfLines={1} style={{ flex: 1 }}>
         {name}
       </Text>
-      <Icon sf="line.3.horizontal" md="drag_handle" size={16} color={lifted ? colors.accent : '#B8C0CE'} />
+      <Icon sf="line.3.horizontal" md="drag_handle" size={16} color={lifted ? colors.accent : colors.disabled} />
     </View>
   );
 }

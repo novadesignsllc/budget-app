@@ -301,7 +301,7 @@ export function Dropdown<T extends string>({
     <Pressable
       accessibilityLabel="Close menu"
       onPress={close}
-      style={{ flex: 1, backgroundColor: 'rgba(11,18,32,0.06)' }}
+      style={{ flex: 1, backgroundColor: colors.backdropLight }}
     >
       <Animated.View
         entering={reduceMotion ? undefined : menuIn('top' in position ? -6 : 6)}
@@ -320,7 +320,7 @@ export function Dropdown<T extends string>({
             maxHeight,
             backgroundColor: colors.surface,
             borderWidth: 1,
-            borderColor: 'rgba(20,40,80,0.14)',
+            borderColor: colors.menuBorder,
             borderRadius: radius.menu,
             borderCurve: 'continuous',
             padding: 5,

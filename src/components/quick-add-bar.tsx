@@ -51,7 +51,7 @@ export function QuickAddBar() {
     height: 40,
     borderRadius: radius.control,
     borderWidth: 1,
-    borderColor: 'rgba(20,40,80,0.10)',
+    borderColor: colors.borderStrong,
     backgroundColor: colors.surface,
   } as const;
 

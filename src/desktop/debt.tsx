@@ -238,7 +238,7 @@ export function DesktopDebt() {
                 paddingHorizontal: 16,
                 borderTopWidth: i === 0 ? 0 : 1,
                 borderTopColor: colors.hairline,
-                backgroundColor: hovered ? '#FAFBFD' : 'transparent',
+                backgroundColor: hovered ? colors.tableHeader : 'transparent',
               })}
             >
               <Text variant="callout" tone="textTertiary" style={{ width: 24 }}>

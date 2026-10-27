@@ -164,7 +164,7 @@ export function LineChart({
                   x2={width}
                   y1={PAD_TOP + plotH * (1 - f) + 0.5}
                   y2={PAD_TOP + plotH * (1 - f) + 0.5}
-                  stroke={f === 0 ? 'rgba(20,40,80,0.14)' : 'rgba(20,40,80,0.06)'}
+                  stroke={f === 0 ? colors.chartBaseline : colors.chartGrid}
                   strokeWidth={1}
                 />
               ))}
@@ -175,13 +175,13 @@ export function LineChart({
                 {formatAxis(max)}
               </SvgText>
               {active !== null && (
-                <Line x1={x(active)} x2={x(active)} y1={0} y2={height} stroke="rgba(20,40,80,0.25)" strokeDasharray="3 3" />
+                <Line x1={x(active)} x2={x(active)} y1={0} y2={height} stroke={colors.chartCrosshair} strokeDasharray="3 3" />
               )}
               {projectFrom !== undefined && projectFrom < count && (
                 <>
                   {/* The future, lightly shaded, with today marked where the dashes start. */}
-                  <Rect x={x(actualEnd)} y={0} width={width - x(actualEnd)} height={height} fill="rgba(20,40,80,0.025)" />
-                  <Line x1={x(actualEnd)} x2={x(actualEnd)} y1={0} y2={height} stroke="rgba(20,40,80,0.18)" strokeWidth={1} />
+                  <Rect x={x(actualEnd)} y={0} width={width - x(actualEnd)} height={height} fill={colors.chartShade} />
+                  <Line x1={x(actualEnd)} x2={x(actualEnd)} y1={0} y2={height} stroke={colors.chartDivider} strokeWidth={1} />
                   <SvgText x={x(actualEnd) + 4} y={PAD_TOP + 2} fill={colors.textTertiary} fontSize={9} fontFamily={fontFamily}>
                     Projected
                   </SvgText>
@@ -206,13 +206,13 @@ export function LineChart({
               )}
               {paths.map((p) =>
                 p.last ? (
-                  <Circle key={`${p.id}-end`} cx={x(p.last.i)} cy={y(p.last.v)} r={4} fill={p.color} stroke="#FFFFFF" strokeWidth={2} />
+                  <Circle key={`${p.id}-end`} cx={x(p.last.i)} cy={y(p.last.v)} r={4} fill={p.color} stroke={colors.surface} strokeWidth={2} />
                 ) : null,
               )}
               {active !== null &&
                 series.map((s) =>
                   s.values[active] !== null && s.values[active] !== undefined ? (
-                    <Circle key={`${s.id}-a`} cx={x(active)} cy={y(s.values[active]!)} r={4} fill={s.color} stroke="#FFFFFF" strokeWidth={2} />
+                    <Circle key={`${s.id}-a`} cx={x(active)} cy={y(s.values[active]!)} r={4} fill={s.color} stroke={colors.surface} strokeWidth={2} />
                   ) : null,
                 )}
               {labels.map((l) => (

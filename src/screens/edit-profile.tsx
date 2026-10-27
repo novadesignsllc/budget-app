@@ -11,7 +11,7 @@ import { useToast } from '@/components/toast';
 import { EmojiHeader } from '@/screens/envelope-settings';
 import { MAX_PROFILES, newProfileId, saveProfile, useProfiles, type Profile } from '@/sync/profiles';
 import { switchProfile, useSession } from '@/sync/session';
-import { ACCENTS, spacing } from '@/theme';
+import { ACCENTS, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
@@ -20,6 +20,7 @@ import { haptic } from '@/utils/haptics';
  * profile starts empty and opens right away.
  */
 export function EditProfile({ id }: { id?: string }) {
+  const colors = useColors();
   const user = useSession((s) => s.user);
   const list = useProfiles((s) => s.list);
   const existing = list.find((p) => p.id === id);
@@ -105,7 +106,7 @@ export function EditProfile({ id }: { id?: string }) {
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderWidth: on ? 2 : 0,
-                    borderColor: '#FFFFFF',
+                    borderColor: colors.surface,
                     outlineWidth: on ? 2 : 0,
                     outlineColor: a.hex,
                     outlineStyle: 'solid',

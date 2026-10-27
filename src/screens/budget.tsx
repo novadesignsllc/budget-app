@@ -976,7 +976,7 @@ function SplitToAssign({
     const left = floorDollars(pools[p].readyToAssign);
     const look = past || left === 0 ? 'zero' : left < 0 ? 'short' : 'ok';
     const ink = look === 'short' ? colors.negative : look === 'ok' ? colors.positive : colors.textSecondary;
-    const soft = look === 'short' ? '#7A271A' : look === 'ok' ? '#2E6B45' : colors.textSecondary;
+    const soft = look === 'short' ? colors.negativeInk : look === 'ok' ? colors.okInk : colors.textSecondary;
     return (
       <View
         key={p}
@@ -986,7 +986,7 @@ function SplitToAssign({
           gap: 2,
           paddingHorizontal: spacing.md + 2,
           paddingVertical: spacing.md + 2,
-          backgroundColor: look === 'short' ? colors.negativeSoft : look === 'ok' ? '#E9F6EE' : '#E9EDF3',
+          backgroundColor: look === 'short' ? colors.negativeSoft : look === 'ok' ? colors.okSoft : colors.neutralSoft,
           borderLeftWidth: i ? 1 : 0,
           borderLeftColor: colors.separator,
         }}
@@ -1036,11 +1036,11 @@ function SplitToAssign({
             gap: spacing.md - 2,
             padding: spacing.md + 2,
             borderTopWidth: 1,
-            borderTopColor: 'rgba(180,35,24,0.18)',
+            borderTopColor: colors.negativeBorder,
             backgroundColor: colors.negativeTint,
           }}
         >
-          <Text variant="callout" color="#7A271A">
+          <Text variant="callout" color={colors.negativeInk}>
             <Text variant="callout" weight="600" tone="negative">
               {shorts.length === 2
                 ? 'You’re overspent in spending and savings. '
@@ -1116,7 +1116,7 @@ function LeftToAssign({ cents, past }: { cents: number; past: boolean }) {
           borderRadius: radius.card,
           borderWidth: 1,
           borderColor: colors.border,
-          backgroundColor: '#E9EDF3',
+          backgroundColor: colors.neutralSoft,
         }}
       >
         <View
@@ -1139,7 +1139,7 @@ function LeftToAssign({ cents, past }: { cents: number; past: boolean }) {
   }
   const over = left < 0;
   const ink = past ? colors.textSecondary : over ? colors.negative : colors.positive;
-  const soft = past ? colors.textSecondary : over ? '#7A271A' : '#2E6B45';
+  const soft = past ? colors.textSecondary : over ? colors.negativeInk : colors.okInk;
   return (
     <View
       accessibilityRole="summary"
@@ -1149,8 +1149,8 @@ function LeftToAssign({ cents, past }: { cents: number; past: boolean }) {
         padding: spacing.lg,
         borderRadius: radius.card,
         borderWidth: 1,
-        borderColor: past ? colors.border : over ? 'rgba(180,35,24,0.25)' : 'rgba(19,128,63,0.25)',
-        backgroundColor: past ? '#E9EDF3' : over ? colors.negativeSoft : '#E9F6EE',
+        borderColor: past ? colors.border : over ? colors.negativeBorder : colors.positiveBorder,
+        backgroundColor: past ? colors.neutralSoft : over ? colors.negativeSoft : colors.okSoft,
       }}
     >
       <Text variant="callout" color={soft}>

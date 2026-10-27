@@ -82,7 +82,7 @@ export function ActionMenu({
         </Pressable>
       </View>
       <Modal visible={!!frame} transparent animationType="none" onRequestClose={close}>
-        <Pressable accessibilityLabel="Close menu" onPress={close} style={{ flex: 1, backgroundColor: 'rgba(11,18,32,0.06)' }}>
+        <Pressable accessibilityLabel="Close menu" onPress={close} style={{ flex: 1, backgroundColor: colors.backdropLight }}>
           <Animated.View
             entering={reduceMotion ? undefined : menuIn(below ? -6 : 6)}
             style={{ position: 'absolute', left, width, ...position }}
@@ -92,7 +92,7 @@ export function ActionMenu({
               style={{
                 backgroundColor: colors.surface,
                 borderWidth: 1,
-                borderColor: 'rgba(20,40,80,0.14)',
+                borderColor: colors.menuBorder,
                 borderRadius: radius.menu,
                 borderCurve: 'continuous',
                 padding: 5,

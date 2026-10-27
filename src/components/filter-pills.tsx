@@ -40,7 +40,7 @@ export function FilterPills<T extends string>({
               paddingHorizontal: 11,
               borderRadius: 13,
               borderWidth: 1,
-              borderColor: selected ? 'rgba(20,40,80,0.16)' : 'transparent',
+              borderColor: selected ? colors.menuBorder : 'transparent',
               backgroundColor: selected ? colors.surface : 'transparent',
               justifyContent: 'center',
             }}

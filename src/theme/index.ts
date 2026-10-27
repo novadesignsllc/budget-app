@@ -1,5 +1,7 @@
 import { Platform, type TextStyle } from 'react-native';
 import { create } from 'zustand';
+// localStorage on phones too, so the light/dark choice is read before the first frame.
+import 'expo-sqlite/localStorage/install';
 
 /**
  * The one source of truth for visual values. Approved mockup:
@@ -61,10 +63,121 @@ const light = {
   floating: '#FFFFFF',
   heroFrom: '#E6E0FF',
   heroTo: '#FCE6F0',
+  /** Left pills: green with money, its text; grey at zero; dark red text on the red pill. */
+  okSoft: '#E9F6EE',
+  okInk: '#2E6B45',
+  neutralSoft: '#E9EDF3',
+  negativeInk: '#7A271A',
+  positiveBorder: 'rgba(19, 128, 63, 0.25)',
+  negativeBorder: 'rgba(180, 35, 24, 0.25)',
+  orangeBorder: 'rgba(194, 86, 15, 0.35)',
+  /** Reconciled rows: faded text on a faint grey row. */
+  textMuted: '#A3ADBD',
+  rowDone: '#F6F7FA',
+  rowDoneHover: '#EEF1F6',
+  /** Disabled days, idle drag handles. */
+  disabled: '#B8C0CE',
+  /** Menus and selected filter pills. */
+  menuBorder: 'rgba(20, 40, 80, 0.14)',
+  /** Behind an open menu, and behind a sheet. */
+  backdropLight: 'rgba(11, 18, 32, 0.06)',
+  backdrop: 'rgba(11, 18, 32, 0.32)',
+  /** Charts: grid lines, the hover line, the projected side. */
+  chartGrid: 'rgba(20, 40, 80, 0.06)',
+  chartBaseline: 'rgba(20, 40, 80, 0.14)',
+  chartCrosshair: 'rgba(20, 40, 80, 0.25)',
+  chartShade: 'rgba(20, 40, 80, 0.025)',
+  chartDivider: 'rgba(20, 40, 80, 0.18)',
 };
 
 export type Palette = typeof light;
-export const palettes = { light, dark: light };
+
+/**
+ * Dark: its own steps, not an inverted light. Cards sit a step above the page, text is
+ * off-white, and status colors are lifted so they still read on dark. White stays the
+ * text on accent buttons, so `ink` (the dark button) is a raised grey here.
+ */
+const dark: Palette = {
+  background: '#0C1018',
+  surface: '#161B24',
+  tableHeader: '#1A202A',
+  control: '#212835',
+  fill: '#2A3240',
+  fillPressed: '#323B4B',
+  text: '#E8ECF3',
+  textSecondary: '#9AA5B8',
+  textTertiary: '#717D91',
+  placeholder: '#6C788C',
+  border: 'rgba(255, 255, 255, 0.08)',
+  borderStrong: 'rgba(255, 255, 255, 0.12)',
+  separator: 'rgba(255, 255, 255, 0.08)',
+  hairline: 'rgba(255, 255, 255, 0.05)',
+  ink: '#343D4E',
+  onInk: '#FFFFFF',
+  accent: '#7B6FF4',
+  accentSoft: '#272646',
+  accentFaint: '#1C1F31',
+  blue: '#6EA0FF',
+  blueSoft: '#17243D',
+  orange: '#FF9B57',
+  orangeSoft: '#33231A',
+  positive: '#45C97E',
+  positiveSoft: '#16301F',
+  negative: '#FF7A6E',
+  negativeStrong: '#FF5A4D',
+  negativeSoft: '#3A1D1C',
+  negativeTint: '#22181C',
+  warning: '#FF9B57',
+  warningSoft: '#33231A',
+  caution: '#F2C14E',
+  cautionDot: '#F5B700',
+  cautionSoft: '#332B14',
+  scrim: '#05070B',
+  floating: '#1E2430',
+  heroFrom: '#28224D',
+  heroTo: '#3A1E33',
+  okSoft: '#163020',
+  okInk: '#7ED9A0',
+  neutralSoft: '#252C38',
+  negativeInk: '#FFB3AA',
+  positiveBorder: 'rgba(69, 201, 126, 0.3)',
+  negativeBorder: 'rgba(255, 122, 110, 0.3)',
+  orangeBorder: 'rgba(255, 155, 87, 0.35)',
+  textMuted: '#5E6A7D',
+  rowDone: '#12161E',
+  rowDoneHover: '#1A1F29',
+  disabled: '#4A5465',
+  menuBorder: 'rgba(255, 255, 255, 0.14)',
+  backdropLight: 'rgba(0, 0, 0, 0.25)',
+  backdrop: 'rgba(0, 0, 0, 0.55)',
+  chartGrid: 'rgba(255, 255, 255, 0.06)',
+  chartBaseline: 'rgba(255, 255, 255, 0.16)',
+  chartCrosshair: 'rgba(255, 255, 255, 0.3)',
+  chartShade: 'rgba(255, 255, 255, 0.03)',
+  chartDivider: 'rgba(255, 255, 255, 0.2)',
+};
+
+export const palettes = { light, dark };
+
+/**
+ * Light or dark, chosen in Settings and kept on this device only (not the account), so a
+ * phone and a computer can differ.
+ */
+const SCHEME_KEY = 'slip-scheme';
+function savedScheme(): 'light' | 'dark' {
+  try {
+    return localStorage.getItem(SCHEME_KEY) === 'dark' ? 'dark' : 'light';
+  } catch {
+    return 'light';
+  }
+}
+export const useScheme = create<{ scheme: 'light' | 'dark' }>()(() => ({ scheme: savedScheme() }));
+export function setScheme(scheme: 'light' | 'dark') {
+  try {
+    localStorage.setItem(SCHEME_KEY, scheme);
+  } catch {}
+  useScheme.setState({ scheme });
+}
 
 /**
  * The accent of the profile you're in. Each profile can pick one of these; all keep white
@@ -82,22 +195,42 @@ export const ACCENTS = [
 export const useAccent = create<{ accent: string }>()(() => ({ accent: light.accent }));
 
 /** A solid light tint of a color, for soft backgrounds behind it. */
-function tint(hex: string, amount: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const mix = (c: number) => Math.round(255 - (255 - c) * amount);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map(mix);
-  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1).toUpperCase()}`;
+export function tint(hex: string, amount: number): string {
+  return mix(hex, '#FFFFFF', amount);
+}
+
+/** `hex` laid over `base` at `amount` (0 to 1), as a solid color. */
+function mix(hex: string, base: string, amount: number): string {
+  const rgb = (h: string) => {
+    const n = parseInt(h.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const [a, b] = [rgb(hex), rgb(base)];
+  const [r, g, bl] = a.map((c, i) => Math.round(b[i] + (c - b[i]) * amount));
+  return `#${((1 << 24) | (r << 16) | (g << 8) | bl).toString(16).slice(1).toUpperCase()}`;
 }
 
 const withAccent = new Map<string, Palette>();
-/** Light only for now (decided 2026-10-23), with the current profile's accent. */
+/** The palette for this device's light or dark setting, with the current profile's accent. */
 export function useColors(): Palette {
   const accent = useAccent((s) => s.accent);
-  if (accent === light.accent) return light;
-  let palette = withAccent.get(accent);
+  const scheme = useScheme((s) => s.scheme);
+  return paletteFor(scheme, accent);
+}
+
+export function paletteFor(scheme: 'light' | 'dark', accent: string): Palette {
+  const base = scheme === 'dark' ? dark : light;
+  if (accent === light.accent) return base;
+  const key = `${scheme}${accent}`;
+  let palette = withAccent.get(key);
   if (!palette) {
-    palette = { ...light, accent, accentSoft: tint(accent, 0.09), accentFaint: tint(accent, 0.04) };
-    withAccent.set(accent, palette);
+    // On dark, the accent is lifted a little so links and selection read on the dark cards.
+    const shown = scheme === 'dark' ? mix(accent, '#FFFFFF', 0.78) : accent;
+    palette =
+      scheme === 'dark'
+        ? { ...base, accent: shown, accentSoft: mix(shown, base.surface, 0.2), accentFaint: mix(shown, base.surface, 0.08) }
+        : { ...base, accent, accentSoft: tint(accent, 0.09), accentFaint: tint(accent, 0.04) };
+    withAccent.set(key, palette);
   }
   return palette;
 }

@@ -1,4 +1,4 @@
-import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -8,12 +8,12 @@ import { KeypadHost } from '@/components/keypad';
 import { SyncIndicator } from '@/components/sync-indicator';
 import { ToastHost } from '@/components/toast';
 import { useSession, useSessionBootstrap } from '@/sync/session';
-import { useColors } from '@/theme';
-import { pinLightAppearance } from '@/theme/preference';
+import { useColors, useScheme } from '@/theme';
+import { followAppScheme } from '@/theme/preference';
 import '@/theme/web-reset';
 
 SplashScreen.preventAutoHideAsync();
-pinLightAppearance();
+followAppScheme();
 
 const sheet = {
   presentation: 'formSheet',
@@ -27,7 +27,8 @@ export default function RootLayout() {
   const dataReady = useSession((s) => s.dataReady);
   const colors = useColors();
   const desktop = useIsDesktop();
-  const base = DefaultTheme;
+  const scheme = useScheme((s) => s.scheme);
+  const base = scheme === 'dark' ? DarkTheme : DefaultTheme;
 
   // Keep the splash up until we know who's signed in and their data has loaded,
   // so the app never flashes empty and nothing is edited before sync is ready.

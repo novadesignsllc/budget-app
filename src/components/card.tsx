@@ -23,11 +23,11 @@ export function Card({
   const colors = useColors();
   const border =
     tone === 'urgent'
-      ? 'rgba(217,45,32,0.35)'
+      ? colors.negativeBorder
       : tone === 'slip'
-        ? 'rgba(217,45,32,0.35)'
+        ? colors.negativeBorder
         : tone === 'due'
-          ? 'rgba(194,86,15,0.35)'
+          ? colors.orangeBorder
           : colors.border;
   return (
     <View

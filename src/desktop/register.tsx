@@ -85,7 +85,7 @@ export function RegisterRow({
   const done = !!t.reconciled;
   const env = envelopeText(t, envelope);
   const ink = done ? colors.textTertiary : colors.text;
-  const sub = done ? '#A3ADBD' : colors.textSecondary;
+  const sub = done ? colors.textMuted : colors.textSecondary;
   const outColor = done ? colors.textTertiary : t.kind === 'slip' ? colors.negative : colors.text;
   return (
     <Pressable
@@ -103,7 +103,7 @@ export function RegisterRow({
         borderTopWidth: 1,
         borderTopColor: colors.hairline,
         opacity: select?.disabled ? 0.55 : 1,
-        backgroundColor: hovered ? (done ? '#EEF1F6' : '#FAFBFD') : done ? '#F6F7FA' : 'transparent',
+        backgroundColor: hovered ? (done ? colors.rowDoneHover : colors.tableHeader) : done ? colors.rowDone : 'transparent',
       })}
     >
       {columns.check && (
@@ -156,7 +156,7 @@ export function RegisterRow({
         </View>
       </View>
       {columns.envelope !== false && (
-        <Text variant="callout" color={done ? '#A3ADBD' : colors[env.tone]} numberOfLines={1} style={{ flex: FLEX.envelope }}>
+        <Text variant="callout" color={done ? colors.textMuted : colors[env.tone]} numberOfLines={1} style={{ flex: FLEX.envelope }}>
           {env.text}
         </Text>
       )}

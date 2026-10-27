@@ -99,7 +99,7 @@ export function DesktopHome() {
       }
     >
       {health.short > 0 && (
-        <DCard padded style={{ backgroundColor: colors.negativeSoft, borderColor: 'rgba(180,35,24,0.25)' }}>
+        <DCard padded style={{ backgroundColor: colors.negativeSoft, borderColor: colors.negativeBorder }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
             <Text variant="body" weight="600" tone="negative" style={{ flex: 1 }}>
               Your accounts are {formatMoney(health.short)} short. Checking and savings hold less than your envelopes.
@@ -363,7 +363,7 @@ export function DesktopHome() {
                     paddingVertical: 8,
                     borderTopWidth: 1,
                     borderTopColor: colors.hairline,
-                    backgroundColor: hovered ? '#FAFBFD' : 'transparent',
+                    backgroundColor: hovered ? colors.tableHeader : 'transparent',
                   })}
                 >
                   <Text variant="footnote" tone="textSecondary" style={{ width: 48 }}>

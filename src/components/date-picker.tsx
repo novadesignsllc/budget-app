@@ -23,7 +23,6 @@ import { Text } from './text';
 /** Compact, so the calendar fits above the keyboard with the date row still showing. */
 const DAY = 30;
 const WEEKDAYS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const MUTED = '#B8C0CE';
 const monthTitle = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
 const shortDay = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const shortDayYear = new Intl.DateTimeFormat('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
@@ -207,7 +206,7 @@ function Calendar({
                     <Text
                       variant="body"
                       weight={selected || isToday ? '600' : '400'}
-                      color={selected ? colors.onInk : isToday ? colors.accent : enabled ? colors.text : MUTED}
+                      color={selected ? colors.onInk : isToday ? colors.accent : enabled ? colors.text : colors.disabled}
                       style={{ fontVariant: ['tabular-nums'] }}
                     >
                       {fromISODate(d).getDate()}

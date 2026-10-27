@@ -131,7 +131,7 @@ export function Home() {
               <Text variant="body" weight="600" tone="negative">
                 Your accounts are {formatMoney(health.short)} short
               </Text>
-              <Text variant="callout" color="#7A271A">
+              <Text variant="callout" color={colors.negativeInk}>
                 Checking and savings hold less than your envelopes. Take money back from envelopes until they match.
               </Text>
             </View>

@@ -966,7 +966,7 @@ function Inspector({
                 paddingVertical: 9,
                 borderTopWidth: 1,
                 borderTopColor: colors.hairline,
-                backgroundColor: hovered ? '#FAFBFD' : 'transparent',
+                backgroundColor: hovered ? colors.tableHeader : 'transparent',
               })}
             >
               <Text variant="footnote" tone="textSecondary" style={{ width: 48 }}>

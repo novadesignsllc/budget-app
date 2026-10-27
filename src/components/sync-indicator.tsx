@@ -4,8 +4,7 @@ import { FullWindowOverlay } from 'react-native-screens';
 
 import { useSession } from '@/sync/session';
 import { useSyncStatus, type SyncPhase } from '@/sync/status';
-import { palettes, radius, shadows, spacing } from '@/theme';
-import { useColorScheme } from '@/hooks/use-color-scheme';
+import { radius, shadows, spacing, useColors } from '@/theme';
 
 import { useIsDesktop } from './dock';
 import { useFloatingBottom } from './floating-action';
@@ -35,8 +34,7 @@ const slide = {
 export function SyncIndicator() {
   const phase = useSyncStatus((s) => s.phase);
   const signedIn = useSession((s) => s.status === 'signedIn');
-  const scheme = useColorScheme() === 'dark' ? 'dark' : 'light';
-  const colors = palettes[scheme];
+  const colors = useColors();
   const reduceMotion = useReducedMotion();
   const floatingBottom = useFloatingBottom();
   // On a computer the sidebar shows sync status instead.

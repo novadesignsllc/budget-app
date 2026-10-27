@@ -37,7 +37,7 @@ export function Button({
     primary: { bg: colors.accent, fg: colors.onInk, border: colors.accent },
     ink: { bg: colors.ink, fg: colors.onInk, border: colors.ink },
     secondary: { bg: colors.surface, fg: colors.text, border: colors.borderStrong },
-    destructive: { bg: colors.negativeSoft, fg: colors.negative, border: 'rgba(217,45,32,0.3)' },
+    destructive: { bg: colors.negativeSoft, fg: colors.negative, border: colors.negativeBorder },
     ghost: { bg: 'transparent', fg: colors.accent, border: 'transparent' },
     tinted: { bg: colors.accentSoft, fg: colors.accent, border: colors.accentSoft },
   };

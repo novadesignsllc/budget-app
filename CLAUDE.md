@@ -41,7 +41,8 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `npx expo start --web`: desktop and web preview against the real Firebase
 - `EXPO_PUBLIC_FAKE_BACKEND=1 npx expo start --web`: same, with the fake backend (any email and password signs in; `window.__fakeBackend.setOnline(false)` simulates no signal)
 - `npx expo start`: the iPhone dev build connects to this. Expo Go doesn't work: native Firebase needs a dev build.
-- `eas update --channel production --environment production --platform ios --non-interactive -m "..."`: ship JS and design changes to the TestFlight app over the air. Adding a native module changes the runtime fingerprint, which needs a new build instead.
+- `./scripts/ship.sh "What changed"`: the normal way to ship. Runs the checks, sends an over-the-air update to both phones, and publishes the website (https://slip-budget.expo.app, EAS Hosting). It stops if the native fingerprint no longer matches the installed builds. `./scripts/ship.sh --web` publishes only the website.
+- Don't add npm scripts: package.json `scripts` count toward the native fingerprint, so editing them breaks updates to the installed apps.
 - `eas build -p ios --profile production --auto-submit`: build and send to TestFlight
 - `eas build -p ios --profile development`: dev build for live reloading. Register the phone first with `eas device:create`.
 

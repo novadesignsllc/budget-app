@@ -88,18 +88,18 @@ export function Settings() {
           )}
         </Card>
 
-        <Card>
-          <ActionRow
-            title="Reset account"
-            detail="Start over empty"
-            tone="negative"
-            onPress={() => router.push('/reset-account')}
-            last={inDemo}
-          />
-          {!inDemo && (
+        {/* The demo can't be reset or deleted. Exiting it is the way out. */}
+        {!inDemo && (
+          <Card>
+            <ActionRow
+              title="Reset account"
+              detail="Start over empty"
+              tone="negative"
+              onPress={() => router.push('/reset-account')}
+            />
             <ActionRow title="Delete account" tone="negative" onPress={() => router.push('/delete-account')} last />
-          )}
-        </Card>
+          </Card>
+        )}
       </Screen>
       <ScreenActions>
         <ActionButton

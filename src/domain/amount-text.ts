@@ -52,3 +52,18 @@ export function typedText(text: string, mode: 'cents' | 'whole' = 'cents', negat
   const value = negative ? cents : Math.abs(cents);
   return mode === 'cents' ? (value / 100).toFixed(2) : String(Math.trunc(value / 100));
 }
+
+/**
+ * For money typed the YNAB way on a computer: what's in the field ("$43.57 + $12", even
+ * with a stray letter) back to the number pad's expression ("4357+1200"), so each number
+ * fills in from the right. Keeps a leading minus only when `negative`.
+ */
+export function fieldExpr(text: string, negative = false): string {
+  let expr = text.replace(/−/g, '-').replace(/[^\d+-]/g, '');
+  // One operator at a time, and none to start with (except a minus sign where allowed).
+  expr = expr.replace(/([+-])[+-]+/g, '$1');
+  if (expr.startsWith('+')) expr = expr.slice(1);
+  if (expr.startsWith('-') && !negative) expr = expr.slice(1);
+  // No leading zeros in any number.
+  return expr.replace(/(^|[+-])0+(?=\d)/g, '$1');
+}

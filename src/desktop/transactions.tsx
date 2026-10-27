@@ -6,9 +6,9 @@ import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { formatPickedDate } from '@/components/date-picker';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
-import { showAmount, typedCents, typedText } from '@/domain/amount-text';
+import { cleanAmount, showAmount } from '@/domain/amount-text';
 import { addDays, today } from '@/domain/dates';
-import { formatMoney } from '@/domain/money';
+import { formatMoney, parseMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
 import { payeeMemory } from '@/domain/payees';
 import { draftFromFields } from '@/domain/quick-add';
@@ -217,7 +217,7 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
   }, [day]);
 
   function save() {
-    const amount = Math.abs(typedCents(inText || outText) ?? 0) || null;
+    const amount = parseMoney(inText || outText);
     const missing = !payee.trim()
       ? 'Add a payee.'
       : !amount
@@ -328,14 +328,13 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
         {input({ value: note, onChangeText: setNote, placeholder: 'Note', accessibilityLabel: 'Note' }, FLEX.note)}
         {input(
           {
-            value: outText,
+            // Digits fill in from the right, like New transaction: 4357 is $43.57.
+            value: outText ? showAmount(outText) : '',
             onChangeText: (t) => {
-              setOutText(t);
+              setOutText(cleanAmount(t));
               if (t) setInText('');
               setProblem('');
             },
-            // Typed like any desktop amount ("43.57", "43", "25+12.99"), then shown as money.
-            onBlur: () => setOutText((t) => (typedText(t) ? showAmount(typedText(t)) : t)),
             placeholder: '$0.00',
             accessibilityLabel: 'Outflow',
             inputMode: 'decimal',
@@ -346,14 +345,13 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
         )}
         {input(
           {
-            value: inText,
+            // Digits fill in from the right, like New transaction: 4357 is $43.57.
+            value: inText ? showAmount(inText) : '',
             onChangeText: (t) => {
-              setInText(t);
+              setInText(cleanAmount(t));
               if (t) setOutText('');
               setProblem('');
             },
-            // Typed like any desktop amount ("43.57", "43", "25+12.99"), then shown as money.
-            onBlur: () => setInText((t) => (typedText(t) ? showAmount(typedText(t)) : t)),
             placeholder: '$0.00',
             accessibilityLabel: 'Inflow',
             inputMode: 'decimal',

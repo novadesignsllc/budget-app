@@ -1,8 +1,8 @@
 import { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { TextInput, type TextStyle } from 'react-native';
 
-import { typedText } from '@/domain/amount-text';
-import { exprFrom, keypadDisplay, textCents, type KeypadMode, type KeypadUnit } from '@/domain/keypad';
+import { fieldExpr, typedText } from '@/domain/amount-text';
+import { exprFrom, keypadDisplay, keypadText, textCents, type KeypadMode, type KeypadUnit } from '@/domain/keypad';
 import { useColors } from '@/theme';
 
 import type { KeypadFieldHandle } from './keypad';
@@ -22,7 +22,9 @@ export function amountDisplay(value: string, mode: KeypadMode, unit: KeypadUnit)
 
 /**
  * A number typed on a computer's keyboard, in place of the phone's number pad. Shows the
- * formatted amount; while focused it's plain text you can type math into ("560+40").
+ * formatted amount; while focused you type into it, math included ("560+40").
+ * Money with cents fills in from the right like the phone's pad and YNAB (4357 is
+ * $43.57); whole dollars, rates and days are typed as they read.
  * Enter or leaving the field saves; Escape puts it back.
  */
 export function TypedAmount({
@@ -80,7 +82,19 @@ export function TypedAmount({
   const selectAll = () =>
     requestAnimationFrame(() => (input.current as unknown as { select?: () => void } | null)?.select?.());
 
-  const editable = value ? amountDisplay(value, mode, 'number').replace(/,/g, '') : '';
+  // Money with cents: digits fill in from the right, and the field shows "$43.57" as you type.
+  const fromRight = mode === 'cents' && unit === 'money';
+  const show = (expr: string) => (expr ? keypadDisplay(expr, 'cents', 'money') : '');
+  const plain = (draftText: string) => {
+    if (!fromRight) return typedText(draftText, mode, negative);
+    const text = keypadText(fieldExpr(draftText, negative), 'cents');
+    return !negative && text.startsWith('-') ? text.slice(1) : text;
+  };
+  const editable = !value
+    ? ''
+    : fromRight
+      ? show(exprFrom(textCents(value, 'cents'), 'cents'))
+      : amountDisplay(value, mode, 'number').replace(/,/g, '');
   const finish = () => {
     if (draft === null) return;
     const wasCancelled = cancelled.current;
@@ -88,7 +102,7 @@ export function TypedAmount({
     setDraft(null);
     // Escape already put the value back.
     if (wasCancelled) return;
-    const text = typedText(draft, mode, negative);
+    const text = plain(draft);
     onChange?.(text);
     onCommit?.(text);
   };
@@ -107,13 +121,14 @@ export function TypedAmount({
         original.current = value;
         cancelled.current = false;
         setDraft(editable);
-        selectAll();
+        // Typing replaces an amount that's there; an empty field just takes the digits.
+        if (editable) selectAll();
         focused += 1;
         onFocusChange?.(true);
       }}
       onChangeText={(t) => {
-        setDraft(t);
-        onChange?.(typedText(t, mode, negative));
+        setDraft(fromRight ? show(fieldExpr(t, negative)) : t);
+        onChange?.(plain(t));
       }}
       onSubmitEditing={() => input.current?.blur()}
       onKeyPress={(e) => {

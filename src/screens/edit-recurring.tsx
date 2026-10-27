@@ -14,7 +14,9 @@ import { formatMoney, parseMoney } from '@/domain/money';
 import { FREQUENCY_LABEL } from '@/domain/recurring';
 import { isCashAccount, type Frequency, type RecurringKind } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { EmojiHeader } from '@/screens/envelope-settings';
 import { useStore } from '@/store';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { closeSheet } from '@/utils/close-sheet';
 import { haptic } from '@/utils/haptics';
 
@@ -27,6 +29,9 @@ export function EditRecurring({ id }: { id?: string }) {
   const addRecurring = useStore((s) => s.addRecurring);
   const updateRecurring = useStore((s) => s.updateRecurring);
   const deleteRecurring = useStore((s) => s.deleteRecurring);
+  const updateEnvelope = useStore((s) => s.updateEnvelope);
+  // The emoji lives on the bill's envelope, so the Recurring page and the budget always match.
+  const linkedEmoji = useStore((s) => s.envelopes.find((e) => e.id === existing?.envelopeId)?.emoji);
   const assign = useStore((s) => s.assign);
   const skipRecurring = useStore((s) => s.skipRecurring);
   const { all: accounts, cash } = useAccounts();
@@ -38,6 +43,7 @@ export function EditRecurring({ id }: { id?: string }) {
   const [accountId, setAccountId] = useState(existing?.accountId ?? cash[0]?.id);
   const [frequency, setFrequency] = useState<Frequency>(existing?.frequency ?? 'monthly');
   const [nextDue, setNextDue] = useState(existing?.nextDue ?? today());
+  const [emoji, setEmoji] = useState<string | undefined>(linkedEmoji);
   const amountRef = useRef<KeypadFieldHandle>(null);
 
   const amount = parseMoney(amountText);
@@ -96,8 +102,12 @@ export function EditRecurring({ id }: { id?: string }) {
       frequency,
       nextDue,
     };
+    const recurringId = existing ? existing.id : addRecurring(data);
     if (existing) updateRecurring(existing.id, data);
-    else addRecurring(data);
+    if (emoji && emoji !== linkedEmoji) {
+      const envelopeId = useStore.getState().recurring.find((r) => r.id === recurringId)?.envelopeId;
+      if (envelopeId) updateEnvelope(envelopeId, { emoji });
+    }
     haptic('success');
     closeSheet();
   }
@@ -116,6 +126,8 @@ export function EditRecurring({ id }: { id?: string }) {
   return (
     <SheetScreen>
       <SheetHeader title={existing ? existing.name : 'New recurring'} />
+
+      <EmojiHeader emoji={envelopeEmoji({ name: name || 'Bill', emoji })} onChange={setEmoji} />
 
       <AmountHero
         ref={amountRef}

@@ -58,7 +58,7 @@ git push
 if command -v vercel >/dev/null; then
   sleep 10
   for _ in $(seq 1 45); do
-    state=$(vercel ls slip 2>/dev/null | grep -m1 -oE 'Ready|Error|Canceled|Building|Queued|Initializing' || true)
+    state=$(vercel ls slip 2>&1 | grep -m1 -oE 'Ready|Error|Canceled|Building|Queued|Initializing' || true)
     [[ "$state" == "Ready" || "$state" == "Error" || "$state" == "Canceled" ]] && break
     sleep 8
   done

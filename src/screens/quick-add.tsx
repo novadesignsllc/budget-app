@@ -66,6 +66,8 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const [override, setOverride] = useState<Override>({});
   const [note, setNote] = useState('');
   const [flag, setFlagColor] = useState<FlagColor | null>(null);
+  // A complete dictation, waiting for Add or Edit.
+  const [heard, setHeard] = useState<ParsedEntry | null>(null);
 
   const envelopes = useStore((s) => s.envelopes);
   const payees = useStore((s) => s.payees);
@@ -145,9 +147,12 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     onPartial: setText,
     onFinal: (finalText) => {
       setText(finalText);
-      // Said everything we need? Save it. Otherwise fill the form with what was heard.
+      // Said everything we need? Show it to confirm. Otherwise fill the form with what was heard.
       const heard = parse(finalText);
-      if (!save(heard, override, { memo: heard.memo, flag: heard.flagColor })) fillFrom(heard);
+      if (resolve(heard, override).ready) {
+        haptic('light');
+        setHeard(heard);
+      } else fillFrom(heard);
     },
   });
 
@@ -159,7 +164,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   }, []);
 
   /** Moves what dictation heard into the typed fields, keeping any picks already made. */
-  function fillFrom(heard: ParsedEntry) {
+  function fillFrom(heard: ParsedEntry, focus = true) {
     setPayee(heard.payee);
     setAmountText(heard.amount ? (heard.amount / 100).toFixed(2) : '');
     if (heard.memo) setNote(heard.memo);
@@ -172,7 +177,8 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
       ...o,
     }));
     setMode('type');
-    setTimeout(() => (heard.payee ? amountRef : nameRef).current?.focus(), 50);
+    setHeard(null);
+    if (focus) setTimeout(() => (heard.payee ? amountRef : nameRef).current?.focus(), 50);
   }
 
   const typeInstead = () => {
@@ -262,8 +268,9 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   );
 
   if (mode === 'voice') {
-    // Dictation only: what it understood fills in as you talk, nothing to tap. If it
-    // can't save what it heard, the typed form opens with everything filled in.
+    // Dictation: what it understood fills in as you talk. When it has everything, it waits
+    // for Add (or Edit, which opens the typed form filled in). If something's missing, the
+    // typed form opens with what was heard.
     const heardSomething = !!text;
     const amountTone = r.isIncome ? 'positive' : r.isSlip ? 'negative' : 'text';
     return (
@@ -276,7 +283,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
             paddingTop: spacing.xs,
           }}
         >
-          {voiceEntry.error ? (
+          {heard ? null : voiceEntry.error ? (
             <Icon sf="mic.slash" md="mic_off" size={28} color={colors.textSecondary} />
           ) : (
             <View
@@ -368,7 +375,18 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
           </FormCard>
         )}
         {heardSomething && slipWarning}
-        {voiceEntry.error ? (
+        {heard ? (
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Button title="Edit" variant="secondary" size="lg" style={{ flex: 1 }} onPress={() => fillFrom(heard, false)} />
+            <Button
+              title={saveLabel}
+              size="lg"
+              variant={r.isSlip ? 'destructive' : 'primary'}
+              style={{ flex: 2 }}
+              onPress={() => save(heard, override, { memo: heard.memo, flag: heard.flagColor })}
+            />
+          </View>
+        ) : voiceEntry.error ? (
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
             <Button title="Type instead" variant="secondary" size="lg" style={{ flex: 1 }} onPress={typeInstead} />
             <Button

@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card, TableHeader } from '@/components/card';
+import { CreditUsePill } from '@/components/credit-use';
 import { Dropdown } from '@/components/dropdown';
 import { LineChart } from '@/components/line-chart';
 import { MiniCard } from '@/components/mini-card';
@@ -13,7 +14,7 @@ import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
 import { Text } from '@/components/text';
 import { addMonths, fromISODate, today } from '@/domain/dates';
-import { comparePlan, type PlanComparison, type Strategy } from '@/domain/debt';
+import { comparePlan, creditUse, type PlanComparison, type Strategy } from '@/domain/debt';
 import { formatMoney } from '@/domain/money';
 import { monthOf } from '@/domain/months';
 import type { Account } from '@/domain/types';
@@ -32,7 +33,10 @@ export function payoffLabel(months: number | null): string {
 
 /** A debt's chart color: its place in the account list, so it never changes with the strategy. */
 export function debtColor(debts: Account[], id: string): string {
-  const i = Math.max(0, debts.findIndex((d) => d.id === id));
+  const i = Math.max(
+    0,
+    debts.findIndex((d) => d.id === id),
+  );
   return chartColors[i % chartColors.length];
 }
 
@@ -220,6 +224,7 @@ export function Debt() {
             const owed = -(ledger.balance.get(a.id) ?? 0);
             const result = order.find((o) => o.id === a.id);
             const slips = slipsThisMonth(a.id);
+            const credit = creditUse(owed, a.creditLimit);
             const when = result ? payoffLabel(result.payoffMonth) : null;
             const subtitle =
               owed <= 0
@@ -250,9 +255,12 @@ export function Debt() {
               >
                 <MiniCard color={debtColor(debts, a.id)} width={30} />
                 <View style={{ flex: 1, minWidth: 0, marginLeft: 2 }}>
-                  <Text variant="body" weight="600" numberOfLines={1}>
-                    {a.name}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text variant="body" weight="600" numberOfLines={1} style={{ flexShrink: 1 }}>
+                      {a.name}
+                    </Text>
+                    {credit && <CreditUsePill use={credit} compact />}
+                  </View>
                   <Text
                     variant="footnote"
                     tone={slips > 0 ? 'negative' : owed <= 0 ? 'positive' : 'textSecondary'}

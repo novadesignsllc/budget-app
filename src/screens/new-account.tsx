@@ -36,6 +36,7 @@ export function NewAccount({ debt }: { debt?: boolean }) {
   const [apr, setApr] = useState('');
   const [min, setMin] = useState('');
   const [dueDay, setDueDay] = useState('');
+  const [limit, setLimit] = useState('');
 
   const isCash = (CASH_KINDS as AccountKind[]).includes(kind);
   const cents = parseMoney(balance);
@@ -68,12 +69,11 @@ export function NewAccount({ debt }: { debt?: boolean }) {
           negative={isCash}
         />
         <Dropdown variant="row" label="Type" value={kind} options={KINDS} onChange={setKind} />
-        {!isCash && (
-          <AmountRow label="APR" value={apr} onChange={setApr} unit="percent" placeholder="24.99%" />
+        {kind === 'credit_card' && (
+          <AmountRow label="Credit limit" value={limit} onChange={setLimit} mode="whole" placeholder="Optional" />
         )}
-        {!isCash && (
-          <AmountRow label="Minimum" value={min} onChange={setMin} placeholder="Estimated" />
-        )}
+        {!isCash && <AmountRow label="APR" value={apr} onChange={setApr} unit="percent" placeholder="24.99%" />}
+        {!isCash && <AmountRow label="Minimum" value={min} onChange={setMin} placeholder="Estimated" />}
         {!isCash && (
           <AmountRow
             label={dueInvalid ? 'Due day (1 to 31)' : 'Due day'}
@@ -99,6 +99,7 @@ export function NewAccount({ debt }: { debt?: boolean }) {
             apr: apr ? Math.round(parseFloat(apr) * 100) : undefined,
             minPayment: parseMoney(min) ?? undefined,
             dueDay: due,
+            creditLimit: kind === 'credit_card' ? (parseMoney(limit) ?? undefined) : undefined,
           });
           haptic('success');
           closeSheet();

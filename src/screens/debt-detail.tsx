@@ -2,12 +2,13 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Card } from '@/components/card';
+import { CreditUsePill } from '@/components/credit-use';
 import { Dropdown } from '@/components/dropdown';
 import { AmountRow, FormCard } from '@/components/form';
 import { LineChart } from '@/components/line-chart';
 import { Money } from '@/components/money';
 import { Text } from '@/components/text';
-import { debtTarget, estimateMinPayment } from '@/domain/debt';
+import { creditUse, debtTarget, estimateMinPayment } from '@/domain/debt';
 import { ceilDollars, formatDollars, formatMoney, parseMoney } from '@/domain/money';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { AccountDetail } from '@/screens/account';
@@ -33,9 +34,7 @@ export function DebtHeader({ id, activityTitle = true }: { id: string; activityT
   const [apr, setApr] = useState(account?.apr ? (account.apr / 100).toFixed(2) : '');
   const [min, setMin] = useState(account?.minPayment ? (account.minPayment / 100).toFixed(2) : '');
   const [due, setDue] = useState(account?.dueDay ? String(account.dueDay) : '');
-  const [custom, setCustom] = useState(
-    account?.paymentTarget ? String(Math.round(account.paymentTarget / 100)) : '',
-  );
+  const [custom, setCustom] = useState(account?.paymentTarget ? String(Math.round(account.paymentTarget / 100)) : '');
 
   if (!account) return null;
   const owed = -(ledger.balance.get(id) ?? 0);
@@ -45,6 +44,7 @@ export function DebtHeader({ id, activityTitle = true }: { id: string; activityT
   const horizon = values.length - 1;
   const color = debtColor(debts, id);
   const minimum = account.minPayment || estimateMinPayment(owed, account.apr ?? 0);
+  const credit = creditUse(owed, account.creditLimit);
   const targetMode = account.paymentTarget ? 'custom' : 'minimum';
 
   const commitDue = (text: string) => {
@@ -69,12 +69,18 @@ export function DebtHeader({ id, activityTitle = true }: { id: string; activityT
               Owed
             </Text>
             <Money cents={owed} variant="number" />
+            {credit && <CreditUsePill use={credit} />}
           </View>
           <View style={{ gap: 2, alignItems: 'flex-end' }}>
             <Text variant="footnote" tone="textSecondary">
               {owed <= 0 ? 'Done' : 'Paid off in the plan'}
             </Text>
-            <Text variant="body" weight="600" tone={owed <= 0 ? 'positive' : 'text'} style={{ fontSize: 16, lineHeight: 20 }}>
+            <Text
+              variant="body"
+              weight="600"
+              tone={owed <= 0 ? 'positive' : 'text'}
+              style={{ fontSize: 16, lineHeight: 20 }}
+            >
               {owed <= 0 ? 'Paid off' : result ? payoffLabel(result.payoffMonth) : 'Not in the plan'}
             </Text>
             {result && result.interest > 0 && (
@@ -84,6 +90,13 @@ export function DebtHeader({ id, activityTitle = true }: { id: string; activityT
             )}
           </View>
         </View>
+        {credit && account.creditLimit && (
+          <Text variant="footnote" tone={credit.available < 0 ? 'negative' : 'textSecondary'}>
+            {credit.available < 0
+              ? `${formatMoney(-credit.available)} over your ${formatMoney(account.creditLimit, { whole: true })} limit`
+              : `${formatMoney(credit.available)} left of your ${formatMoney(account.creditLimit, { whole: true })} limit`}
+          </Text>
+        )}
         {horizon > 0 && (
           <LineChart
             height={90}

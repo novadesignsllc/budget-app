@@ -180,3 +180,14 @@ export function debtTarget(account: Pick<Account, 'paymentTarget' | 'minPayment'
   const target = account.paymentTarget ?? (account.minPayment || estimateMinPayment(owed, account.apr ?? 0));
   return Math.min(target, owed);
 }
+
+/**
+ * How much of a card's limit is used: green under 30% (where it helps your credit), yellow
+ * from 30%, red from 90% or over the limit. Null when the card has no limit set.
+ */
+export type CreditUse = { used: number; available: Cents; level: 'good' | 'high' | 'max' };
+export function creditUse(owed: Cents, limit: Cents | undefined): CreditUse | null {
+  if (!limit || limit <= 0) return null;
+  const used = Math.max(0, owed) / limit;
+  return { used, available: limit - Math.max(0, owed), level: used >= 0.9 ? 'max' : used >= 0.3 ? 'high' : 'good' };
+}

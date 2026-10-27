@@ -103,13 +103,23 @@ type Actions = {
     apr?: number;
     minPayment?: Cents;
     dueDay?: number;
+    creditLimit?: Cents;
   }) => string;
   updateAccount: (
     id: string,
     patch: Partial<
       Pick<
         Account,
-        'name' | 'kind' | 'openingBalance' | 'openedOn' | 'apr' | 'minPayment' | 'dueDay' | 'closed' | 'paymentTarget'
+        | 'name'
+        | 'kind'
+        | 'openingBalance'
+        | 'openedOn'
+        | 'apr'
+        | 'minPayment'
+        | 'dueDay'
+        | 'creditLimit'
+        | 'closed'
+        | 'paymentTarget'
       >
     >,
   ) => void;
@@ -128,7 +138,9 @@ type Actions = {
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
   updateEnvelope: (
     id: string,
-    patch: Partial<Pick<Envelope, 'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji' | 'targetKind'>>,
+    patch: Partial<
+      Pick<Envelope, 'name' | 'group' | 'order' | 'monthlyTarget' | 'hidden' | 'recurringId' | 'emoji' | 'targetKind'>
+    >,
   ) => void;
   /**
    * Saves a new order from sort mode: groups top to bottom, each with its envelopes in
@@ -241,7 +253,7 @@ function signed(kind: NewTransaction['kind'], amount: Cents): Cents {
 export const useStore = create<Store>()((set, get) => ({
   ...initialState,
 
-  addAccount: ({ name, kind, balance, apr, minPayment, dueDay }) => {
+  addAccount: ({ name, kind, balance, apr, minPayment, dueDay, creditLimit }) => {
     const id = newId();
     const isCash = isCashAccount({ kind });
     const account: Account = {
@@ -252,7 +264,9 @@ export const useStore = create<Store>()((set, get) => ({
       openingBalance: isCash ? balance : -Math.abs(balance),
       openedOn: today(),
       order: get().accounts.length,
-      ...(isCash ? { lastReconciledOn: today() } : { apr, minPayment, dueDay }),
+      ...(isCash
+        ? { lastReconciledOn: today() }
+        : { apr, minPayment, dueDay, ...(creditLimit ? { creditLimit } : {}) }),
     };
     set((s) => {
       const envelopes = isCash
@@ -411,7 +425,13 @@ export const useStore = create<Store>()((set, get) => ({
           const next = applyAmount({ ...t, ...rest });
           // A different account means a different statement, so it's no longer reconciled.
           return moveTo
-            ? { ...next, accountId: moveTo.id, kind: isCashAccount(moveTo) ? ('spend' as const) : ('slip' as const), reconciled: false, cleared: false }
+            ? {
+                ...next,
+                accountId: moveTo.id,
+                kind: isCashAccount(moveTo) ? ('spend' as const) : ('slip' as const),
+                reconciled: false,
+                cleared: false,
+              }
             : next;
         }
         // Keep the other half of a transfer in sync.
@@ -592,7 +612,11 @@ export const useStore = create<Store>()((set, get) => ({
     const id = newId();
     // Every bill and subscription gets its own envelope in Bills or Subscriptions, budgeted to
     // what it costs a month, so approving it always spends money that was set aside for it.
-    const envelopeId = get().addEnvelope({ name: r.name, group: recurringGroup(r.kind), monthlyTarget: monthlyBudget(r) });
+    const envelopeId = get().addEnvelope({
+      name: r.name,
+      group: recurringGroup(r.kind),
+      monthlyTarget: monthlyBudget(r),
+    });
     get().updateEnvelope(envelopeId, { recurringId: id });
     set((s) => ({ recurring: [...s.recurring, { ...r, envelopeId, id, active: true }] }));
     return id;
@@ -676,7 +700,8 @@ export const useStore = create<Store>()((set, get) => ({
       // Each recurring item owns one envelope. Link items to the envelope they already use
       // when nothing else has claimed it.
       const owner = new Map<string, string>();
-      for (const e of s.envelopes) if (e.recurringId && s.recurring.some((r) => r.id === e.recurringId)) owner.set(e.id, e.recurringId);
+      for (const e of s.envelopes)
+        if (e.recurringId && s.recurring.some((r) => r.id === e.recurringId)) owner.set(e.id, e.recurringId);
       // Only an envelope already in Bills or Subscriptions, so an ordinary one is never renamed.
       const groupOf = new Map(s.envelopes.map((e) => [e.id, e.group]));
       for (const r of s.recurring) {
@@ -697,7 +722,9 @@ export const useStore = create<Store>()((set, get) => ({
           const r = byId.get(rid)!;
           const group = recurringGroup(r.kind);
           const name = r.name.trim() || e.name;
-          return e.recurringId === rid && e.group === group && e.name === name ? e : { ...e, recurringId: rid, group, name };
+          return e.recurringId === rid && e.group === group && e.name === name
+            ? e
+            : { ...e, recurringId: rid, group, name };
         }
         // Not tied to a bill: it can't sit in a group the app fills on its own.
         const group = isManagedGroup(e.group) ? 'Daily' : fixGroup(e.group);
@@ -721,7 +748,11 @@ export const useStore = create<Store>()((set, get) => ({
     const owned = new Set(s.envelopes.filter((e) => e.recurringId).map((e) => e.recurringId));
     for (const r of s.recurring) {
       if (owned.has(r.id)) continue;
-      const envelopeId = get().addEnvelope({ name: r.name, group: recurringGroup(r.kind), monthlyTarget: monthlyBudget(r) });
+      const envelopeId = get().addEnvelope({
+        name: r.name,
+        group: recurringGroup(r.kind),
+        monthlyTarget: monthlyBudget(r),
+      });
       get().updateEnvelope(envelopeId, { recurringId: r.id });
       set((st) => ({ recurring: st.recurring.map((x) => (x.id === r.id ? { ...x, envelopeId } : x)) }));
     }

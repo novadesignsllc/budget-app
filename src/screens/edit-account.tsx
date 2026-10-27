@@ -36,6 +36,7 @@ export function EditAccount({ id }: { id: string }) {
   const [apr, setApr] = useState(account?.apr ? (account.apr / 100).toFixed(2) : '');
   const [min, setMin] = useState(account?.minPayment ? (account.minPayment / 100).toFixed(2) : '');
   const [due, setDue] = useState(account?.dueDay ? String(account.dueDay) : '');
+  const [limit, setLimit] = useState(account?.creditLimit ? String(Math.round(account.creditLimit / 100)) : '');
 
   if (!account) {
     return (
@@ -77,6 +78,8 @@ export function EditAccount({ id }: { id: string }) {
             apr: apr ? Math.round(parseFloat(apr) * 100) : undefined,
             minPayment: parseMoney(min) ?? undefined,
             dueDay,
+            // Only cards have a limit; switching to a loan clears it.
+            creditLimit: kind === 'credit_card' ? (parseMoney(limit) ?? undefined) : undefined,
           }),
     });
     haptic('success');
@@ -117,6 +120,9 @@ export function EditAccount({ id }: { id: string }) {
 
       {!cash && (
         <FormCard>
+          {kind === 'credit_card' && (
+            <AmountRow label="Credit limit" value={limit} onChange={setLimit} mode="whole" placeholder="Not set" />
+          )}
           <AmountRow label="Interest rate" value={apr} onChange={setApr} unit="percent" placeholder="24.99%" />
           <AmountRow label="Minimum payment" value={min} onChange={setMin} placeholder="Estimated" />
           <AmountRow

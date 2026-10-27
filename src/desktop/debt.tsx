@@ -2,11 +2,12 @@ import { router } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { CreditUsePill } from '@/components/credit-use';
 import { Dropdown } from '@/components/dropdown';
 import { LineChart } from '@/components/line-chart';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
-import { comparePlan, estimateMinPayment, type PlanComparison, type Strategy } from '@/domain/debt';
+import { comparePlan, creditUse, estimateMinPayment, type PlanComparison, type Strategy } from '@/domain/debt';
 import { formatMoney } from '@/domain/money';
 import { monthOf } from '@/domain/months';
 import type { Account } from '@/domain/types';
@@ -18,7 +19,7 @@ import { spacing, useColors } from '@/theme';
 import { Label } from './register';
 import { DButton, DCard, DPage, PageTitle, Spacer } from './ui';
 
-const COL = { apr: 80, min: 100, paid: 110, owed: 110 } as const;
+const COL = { apr: 80, min: 100, limit: 110, paid: 110, owed: 110 } as const;
 
 /**
  * The debt plan on a computer: the payoff chart large, the numbers that matter beside it,
@@ -36,7 +37,10 @@ export function DesktopDebt() {
   const plans = useMemo(() => {
     if (!inputs.length || !comparison) return null;
     const other: Strategy = settings.debtStrategy === 'snowball' ? 'avalanche' : 'snowball';
-    return { [settings.debtStrategy]: comparison, [other]: comparePlan(inputs, monthly, other) } as Record<Strategy, PlanComparison>;
+    return { [settings.debtStrategy]: comparison, [other]: comparePlan(inputs, monthly, other) } as Record<
+      Strategy,
+      PlanComparison
+    >;
   }, [inputs, monthly, settings.debtStrategy, comparison]);
 
   const addDebt = () => router.push({ pathname: '/new-account', params: { debt: '1' } });
@@ -51,8 +55,18 @@ export function DesktopDebt() {
           onChange={(v) => updateSettings({ debtStrategy: v })}
           label="Strategy"
           options={[
-            { value: 'snowball', label: 'Snowball', description: 'Smallest balance first', detail: payoffLabel(plans.snowball.plan.months) },
-            { value: 'avalanche', label: 'Avalanche', description: 'Highest rate first', detail: payoffLabel(plans.avalanche.plan.months) },
+            {
+              value: 'snowball',
+              label: 'Snowball',
+              description: 'Smallest balance first',
+              detail: payoffLabel(plans.snowball.plan.months),
+            },
+            {
+              value: 'avalanche',
+              label: 'Avalanche',
+              description: 'Highest rate first',
+              detail: payoffLabel(plans.avalanche.plan.months),
+            },
           ]}
         />
       )}
@@ -134,7 +148,10 @@ export function DesktopDebt() {
             <Text variant="footnote" tone="textSecondary">
               Debt-free by
             </Text>
-            <Text style={{ fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5 }} tone={plan && plan.months == null ? 'negative' : 'text'}>
+            <Text
+              style={{ fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5 }}
+              tone={plan && plan.months == null ? 'negative' : 'text'}
+            >
               {plan ? (plan.months == null ? 'Never' : payoffLabel(plan.months)) : 'Now'}
             </Text>
             {comparison && comparison.interestSaved > 0 ? (
@@ -152,13 +169,17 @@ export function DesktopDebt() {
             <Stat label="Owed now" value={formatMoney(ledger.debtTotal, { whole: true })} />
             <Stat label="Each month" value={formatMoney(monthly, { whole: true })} />
             <Stat label="Minimums" value={formatMoney(minimums, { whole: true })} />
-            <Stat label="Extra on top" value={formatMoney(extra, { whole: true })} tone={extra > 0 ? 'positive' : 'textSecondary'} />
+            <Stat
+              label="Extra on top"
+              value={formatMoney(extra, { whole: true })}
+              tone={extra > 0 ? 'positive' : 'textSecondary'}
+            />
             {plan && <Stat label="Interest to go" value={formatMoney(plan.totalInterest, { whole: true })} />}
           </DCard>
         </View>
       </View>
 
-      <DCard style={{ minWidth: 720 }}>
+      <DCard style={{ minWidth: 840 }}>
         <View
           style={{
             flexDirection: 'row',
@@ -179,6 +200,9 @@ export function DesktopDebt() {
           <Label width={COL.min} right>
             Minimum
           </Label>
+          <Label width={COL.limit} right>
+            Limit used
+          </Label>
           <Label width={COL.paid} right>
             Paid off
           </Label>
@@ -191,6 +215,7 @@ export function DesktopDebt() {
           const result = order.find((o) => o.id === a.id);
           const slips = slipsThisMonth(a.id);
           const minimum = a.minPayment || estimateMinPayment(owed, a.apr ?? 0);
+          const credit = creditUse(owed, a.creditLimit);
           const note =
             owed <= 0
               ? 'Paid off'
@@ -226,22 +251,50 @@ export function DesktopDebt() {
                     {a.name}
                   </Text>
                   {note ? (
-                    <Text variant="footnote" tone={slips > 0 ? 'negative' : owed <= 0 ? 'positive' : 'textSecondary'} numberOfLines={1}>
+                    <Text
+                      variant="footnote"
+                      tone={slips > 0 ? 'negative' : owed <= 0 ? 'positive' : 'textSecondary'}
+                      numberOfLines={1}
+                    >
                       {note}
                     </Text>
                   ) : null}
                 </View>
               </View>
-              <Text variant="body" tone={a.apr ? 'textSecondary' : 'textTertiary'} align="right" style={{ width: COL.apr, fontVariant: ['tabular-nums'] }}>
+              <Text
+                variant="body"
+                tone={a.apr ? 'textSecondary' : 'textTertiary'}
+                align="right"
+                style={{ width: COL.apr, fontVariant: ['tabular-nums'] }}
+              >
                 {a.apr ? `${(a.apr / 100).toFixed(2)}%` : 'Not set'}
               </Text>
-              <Text variant="body" tone="textSecondary" align="right" style={{ width: COL.min, fontVariant: ['tabular-nums'] }}>
+              <Text
+                variant="body"
+                tone="textSecondary"
+                align="right"
+                style={{ width: COL.min, fontVariant: ['tabular-nums'] }}
+              >
                 {owed > 0 ? formatMoney(minimum) : '—'}
               </Text>
+              <View style={{ width: COL.limit, alignItems: 'flex-end' }}>
+                {credit ? (
+                  <CreditUsePill use={credit} />
+                ) : (
+                  <Text variant="body" tone="textTertiary">
+                    —
+                  </Text>
+                )}
+              </View>
               <Text variant="body" tone="textSecondary" align="right" style={{ width: COL.paid }}>
                 {owed <= 0 ? 'Done' : result ? payoffLabel(result.payoffMonth) : 'Never'}
               </Text>
-              <Text variant="body" weight="700" align="right" style={{ width: COL.owed, fontVariant: ['tabular-nums'] }}>
+              <Text
+                variant="body"
+                weight="700"
+                align="right"
+                style={{ width: COL.owed, fontVariant: ['tabular-nums'] }}
+              >
                 {formatMoney(owed)}
               </Text>
             </Pressable>
@@ -252,7 +305,15 @@ export function DesktopDebt() {
   );
 }
 
-function Stat({ label, value, tone = 'text' }: { label: string; value: string; tone?: 'text' | 'positive' | 'textSecondary' }) {
+function Stat({
+  label,
+  value,
+  tone = 'text',
+}: {
+  label: string;
+  value: string;
+  tone?: 'text' | 'positive' | 'textSecondary';
+}) {
   return (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
       <Text variant="callout" tone="textSecondary">

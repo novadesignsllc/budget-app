@@ -31,6 +31,8 @@ export type Account = {
    * minimum payment; a number is a custom amount in whole dollars.
    */
   paymentTarget?: Cents | null;
+  /** Credit cards: the card's limit, to see how close the balance is to it. */
+  creditLimit?: Cents;
   /** Cash-only: last time the user confirmed the bank balance. */
   lastReconciledOn?: ISODate;
 };

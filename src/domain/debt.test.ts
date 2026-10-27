@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { comparePlan, interestFromStatement, orderDebts, project, type DebtInput } from './debt';
+import { comparePlan, creditUse, interestFromStatement, orderDebts, project, type DebtInput } from './debt';
 
 const debts: DebtInput[] = [
   { id: 'big', name: 'Car', balance: 1200000, apr: 699, minPayment: 30000 },
@@ -75,3 +75,21 @@ describe('interestFromStatement', () => {
     expect(interestFromStatement(306200, 300000)).toBe(6200);
   });
 });
+
+describe('creditUse', () => {
+  it('needs a limit', () => {
+    expect(creditUse(50000, undefined)).toBeNull();
+    expect(creditUse(50000, 0)).toBeNull();
+  });
+  it('is good under 30%, high from 30%, max from 90% or over', () => {
+    expect(creditUse(29000, 100000)).toEqual({ used: 0.29, available: 71000, level: 'good' });
+    expect(creditUse(30000, 100000)!.level).toBe('high');
+    expect(creditUse(89999, 100000)!.level).toBe('high');
+    expect(creditUse(90000, 100000)!.level).toBe('max');
+    expect(creditUse(105000, 100000)).toMatchObject({ available: -5000, level: 'max' });
+  });
+  it('treats a paid-off card as nothing used', () => {
+    expect(creditUse(-2000, 100000)).toEqual({ used: 0, available: 100000, level: 'good' });
+  });
+});
+

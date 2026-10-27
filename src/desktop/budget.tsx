@@ -1,0 +1,873 @@
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
+
+import { ActionMenu } from '@/components/action-menu';
+import { Icon } from '@/components/icon';
+import { InlineAmount } from '@/components/inline-amount';
+import { closeKeypad, keypadIsOpen, useKeypadField } from '@/components/keypad';
+import { desktopSheetOpen } from '@/components/screen';
+import { SortList, type SortGroup } from '@/components/sort-list';
+import { Text } from '@/components/text';
+import { useToast } from '@/components/toast';
+import { today } from '@/domain/dates';
+import { debtTarget } from '@/domain/debt';
+import { ceilDollars, floorDollars, formatDollars, formatMoney } from '@/domain/money';
+import { addMonthKey, assignDateFor, monthOf, targetGaps, type EnvelopeMonth, type MonthKey } from '@/domain/months';
+import { targetFor, targetKindOf } from '@/domain/targets';
+import type { Envelope } from '@/domain/types';
+import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
+import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
+import { useLedger } from '@/hooks/use-ledger';
+import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
+import { newestFirst } from '@/screens/transactions';
+import { isManagedGroup, useStore } from '@/store';
+import { groupColor, spacing, useColors } from '@/theme';
+import { barLevel, envelopeStatus, groupSummary, moneyLeftBar, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { envelopeEmoji } from '@/utils/envelope-emoji';
+import { orderGroups } from '@/utils/group-order';
+import { haptic } from '@/utils/haptics';
+
+import { DButton, DCard, DPage, PageTitle, SearchField, Spacer, usePageKeys } from './ui';
+
+/** Assigned, Spent and Left: one width for all three, roomy enough for $12,345. */
+const COL = 84;
+const TARGET_COL = 200;
+const GAP = 12;
+const EMPTY: EnvelopeMonth = { assigned: 0, activity: 0, spent: 0, carriedIn: 0, available: 0 };
+
+const monthYear = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+const monthOnly = new Intl.DateTimeFormat('en-US', { month: 'long' });
+const asDate = (m: MonthKey) => {
+  const [y, mo] = m.split('-').map(Number);
+  return new Date(y, mo - 1, 1);
+};
+
+type Row = { envelope: Envelope; row: EnvelopeMonth };
+
+/**
+ * The budget on a computer: every envelope in one table with its target, and the
+ * selected envelope's details on the right (how Left adds up, its target, this month's
+ * spending). Arrow keys move the selection.
+ */
+export function DesktopBudget() {
+  const colors = useColors();
+  const thisMonth = currentMonth();
+  const [month, setMonth] = useState<MonthKey>(thisMonth);
+  const budget = useBudgetMonth(month);
+  const ledger = useLedger();
+  const envelopes = useStore((s) => s.envelopes);
+  const accounts = useStore((s) => s.accounts);
+  const groupOrder = useStore((s) => s.settings.groupOrder);
+  const startersDone = useStore((s) => !!s.settings.startersDone);
+  const updateSettings = useStore((s) => s.updateSettings);
+  const addEnvelope = useStore((s) => s.addEnvelope);
+  const reorderEnvelopes = useStore((s) => s.reorderEnvelopes);
+  const assign = useStore((s) => s.assign);
+  const assignMany = useStore((s) => s.assignMany);
+  const removeAllocations = useStore((s) => s.removeAllocations);
+  const showToast = useToast((s) => s.show);
+  const { scrollRef, onScroll, offset, scrollBy } = useKeyboardReveal();
+  const [query, setQuery] = useState('');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [sorting, setSorting] = useState<SortGroup[] | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [confirmUnassign, setConfirmUnassign] = useState(false);
+
+  const past = month < thisMonth;
+  const rta = budget.readyToAssign;
+  const date = assignDateFor(month, today());
+
+  const groups = useMemo(() => {
+    const visible = envelopes.filter((e) => !e.hidden);
+    return orderGroups(
+      visible.map((e) => e.group),
+      groupOrder,
+    ).map((name) => ({
+      name,
+      items: visible.filter((e) => e.group === name).sort((a, b) => a.order - b.order),
+    }));
+  }, [envelopes, groupOrder]);
+
+  const q = query.trim().toLowerCase();
+  const shown = groups
+    .map((g) => ({ ...g, items: q ? g.items.filter((e) => e.name.toLowerCase().includes(q)) : g.items }))
+    .filter((g) => g.items.length);
+  const flat: Row[] = shown.flatMap((g) => g.items.map((e) => ({ envelope: e, row: budget.envelopes.get(e.id) ?? EMPTY })));
+  const selected = flat.find((r) => r.envelope.id === selectedId) ?? flat[0];
+
+  function debtFor(e: Envelope) {
+    if (!e.debtAccountId) return undefined;
+    const a = accounts.find((x) => x.id === e.debtAccountId);
+    const owed = -(ledger.balance.get(e.debtAccountId) ?? 0);
+    return { owed, target: a ? debtTarget(a, owed) : 0 };
+  }
+
+  const debtTargets = new Map(
+    envelopes.filter((e) => e.debtAccountId).map((e) => [e.id, ceilDollars(debtFor(e)?.target ?? 0)] as const),
+  );
+  const gaps = targetGaps(envelopes, budget, debtTargets);
+  const listed = groups.flatMap((g) => g.items.map((e) => e.id));
+  const orderedGaps = [...gaps].sort((a, b) => listed.indexOf(a.envelopeId) - listed.indexOf(b.envelopeId));
+  const assignedTotal = listed.reduce((sum, id) => sum + (budget.envelopes.get(id)?.assigned ?? 0), 0);
+  const existing = new Set(envelopes.filter((e) => !e.hidden).map((e) => e.name.toLowerCase()));
+  const starters = startersDone || past ? [] : STARTERS.filter((s) => !existing.has(s.name.toLowerCase()));
+
+  function fill(entries: { envelopeId: string; amount: number }[], message: string) {
+    // Whole dollars only: the cents in Ready to assign stay put.
+    let left = floorDollars(rta);
+    const capped = entries
+      .map((e) => {
+        const amount = Math.min(e.amount, Math.max(left, 0));
+        left -= amount;
+        return { ...e, amount, date };
+      })
+      .filter((e) => e.amount > 0);
+    if (!capped.length) {
+      showToast({ message: 'Nothing left to assign this month' });
+      return;
+    }
+    const ids = assignMany(capped);
+    showToast({ message, actionLabel: 'Undo', onAction: () => removeAllocations(ids) });
+  }
+
+  function moveBack(e: Envelope, cents: number) {
+    const ids = assignMany([{ envelopeId: e.id, amount: -cents, date }]);
+    showToast({
+      message: `Moved ${formatDollars(cents)} back to Ready to assign`,
+      actionLabel: 'Undo',
+      onAction: () => removeAllocations(ids),
+    });
+  }
+
+  function unassignAll() {
+    if (!confirmUnassign) {
+      setConfirmUnassign(true);
+      setTimeout(() => setConfirmUnassign(false), 4000);
+      return;
+    }
+    setConfirmUnassign(false);
+    const ids = assignMany(
+      listed
+        .map((id) => ({ envelopeId: id, amount: -(budget.envelopes.get(id)?.assigned ?? 0), date }))
+        .filter((e) => e.amount !== 0),
+    );
+    showToast({
+      message: `Sent ${formatDollars(assignedTotal)} back to Ready to assign`,
+      actionLabel: 'Undo',
+      onAction: () => removeAllocations(ids),
+    });
+  }
+
+  // Up and down pick the envelope; left and right change the month.
+  usePageKeys((e) => {
+    if (keypadIsOpen() || desktopSheetOpen() || sorting || !flat.length) return;
+    const i = Math.max(0, flat.findIndex((r) => r.envelope.id === selected?.envelope.id));
+    if (e.key === 'ArrowDown') setSelectedId(flat[Math.min(flat.length - 1, i + 1)].envelope.id);
+    else if (e.key === 'ArrowUp') setSelectedId(flat[Math.max(0, i - 1)].envelope.id);
+    else if (e.key === 'ArrowLeft') setMonth((m) => addMonthKey(m, -1));
+    else if (e.key === 'ArrowRight') setMonth((m) => (m < thisMonth ? addMonthKey(m, 1) : m));
+    else return;
+    e.preventDefault();
+  });
+
+  if (sorting) {
+    return (
+      <DPage
+        scrollRef={scrollRef}
+        onScroll={onScroll}
+        scrollEnabled={!dragging}
+        contentStyle={{ maxWidth: 760 }}
+        header={
+          <>
+            <PageTitle>Sort envelopes</PageTitle>
+            <Spacer />
+            <DButton label="Cancel" onPress={() => setSorting(null)} />
+            <DButton
+              label="Save order"
+              variant="accent"
+              onPress={() => {
+                reorderEnvelopes(sorting.filter((g) => g.items.length).map((g) => ({ name: g.name, ids: g.items.map((i) => i.id) })));
+                setSorting(null);
+                showToast({ message: 'Order saved' });
+              }}
+            />
+          </>
+        }
+      >
+        <SortList groups={sorting} onChange={setSorting} scroller={{ offset, scrollBy }} onDragChange={setDragging} />
+      </DPage>
+    );
+  }
+
+  const rtaLeft = floorDollars(rta);
+  const rtaLook =
+    past || rtaLeft === 0
+      ? { bg: colors.control, fg: colors.textSecondary }
+      : rtaLeft < 0
+        ? { bg: colors.negativeSoft, fg: colors.negative }
+        : { bg: colors.positiveSoft, fg: colors.positive };
+
+  return (
+    <DPage
+      scrollRef={scrollRef}
+      onScroll={onScroll}
+      header={
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            <MonthStep label="Previous month" glyph="chevron_left" sf="chevron.left" onPress={() => setMonth(addMonthKey(month, -1))} />
+            <View style={{ minWidth: 176, alignItems: 'center' }}>
+              <PageTitle>{monthYear.format(asDate(month))}</PageTitle>
+            </View>
+            <MonthStep
+              label="Next month"
+              glyph="chevron_right"
+              sf="chevron.right"
+              disabled={!past}
+              onPress={() => setMonth(addMonthKey(month, 1))}
+            />
+          </View>
+          <View
+            accessibilityRole="summary"
+            style={{
+              flexDirection: 'row',
+              alignItems: 'baseline',
+              gap: spacing.sm,
+              paddingHorizontal: 14,
+              paddingVertical: 6,
+              borderRadius: 10,
+              backgroundColor: rtaLook.bg,
+            }}
+          >
+            {rtaLeft === 0 ? (
+              <Text variant="body" weight="600" color={rtaLook.fg}>
+                All money assigned
+              </Text>
+            ) : (
+              <>
+                <Text style={{ fontSize: 20, lineHeight: 24, fontWeight: '700', color: rtaLook.fg, fontVariant: ['tabular-nums'] }}>
+                  {formatDollars(Math.abs(rtaLeft))}
+                </Text>
+                <Text variant="callout" weight="600" color={rtaLook.fg}>
+                  {rtaLeft < 0 ? 'assigned more than you have' : 'ready to assign'}
+                </Text>
+              </>
+            )}
+          </View>
+          {past && <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />}
+          <Spacer />
+          <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={210} />
+          <DButton
+            label="Auto-assign"
+            icon={{ sf: 'bolt.fill', md: 'bolt' }}
+            disabled={gaps.length === 0 || rta < 100}
+            onPress={() =>
+              fill(
+                orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
+                `Auto-assigned ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
+              )
+            }
+          />
+          <DButton
+            label="Sort"
+            icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
+            onPress={() =>
+              setSorting(
+                groups.map((g) => ({
+                  name: g.name,
+                  color: groupColor(g.name),
+                  locked: isManagedGroup(g.name),
+                  items: g.items.map((e) => ({ id: e.id, name: e.name })),
+                })),
+              )
+            }
+          />
+          <DButton
+            label="Envelope"
+            icon={{ sf: 'plus', md: 'add' }}
+            accessibilityLabel="New envelope"
+            onPress={() => router.push({ pathname: '/new-envelope', params: { month } })}
+          />
+        </>
+      }
+    >
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
+        <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 600, minWidth: 0, gap: spacing.md }}>
+          {starters.length > 0 && (
+            <Starters starters={starters} onAdd={(s) => addEnvelope({ ...s, month })} onDone={() => updateSettings({ startersDone: true })} />
+          )}
+
+          {shown.length > 0 ? (
+            <DCard>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: GAP,
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  backgroundColor: colors.tableHeader,
+                  borderBottomWidth: 1,
+                  borderBottomColor: colors.separator,
+                }}
+              >
+                <ColumnLabel flex>Envelope</ColumnLabel>
+                <ColumnLabel width={TARGET_COL}>Target</ColumnLabel>
+                <ColumnLabel width={COL} right>
+                  Assigned
+                </ColumnLabel>
+                <ColumnLabel width={COL} right>
+                  Spent
+                </ColumnLabel>
+                <ColumnLabel width={COL + 6} right>
+                  Left
+                </ColumnLabel>
+              </View>
+              {shown.map((g, gi) => {
+                const rows = g.items.map((e) => budget.envelopes.get(e.id) ?? EMPTY);
+                const sum = (k: 'assigned' | 'spent') => rows.reduce((a, r) => a + r[k], 0);
+                const left = rows.reduce((a, r) => a + floorDollars(r.available), 0);
+                return (
+                  <View key={g.name}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: GAP,
+                        paddingHorizontal: 16,
+                        paddingTop: 12,
+                        paddingBottom: 6,
+                        borderTopWidth: gi === 0 ? 0 : 1,
+                        borderTopColor: colors.hairline,
+                      }}
+                    >
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: past ? colors.textTertiary : groupColor(g.name) }} />
+                        <Text variant="section" style={{ fontSize: 15 }}>
+                          {g.name}
+                        </Text>
+                      </View>
+                      <View style={{ width: TARGET_COL }} />
+                      <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
+                      <GroupSum>{formatDollars(sum('spent'), 'up')}</GroupSum>
+                      <View style={{ width: COL + 6, alignItems: 'flex-end', paddingRight: 6 }}>
+                        <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1}>
+                          {groupSummary(g.name, left)}
+                        </Text>
+                      </View>
+                    </View>
+                    {g.items.map((e) => {
+                      const row = budget.envelopes.get(e.id) ?? EMPTY;
+                      const debt = debtFor(e);
+                      const status = envelopeStatus(e, row, month, debt);
+                      return (
+                        <EnvelopeRow
+                          key={e.id}
+                          envelope={e}
+                          row={row}
+                          past={past}
+                          selected={selected?.envelope.id === e.id}
+                          bar={targetBar(e, row, month, debt)}
+                          target={targetLabel(e, row, month, status.need, debt)}
+                          need={past ? 0 : status.need}
+                          onSelect={() => setSelectedId(e.id)}
+                          onAssign={(cents) => assign(e.id, cents - row.assigned, date)}
+                          onMoveBack={(cents) => moveBack(e, cents)}
+                        />
+                      );
+                    })}
+                  </View>
+                );
+              })}
+            </DCard>
+          ) : (
+            <DCard padded>
+              <Text variant="callout" tone="textSecondary">
+                {q ? 'No envelope matches that.' : 'No envelopes yet. Add one with the Envelope button.'}
+              </Text>
+            </DCard>
+          )}
+
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: 4 }}>
+            <Text variant="footnote" style={{ flex: 1, color: '#6B778C' }}>
+              Click Assigned to type an amount (math works: 560+40). Arrow keys pick an envelope; ← → change the month.
+            </Text>
+            {!past && assignedTotal !== 0 && (
+              <Pressable accessibilityRole="button" onPress={unassignAll} hitSlop={6}>
+                <Text variant="footnote" weight="600" tone="negative">
+                  {confirmUnassign ? `Click again to unassign ${formatDollars(assignedTotal)}` : 'Unassign all'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+
+        {selected && (
+          <Inspector
+            key={selected.envelope.id}
+            envelope={selected.envelope}
+            row={selected.row}
+            month={month}
+            past={past}
+            rta={rta}
+            debt={debtFor(selected.envelope)}
+            onFill={(need) => fill([{ envelopeId: selected.envelope.id, amount: need }], `Filled ${selected.envelope.name}`)}
+            onMoveBack={(cents) => moveBack(selected.envelope, cents)}
+          />
+        )}
+      </View>
+    </DPage>
+  );
+}
+
+/** "$600 a month · $40 short": the target and where this month stands against it. */
+function targetLabel(
+  e: Envelope,
+  row: EnvelopeMonth,
+  month: MonthKey,
+  need: number,
+  debt?: { owed: number; target: number },
+): { text: string; tone: 'textSecondary' | 'textTertiary' | 'negative' | 'caution' } {
+  if (row.available < 0) return { text: `Over by ${formatDollars(-row.available, 'up')}`, tone: 'negative' };
+  const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
+  if (target <= 0) return { text: 'No target', tone: 'textTertiary' };
+  const amount = formatDollars(ceilDollars(target));
+  const base = e.debtAccountId ? `${amount} a month` : targetKindOf(e) === 'goal' ? `Save ${amount} a month` : `${amount} a month`;
+  if (e.debtAccountId && debt && debt.owed <= 0) return { text: 'Paid off', tone: 'textSecondary' };
+  if (need >= 100) return { text: `${base} · ${formatDollars(need)} short`, tone: 'caution' };
+  if (row.available < 100 && row.spent > 0) return { text: `${base} · paid`, tone: 'textSecondary' };
+  return { text: `${base} · funded`, tone: 'textSecondary' };
+}
+
+function EnvelopeRow({
+  envelope,
+  row,
+  past,
+  selected,
+  bar,
+  target,
+  need,
+  onSelect,
+  onAssign,
+  onMoveBack,
+}: {
+  envelope: Envelope;
+  row: EnvelopeMonth;
+  past: boolean;
+  selected: boolean;
+  bar: TargetBar | null;
+  target: ReturnType<typeof targetLabel>;
+  need: number;
+  onSelect: () => void;
+  onAssign: (cents: number) => void;
+  onMoveBack: (cents: number) => void;
+}) {
+  const colors = useColors();
+  const level = barLevel(row);
+  const left = moneyLeftBar(row, envelope);
+  const red = row.available < 0 && !past;
+  // The name and target select the row; Assigned and Left are their own buttons beside them.
+  return (
+    <View
+      style={{
+        paddingHorizontal: 16,
+        paddingTop: 8,
+        paddingBottom: 9,
+        gap: 6,
+        backgroundColor: selected ? '#F7F6FF' : 'transparent',
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: GAP }}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${envelope.name}, ${formatDollars(row.available)} left. Show details`}
+          accessibilityState={{ selected }}
+          onPress={onSelect}
+          style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: GAP, alignSelf: 'stretch' }}
+        >
+          <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+            <Text style={{ width: 20, textAlign: 'center', fontSize: 15, lineHeight: 20, opacity: past ? 0.6 : 1 }}>
+              {envelopeEmoji(envelope)}
+            </Text>
+            <Text variant="body" weight="500" tone={red ? 'negative' : past ? 'textSecondary' : 'text'} numberOfLines={1} style={{ flex: 1 }}>
+              {envelope.name}
+            </Text>
+          </View>
+          <Text variant="footnote" color={colors[target.tone]} numberOfLines={1} style={{ width: TARGET_COL }}>
+            {target.text}
+          </Text>
+        </Pressable>
+        <View>
+          <InlineAmount
+            exact
+            cents={row.assigned}
+            width={COL}
+            accessibilityLabel={`Assigned to ${envelope.name}`}
+            muted={past}
+            onEditingChange={(on) => on && onSelect()}
+            onCommit={onAssign}
+            actions={[
+              {
+                label: need > 0 ? `Fill ${formatDollars(need)}` : 'Target met',
+                icon: { sf: 'bolt.fill', md: 'bolt' },
+                disabled: need <= 0,
+                onPress: () => {
+                  closeKeypad();
+                  onAssign(row.assigned + need);
+                },
+              },
+            ]}
+          />
+        </View>
+        <Text variant="body" tone="textSecondary" align="right" style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}>
+          {formatDollars(row.spent, 'up')}
+        </Text>
+        <LeftCell
+          width={COL}
+          row={row}
+          bar={bar}
+          past={past}
+          tone={red ? 'negative' : row.available < 100 || past ? 'textTertiary' : 'text'}
+          onEditingChange={(on) => on && onSelect()}
+          onMoveBack={onMoveBack}
+        />
+      </View>
+      <View style={{ height: 3, borderRadius: 2, backgroundColor: level === 'over' ? (past ? colors.textSecondary : colors.negativeStrong) : colors.fill }}>
+        {left.progress > 0 && (
+          <View
+            style={{
+              width: `${Math.min(1, left.progress) * 100}%`,
+              height: 3,
+              borderRadius: 2,
+              backgroundColor: past ? colors.textTertiary : level === 'plenty' ? colors.positive : colors.cautionDot,
+            }}
+          />
+        )}
+      </View>
+    </View>
+  );
+}
+
+/** The right-hand panel for the selected envelope. */
+function Inspector({
+  envelope,
+  row,
+  month,
+  past,
+  rta,
+  debt,
+  onFill,
+  onMoveBack,
+}: {
+  envelope: Envelope;
+  row: EnvelopeMonth;
+  month: MonthKey;
+  past: boolean;
+  rta: number;
+  debt?: { owed: number; target: number };
+  onFill: (need: number) => void;
+  onMoveBack: (cents: number) => void;
+}) {
+  const colors = useColors();
+  const transactions = useStore((s) => s.transactions);
+  const status = envelopeStatus(envelope, row, month, debt);
+  const bar = targetBar(envelope, row, month, debt);
+  const label = targetLabel(envelope, row, month, status.need, debt);
+  const max = floorDollars(row.available);
+  const movable = !past && max >= 100;
+  const pad = useKeypadField({
+    value: '',
+    mode: 'whole',
+    live: false,
+    title: `Move back to Ready to assign (up to ${formatDollars(max)})`,
+    showValue: true,
+    onDone: (cents) => {
+      const amount = Math.min(max, Math.max(0, cents ?? 0));
+      if (amount > 0) onMoveBack(amount);
+    },
+  });
+  const spending = useMemo(
+    () => transactions.filter((t) => t.envelopeId === envelope.id && monthOf(t.date) === month).sort(newestFirst),
+    [transactions, envelope.id, month],
+  );
+  const leftColor = row.available < 0 ? colors.negative : row.available < 100 ? colors.textSecondary : colors.positive;
+  const barColor = !bar
+    ? colors.fill
+    : bar.state === 'over'
+      ? colors.negativeStrong
+      : bar.state === 'short'
+        ? colors.cautionDot
+        : bar.state === 'empty'
+          ? colors.textTertiary
+          : colors.positive;
+
+  return (
+    <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 300, maxWidth: 380, gap: 14 }}>
+      <DCard padded>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text variant="footnote" tone="textSecondary">
+              {envelope.group}
+            </Text>
+            <Text accessibilityRole="header" style={{ fontSize: 20, lineHeight: 25, fontWeight: '700', letterSpacing: -0.3 }} numberOfLines={2}>
+              {envelopeEmoji(envelope)} {envelope.name}
+            </Text>
+          </View>
+          <Pressable
+            accessibilityRole="link"
+            onPress={() =>
+              envelope.debtAccountId
+                ? router.navigate(`/debt/${envelope.debtAccountId}`)
+                : router.push({ pathname: '/envelope/[id]', params: { id: envelope.id, month } })
+            }
+            hitSlop={6}
+          >
+            <Text variant="callout" weight="600" tone="accent">
+              {envelope.debtAccountId ? 'Open debt' : 'Edit'}
+            </Text>
+          </Pressable>
+        </View>
+        <View style={{ gap: 2 }}>
+          <Text variant="footnote" tone="textSecondary">
+            {row.available < 0 ? 'Overspent' : 'Left to spend'}
+          </Text>
+          <Text style={{ fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5, color: leftColor, fontVariant: ['tabular-nums'] }}>
+            {formatMoney(row.available)}
+          </Text>
+        </View>
+        <View style={{ marginHorizontal: -9 }}>
+          <LeftMath row={row} />
+        </View>
+      </DCard>
+
+      <DCard padded>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.md }}>
+          <Text variant="callout" weight="700">
+            Target
+          </Text>
+          <Text variant="callout" tone="textSecondary" numberOfLines={1} style={{ flexShrink: 1 }}>
+            {bar ? `${targetKindOf(envelope) === 'goal' && !envelope.debtAccountId ? 'Goal' : 'Spending'}` : 'None set'}
+          </Text>
+        </View>
+        {bar && (
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.fill, overflow: 'hidden' }}>
+            <View style={{ width: `${(bar.state === 'short' ? bar.progress : 1) * 100}%`, height: 6, backgroundColor: barColor }} />
+          </View>
+        )}
+        <Text variant="callout" weight="600" color={colors[label.tone]}>
+          {label.text}
+        </Text>
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          <DButton
+            label={status.need > 0 ? `${status.fillLabel} ${formatDollars(Math.min(status.need, Math.max(0, floorDollars(rta))))}` : 'Target met'}
+            variant="accent"
+            disabled={past || status.need <= 0 || rta < 100}
+            onPress={() => onFill(status.need)}
+            style={{ flex: 1 }}
+          />
+          <ActionMenu
+            accessibilityLabel="Move money back to Ready to assign"
+            disabled={!movable}
+            items={[
+              {
+                label: 'Move all back',
+                detail: formatDollars(max),
+                icon: { sf: 'arrow.uturn.backward', md: 'undo' },
+                onPress: () => onMoveBack(max),
+              },
+              { label: 'Move a custom amount', icon: { sf: 'number', md: 'dialpad' }, onPress: pad.open },
+            ]}
+            style={({ pressed, open }) => ({
+              flex: 1,
+              height: 34,
+              paddingHorizontal: 12,
+              borderRadius: 9,
+              borderWidth: 1,
+              borderColor: open ? colors.accent : colors.borderStrong,
+              backgroundColor: pressed ? colors.control : colors.surface,
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: movable ? 1 : 0.45,
+            })}
+          >
+            <Text variant="body" weight="600" numberOfLines={1}>
+              Move money back
+            </Text>
+          </ActionMenu>
+        </View>
+        {!bar && !envelope.debtAccountId && (
+          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/envelope/[id]', params: { id: envelope.id, month } })}>
+            <Text variant="callout" weight="600" tone="accent">
+              Set a target ›
+            </Text>
+          </Pressable>
+        )}
+      </DCard>
+
+      <DCard>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 14, paddingBottom: 10 }}>
+          <Text variant="callout" weight="700">
+            {past ? monthOnly.format(asDate(month)) : 'This month'}
+          </Text>
+          <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/budget/[id]', params: { id: envelope.id, month } })}>
+            <Text variant="callout" weight="600" tone="accent">
+              All ›
+            </Text>
+          </Pressable>
+        </View>
+        {spending.length === 0 ? (
+          <Text variant="callout" tone="textSecondary" style={{ paddingHorizontal: 18, paddingBottom: 14 }}>
+            Nothing spent yet.
+          </Text>
+        ) : (
+          spending.slice(0, 8).map((t) => (
+            <Pressable
+              key={t.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${t.payee}, ${formatMoney(t.amount)}. Edit`}
+              onPress={() => router.push(`/transaction/${t.id}`)}
+              style={({ hovered }: { hovered?: boolean }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.md,
+                paddingHorizontal: 18,
+                paddingVertical: 9,
+                borderTopWidth: 1,
+                borderTopColor: colors.hairline,
+                backgroundColor: hovered ? '#FAFBFD' : 'transparent',
+              })}
+            >
+              <Text variant="footnote" tone="textSecondary" style={{ width: 48 }}>
+                {shortDate(t.date)}
+              </Text>
+              <Text variant="callout" weight="500" numberOfLines={1} style={{ flex: 1 }}>
+                {t.payee}
+              </Text>
+              <Text variant="callout" color={t.amount < 0 ? colors.negative : colors.positive} style={{ fontVariant: ['tabular-nums'] }}>
+                {formatMoney(t.amount)}
+              </Text>
+            </Pressable>
+          ))
+        )}
+      </DCard>
+    </View>
+  );
+}
+
+const short = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric' });
+export function shortDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return short.format(new Date(y, m - 1, d));
+}
+
+function MonthStep({
+  label,
+  glyph,
+  sf,
+  disabled,
+  onPress,
+}: {
+  label: string;
+  glyph: 'chevron_left' | 'chevron_right';
+  sf: 'chevron.left' | 'chevron.right';
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={() => {
+        haptic('selection');
+        onPress();
+      }}
+      style={({ hovered }: { hovered?: boolean }) => ({
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: hovered && !disabled ? colors.control : 'transparent',
+        opacity: disabled ? 0.3 : 1,
+      })}
+    >
+      <Icon sf={sf} md={glyph} size={16} color={colors.accent} weight="semibold" />
+    </Pressable>
+  );
+}
+
+function ColumnLabel({ children, width, right, flex }: { children: string; width?: number; right?: boolean; flex?: boolean }) {
+  return (
+    <Text variant="label" caps color="#6B778C" align={right ? 'right' : 'left'} style={[flex ? { flex: 1 } : { width }, right && { paddingRight: 6 }]}>
+      {children}
+    </Text>
+  );
+}
+
+function GroupSum({ children }: { children: string }) {
+  return (
+    <Text variant="footnote" tone="textSecondary" align="right" style={{ width: COL, paddingRight: 6, fontVariant: ['tabular-nums'] }}>
+      {children}
+    </Text>
+  );
+}
+
+function Starters({
+  starters,
+  onAdd,
+  onDone,
+}: {
+  starters: typeof STARTERS;
+  onAdd: (s: (typeof STARTERS)[number]) => void;
+  onDone: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <DCard>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingTop: 14 }}>
+        <Text variant="section" style={{ flex: 1 }}>
+          Make your envelopes
+        </Text>
+        <Pressable accessibilityRole="button" onPress={onDone} hitSlop={6}>
+          <Text variant="callout" weight="600" tone="accent">
+            Done
+          </Text>
+        </Pressable>
+      </View>
+      <Text variant="callout" tone="textSecondary" style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 8 }}>
+        Bills and Daily are money you spend each month. Savings is money you add each month and leave alone.
+      </Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, paddingHorizontal: 16, paddingBottom: 16 }}>
+        {starters.map((s) => (
+          <Pressable
+            key={s.name}
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${s.name} to ${s.group}`}
+            onPress={() => onAdd(s)}
+            style={({ hovered }: { hovered?: boolean }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              height: 32,
+              paddingHorizontal: 12,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: colors.borderStrong,
+              backgroundColor: hovered ? colors.control : colors.surface,
+            })}
+          >
+            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: groupColor(s.group) }} />
+            <Text variant="callout" weight="500">
+              {s.name}
+            </Text>
+            <Text variant="callout" weight="600" tone="accent">
+              + Add
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </DCard>
+  );
+}

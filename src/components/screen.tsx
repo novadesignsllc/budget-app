@@ -115,16 +115,29 @@ export function SheetScreen({ children, contentContainerStyle, onScroll, ...prop
  * On a computer a sheet is a centered card over the page, the way a phone's sheet sits over
  * the screen. Clicking outside it or pressing Escape closes it.
  */
+let openDialogs = 0;
+/** Is a sheet open over the page on a computer? (Page shortcuts stand down while one is.) */
+export function desktopSheetOpen(): boolean {
+  return openDialogs > 0;
+}
+
 function SheetDialog({ children, keypadOpen }: { children: React.ReactNode; keypadOpen: boolean }) {
   const colors = useColors();
+  useEffect(() => {
+    openDialogs += 1;
+    return () => {
+      openDialogs -= 1;
+    };
+  }, []);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onKey = (e: KeyboardEvent) => {
       // Escape closes the number pad first.
       if (e.key === 'Escape' && !keypadOpen) closeSheet();
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Capture, so it works while typing in a field too (fields keep Escape to themselves).
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, [keypadOpen]);
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xxl }}>
@@ -142,7 +155,8 @@ function SheetDialog({ children, keypadOpen }: { children: React.ReactNode; keyp
           overflow: 'hidden',
           borderRadius: radius.card + 4,
           backgroundColor: colors.background,
-          boxShadow: '0 24px 64px rgba(11,18,32,0.24)',
+          borderWidth: 1,
+          borderColor: colors.borderStrong,
         }}
       >
         {children}

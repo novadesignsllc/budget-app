@@ -33,7 +33,7 @@ import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
 import { useMonthOptions } from '@/utils/month-options';
 
-const STARTERS: { name: string; group: string }[] = [
+export const STARTERS: { name: string; group: string }[] = [
   { name: 'Groceries', group: 'Daily' },
   { name: 'Eating Out', group: 'Daily' },
   { name: 'Gas', group: 'Daily' },
@@ -474,14 +474,17 @@ export function Budget() {
  * doesn't. It's never typed into. Tapping it offers to move money back to Ready to
  * assign: all of it, or an amount typed on the number pad.
  */
-function LeftCell({
+export function LeftCell({
   row,
   bar,
   past,
   tone,
   onEditingChange,
   onMoveBack,
+  width = COL,
 }: {
+  /** The box's width; the phone's columns are COL, the desktop's wider. */
+  width?: number;
   row: EnvelopeMonth;
   bar: TargetBar | null;
   past: boolean;
@@ -508,7 +511,7 @@ function LeftCell({
   });
   const pill = bar && !past ? LEFT_PILL[bar.state](colors) : null;
   return (
-    <View ref={cell} collapsable={false} style={{ width: COL, marginLeft: COL_GAP }}>
+    <View ref={cell} collapsable={false} style={{ width, marginLeft: COL_GAP }}>
       <ActionMenu
         header={<LeftMath row={row} />}
         items={[
@@ -533,7 +536,7 @@ function LeftCell({
         hitSlop={8}
         style={({ pressed, open }) => ({
           // The same box as the Assigned chip: same width and padding in every row.
-          width: COL,
+          width,
           height: 24,
           paddingHorizontal: COL_PAD,
           borderRadius: 6,
@@ -563,7 +566,7 @@ function LeftCell({
  * How Left adds up, at the top of its menu: everything left from earlier months, plus
  * what was assigned this month, minus what was spent. Exact cents, so it checks out.
  */
-function LeftMath({ row }: { row: EnvelopeMonth }) {
+export function LeftMath({ row }: { row: EnvelopeMonth }) {
   const colors = useColors();
   const line = (label: string, cents: number, opts: { sign?: boolean; bold?: boolean } = {}) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', height: 22 }}>
@@ -597,7 +600,7 @@ function LeftMath({ row }: { row: EnvelopeMonth }) {
  * The Left pill for an envelope with a target: green funded, yellow short, grey at zero,
  * red over. Envelopes without a target show a plain number, so a pill means "has a target".
  */
-const LEFT_PILL: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => { bg: string; fg: string }> = {
+export const LEFT_PILL: Record<TargetBar['state'], (c: ReturnType<typeof useColors>) => { bg: string; fg: string }> = {
   funded: (c) => ({ bg: c.positiveSoft, fg: c.positive }),
   short: (c) => ({ bg: c.cautionSoft, fg: c.caution }),
   empty: (c) => ({ bg: c.control, fg: c.textTertiary }),

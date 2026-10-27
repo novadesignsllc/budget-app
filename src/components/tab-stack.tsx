@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { spacing, useColors } from '@/theme';
 
+import { useIsDesktop } from './dock';
 import { Icon } from './icon';
 import { Text } from './text';
 
@@ -55,9 +56,13 @@ function AppHeader({ options, back, navigation }: NativeStackHeaderProps) {
   );
 }
 
-/** The stack inside each tab: our flat header with a centered title. */
-export function TabStack({ title }: { title: string }) {
+/**
+ * The stack inside each tab: our flat header with a centered title. With `desktopPage`,
+ * the tab's first screen draws its own header on a computer.
+ */
+export function TabStack({ title, desktopPage }: { title: string; desktopPage?: boolean }) {
   const colors = useColors();
+  const desktop = useIsDesktop();
   return (
     <Stack
       screenOptions={{
@@ -65,7 +70,7 @@ export function TabStack({ title }: { title: string }) {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title }} />
+      <Stack.Screen name="index" options={{ title, headerShown: !(desktop && desktopPage) }} />
     </Stack>
   );
 }

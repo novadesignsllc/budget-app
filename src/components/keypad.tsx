@@ -245,7 +245,6 @@ function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
           borderWidth: 1,
           borderColor: colors.separator,
           borderRadius: radius.card,
-          boxShadow: '0 12px 40px rgba(11,18,32,0.18)',
         },
       ]}
     >
@@ -468,6 +467,11 @@ export function useKeypadField({
 
   const shown = active ? keypadDisplay(expr, mode, unit) : value ? keypadDisplay(exprFrom(textCents(value, mode), mode) || '0', mode, unit) : '';
   return { open, active, text: shown };
+}
+
+/** Outside React: is a pad open right now? (Keyboard shortcuts stand down while it is.) */
+export function keypadIsOpen(): boolean {
+  return !!useKeypadStore.getState().session;
 }
 
 /** Is any number pad open? Screens add room at the bottom so what you're typing stays visible. */

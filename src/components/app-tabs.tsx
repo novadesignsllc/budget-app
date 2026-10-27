@@ -1,14 +1,13 @@
-import { Link, router, useSegments } from 'expo-router';
+import { useSegments } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useEffect } from 'react';
 import Animated, { Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming } from 'react-native-reanimated';
 
-import { formatMoney } from '@/domain/money';
-import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { Sidebar } from '@/desktop/sidebar';
 import { spacing, useColors } from '@/theme';
 
-import { SIDEBAR_WIDTH, useDock, useIsDesktop } from './dock';
+import { useDock, useIsDesktop } from './dock';
 import { Icon } from './icon';
 import { QuickAddBar } from './quick-add-bar';
 import { Text } from './text';
@@ -86,103 +85,6 @@ function Dock() {
   );
 }
 
-/** Desktop: sections and accounts in a left sidebar. */
-function Sidebar() {
-  const colors = useColors();
-  const ledger = useLedger();
-  const { cash, debts } = useAccounts();
-  return (
-    <View style={{ width: SIDEBAR_WIDTH, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.xl }}>
-        <Text variant="title" style={{ paddingHorizontal: spacing.sm, paddingTop: spacing.sm }}>
-          Slip
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.push('/add')}
-          style={({ pressed }) => ({
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.sm,
-            height: 38,
-            paddingHorizontal: spacing.md,
-            borderRadius: 8,
-            backgroundColor: colors.accent,
-            opacity: pressed ? 0.8 : 1,
-          })}
-        >
-          <Icon sf="plus" md="add" size={14} color={colors.onInk} />
-          <Text variant="body" weight="600" tone="onInk">
-            Add transaction
-          </Text>
-        </Pressable>
-        <View style={{ gap: 2 }}>
-          {TABS.map((t) => (
-            <TabTrigger key={t.name} name={t.name} href={t.href} resetOnFocus asChild>
-              <SideItem label={t.label} />
-            </TabTrigger>
-          ))}
-          <Link href="/settings" asChild>
-            <SideItem label="Settings" />
-          </Link>
-        </View>
-        {[
-          { title: 'Accounts', rows: cash, debt: false },
-          { title: 'Debts', rows: debts, debt: true },
-        ].map((g) =>
-          g.rows.length ? (
-            <View key={g.title} style={{ gap: spacing.xs }}>
-              <Text variant="label" tone="textTertiary" caps style={{ paddingHorizontal: spacing.sm }}>
-                {g.title}
-              </Text>
-              {g.rows.map((a) => {
-                const b = ledger.balance.get(a.id) ?? 0;
-                return (
-                  <Link key={a.id} href={g.debt ? `/debt/${a.id}` : `/account/${a.id}`} asChild>
-                    <Pressable
-                      style={{ flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: 5 }}
-                    >
-                      <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                        {a.name}
-                      </Text>
-                      <Text variant="body" tone={!g.debt && b < 0 ? 'negative' : 'textSecondary'}>
-                        {formatMoney(g.debt ? -b : b)}
-                      </Text>
-                    </Pressable>
-                  </Link>
-                );
-              })}
-            </View>
-          ) : null,
-        )}
-      </ScrollView>
-    </View>
-  );
-}
-
-function SideItem({ label, isFocused, ref, ...props }: TabProps & { label: string }) {
-  const colors = useColors();
-  return (
-    <Pressable
-      ref={ref}
-      {...props}
-      accessibilityRole="tab"
-      accessibilityState={{ selected: !!isFocused }}
-      style={({ pressed }) => ({
-        height: 36,
-        paddingHorizontal: spacing.md,
-        borderRadius: 8,
-        justifyContent: 'center',
-        backgroundColor: isFocused || pressed ? colors.control : 'transparent',
-      })}
-    >
-      <Text variant="body" weight={isFocused ? '600' : '400'} tone={isFocused ? 'accent' : 'textSecondary'}>
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 /** A short fade when you switch tabs. Opacity only, nothing moves. */
 function useTabFade() {
   const tab = useSegments()[1];
@@ -204,7 +106,7 @@ export function AppTabs() {
   const fade = useTabFade();
   return (
     <Tabs style={{ flex: 1, flexDirection: desktop ? 'row' : 'column', backgroundColor: colors.background }}>
-      {desktop ? <Sidebar /> : null}
+      {desktop ? <Sidebar tabs={TABS} /> : null}
       <Animated.View style={[{ flex: 1 }, fade]}>
         <TabSlot style={{ flex: 1 }} />
       </Animated.View>

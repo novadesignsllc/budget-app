@@ -7,6 +7,7 @@ import { useSyncStatus, type SyncPhase } from '@/sync/status';
 import { palettes, radius, shadows, spacing } from '@/theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 
+import { useIsDesktop } from './dock';
 import { useFloatingBottom } from './floating-action';
 import { Icon } from './icon';
 import { Text } from './text';
@@ -38,8 +39,10 @@ export function SyncIndicator() {
   const colors = palettes[scheme];
   const reduceMotion = useReducedMotion();
   const floatingBottom = useFloatingBottom();
+  // On a computer the sidebar shows sync status instead.
+  const desktop = useIsDesktop();
 
-  const visible = signedIn && phase !== 'idle';
+  const visible = signedIn && phase !== 'idle' && !desktop;
   // Same row as the screen's add button, above the tab bar and quick-add bar.
   const bottom = floatingBottom + 5;
   const green = colors.positive;

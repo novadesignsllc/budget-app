@@ -6,7 +6,7 @@ import Animated, { useAnimatedStyle, useReducedMotion, withTiming, type SharedVa
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DateRow, formatPickedDate } from '@/components/date-picker';
-import { Dropdown, type DropdownOption } from '@/components/dropdown';
+import { Dropdown } from '@/components/dropdown';
 import { FlagRow, FormCard, FormRow, InputRow, SegmentRow } from '@/components/form';
 import { Caret, useKeypadField, type KeypadFieldHandle } from '@/components/keypad';
 import { Icon } from '@/components/icon';
@@ -14,17 +14,17 @@ import { SheetScreen } from '@/components/screen';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { today } from '@/domain/dates';
-import { formatDollars, formatMoney, parseMoney } from '@/domain/money';
+import { formatMoney, parseMoney } from '@/domain/money';
 import { payeeMemory } from '@/domain/payees';
 import { draftFromFields, parseQuickAdd, type ParsedEntry } from '@/domain/quick-add';
 import { isCashAccount, type FlagColor, type ISODate } from '@/domain/types';
-import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { useEntryOptions } from '@/hooks/use-entry-options';
+import { useAccounts } from '@/hooks/use-ledger';
 import { useVoiceEntry } from '@/hooks/use-voice-entry';
 import { SheetHeader } from '@/components/sheet-header';
 import { useStore } from '@/store';
-import { flagHues, groupColor, spacing, type as typeScale, useColors } from '@/theme';
+import { flagHues, spacing, type as typeScale, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
-import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
 
 type Override = {
@@ -59,7 +59,6 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
   const [note, setNote] = useState('');
   const [flag, setFlagColor] = useState<FlagColor | null>(null);
 
-  const ledger = useLedger();
   const envelopes = useStore((s) => s.envelopes);
   const payees = useStore((s) => s.payees);
   const legacyMemory = useStore((s) => s.merchantMemory);
@@ -177,58 +176,7 @@ export function QuickAdd({ voice = false }: { voice?: boolean }) {
     }
   };
 
-  // Envelopes listed in the Budget's group order.
-  const groupOrder = useStore((s) => s.settings.groupOrder);
-
-  const listedGroups = useMemo(
-    () =>
-      orderGroups(
-        envelopes.map((e) => e.group),
-        groupOrder,
-      ),
-    [envelopes, groupOrder],
-  );
-
-  const envelopeOptions = useMemo<DropdownOption<string>[]>(
-    () =>
-      envelopes
-        .filter((e) => !e.hidden && !e.debtAccountId)
-        .sort((a, b) => listedGroups.indexOf(a.group) - listedGroups.indexOf(b.group) || a.order - b.order)
-        .map((e) => {
-          const left = ledger.available.get(e.id) ?? 0;
-          return {
-            value: e.id,
-            label: e.name,
-            dot: groupColor(e.group),
-            section: e.group,
-            detail: left < 0 ? formatDollars(left) : `${formatDollars(left)} left`,
-            tone: left < 0 ? 'negative' : undefined,
-          };
-        }),
-    [envelopes, ledger, listedGroups],
-  );
-
-  const accountOptions = useMemo<DropdownOption<string>[]>(
-    () => [
-      ...accounts.filter(isCashAccount).map((a) => ({
-        value: a.id,
-        label: a.name,
-        face: a.order,
-        section: 'Accounts',
-        detail: formatMoney(ledger.balance.get(a.id) ?? 0),
-      })),
-      ...accounts
-        .filter((a) => !isCashAccount(a))
-        .map((a) => ({
-          value: a.id,
-          label: a.name,
-          face: a.order,
-          section: 'Cards',
-          tone: 'negative' as const,
-        })),
-    ],
-    [accounts, ledger],
-  );
+  const { envelopeOptions, accountOptions } = useEntryOptions();
 
   if (cash.length === 0) {
     return (

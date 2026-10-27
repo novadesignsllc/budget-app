@@ -35,7 +35,7 @@ const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'long' });
 const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' });
 
 /** "Friday, October 23rd": Home's title is today. */
-function todayTitle(d: Date) {
+export function todayTitle(d: Date) {
   const n = d.getDate();
   const suffix = n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
   return `${weekday.format(d)}, ${monthName.format(d)} ${n}${suffix}`;
@@ -436,7 +436,7 @@ const STATUS_LOOK = {
  * Everyday money at a glance: what's left in the Daily envelopes this month and whether
  * spending is keeping pace with the calendar. The tick on the bar is today.
  */
-function BudgetStatusCard({ status, day, daysInMonth }: { status: BudgetStatus; day: number; daysInMonth: number }) {
+export function BudgetStatusCard({ status, day, daysInMonth }: { status: BudgetStatus; day: number; daysInMonth: number }) {
   const colors = useColors();
   const look = STATUS_LOOK[status.level];
   const total = status.spent + Math.max(status.left, 0);

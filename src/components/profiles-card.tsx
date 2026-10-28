@@ -33,20 +33,7 @@ export function ProfilesCard() {
             backgroundColor: pressed ? colors.control : colors.surface,
           })}
         >
-          <View
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: 8,
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: colors.control,
-              borderBottomWidth: 2,
-              borderBottomColor: p.color,
-            }}
-          >
-            <Text style={{ fontSize: 16, lineHeight: 20 }}>{p.emoji}</Text>
-          </View>
+          <Text style={{ fontSize: 20, lineHeight: 26, width: 26, textAlign: 'center' }}>{p.emoji}</Text>
           <Text variant="body" weight="500" style={{ flex: 1 }} numberOfLines={1}>
             {p.name}
           </Text>
@@ -55,6 +42,8 @@ export function ProfilesCard() {
               Open now
             </Text>
           )}
+          {/* Its color, as a plain swatch. */}
+          <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: p.color }} />
           <Icon sf="chevron.right" md="chevron_right" size={12} color={colors.textTertiary} weight="semibold" />
         </Pressable>
       ))}

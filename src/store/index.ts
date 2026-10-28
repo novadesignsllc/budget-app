@@ -169,6 +169,11 @@ type Actions = {
       amount?: Cents;
       /** Spending only. Moving to a card makes it a slip, moving to cash makes it spending. */
       accountId?: string;
+      /**
+       * Money in only: 'income' goes to Ready to assign and counts as income; 'spend' with
+       * an envelope is money back into that envelope (a refund) and isn't income.
+       */
+      kind?: 'income' | 'spend';
     },
   ) => void;
   deleteTransaction: (id: string) => void;
@@ -443,8 +448,13 @@ export const useStore = create<Store>()((set, get) => ({
           : undefined;
       const transactions = s.transactions.map((t) => {
         if (t.id === id) {
-          const { amount: _ignored, accountId: _account, ...rest } = patch;
-          const next = applyAmount({ ...t, ...rest });
+          const { amount: _ignored, accountId: _account, kind, ...rest } = patch;
+          const inflow = t.amount > 0 && (t.kind === 'income' || t.kind === 'spend');
+          const next = applyAmount({
+            ...t,
+            ...rest,
+            ...(inflow && kind ? { kind, envelopeId: kind === 'income' ? undefined : rest.envelopeId } : {}),
+          });
           // A different account means a different statement, so it's no longer reconciled.
           return moveTo
             ? {

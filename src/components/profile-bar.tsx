@@ -5,21 +5,31 @@ import { useProfiles, type Profile } from '@/sync/profiles';
 import { spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 
-import { PROFILE_BAR_HEIGHT } from './dock';
+import { PROFILE_BAR_HEIGHT, useIsDesktop } from './dock';
 import { Text } from './text';
 
 /**
  * Profile tabs along the bottom, like the sheet tabs in Google Sheets: the profile you're
- * in is a raised tab with its color along the top; tap another to switch. With one
- * profile it just shows its name. New profiles are added in Settings.
+ * in is a raised tab with its color along the top; tap another to switch. Hidden with one
+ * profile. New profiles are added in Settings.
  */
 export function ProfileBar({ paddingBottom = 0 }: { paddingBottom?: number }) {
   const colors = useColors();
   const list = useProfiles((s) => s.list);
   const activeId = useProfiles((s) => s.activeId);
   const switching = useProfiles((s) => s.switching);
+  const desktop = useIsDesktop();
   // One profile needs no tabs.
   if (list.length < 2) return null;
+  const tabs = list.map((p) => (
+    <ProfileTab
+      key={p.id}
+      profile={p}
+      active={p.id === activeId}
+      loading={switching && p.id === activeId}
+      fill={!desktop}
+    />
+  ));
   return (
     <View
       style={{
@@ -29,26 +39,25 @@ export function ProfileBar({ paddingBottom = 0 }: { paddingBottom?: number }) {
         paddingBottom,
       }}
     >
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{
-          height: PROFILE_BAR_HEIGHT,
-          alignItems: 'flex-start',
-          paddingHorizontal: spacing.sm,
-          gap: 2,
-        }}
-      >
-        {list.map((p) => (
-          <ProfileTab
-            key={p.id}
-            profile={p}
-            active={p.id === activeId}
-            loading={switching && p.id === activeId}
-            onlyOne={list.length === 1}
-          />
-        ))}
-      </ScrollView>
+      {desktop ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            height: PROFILE_BAR_HEIGHT,
+            alignItems: 'flex-start',
+            paddingHorizontal: spacing.sm,
+            gap: 2,
+          }}
+        >
+          {tabs}
+        </ScrollView>
+      ) : (
+        // On a phone the profiles split the bar evenly, each tab centered in its share.
+        <View style={{ height: PROFILE_BAR_HEIGHT, flexDirection: 'row', paddingHorizontal: spacing.sm, gap: 2 }}>
+          {tabs}
+        </View>
+      )}
     </View>
   );
 }
@@ -57,12 +66,13 @@ function ProfileTab({
   profile,
   active,
   loading,
-  onlyOne,
+  fill,
 }: {
   profile: Profile;
   active: boolean;
   loading: boolean;
-  onlyOne: boolean;
+  /** Take an even share of the bar, centered in it. */
+  fill: boolean;
 }) {
   const colors = useColors();
   return (
@@ -70,7 +80,7 @@ function ProfileTab({
       accessibilityRole="tab"
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${profile.name} profile`}
-      disabled={active || onlyOne}
+      disabled={active}
       onPress={() => {
         haptic('selection');
         switchProfile(profile.id);
@@ -79,6 +89,7 @@ function ProfileTab({
         height: 30,
         flexDirection: 'row',
         alignItems: 'center',
+        ...(fill ? { flex: 1, minWidth: 0, justifyContent: 'center' as const } : {}),
         gap: 6,
         paddingHorizontal: 12,
         marginTop: -1,
@@ -104,6 +115,7 @@ function ProfileTab({
         weight={active ? '600' : '500'}
         color={active ? colors.text : colors.textSecondary}
         numberOfLines={1}
+        style={{ flexShrink: 1 }}
       >
         {profile.name}
       </Text>

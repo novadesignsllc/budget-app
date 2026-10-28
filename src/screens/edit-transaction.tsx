@@ -15,12 +15,15 @@ import { isCashAccount, type FlagColor } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
 import { isLocked, useStore } from '@/store';
-import { groupColor } from '@/theme';
+import { groupColor, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
 
+const READY = '__ready__';
+
 const TITLES = {
+  inflow: 'Inflow',
   spend: 'Expense',
   slip: 'Card slip',
   income: 'Income',
@@ -30,6 +33,7 @@ const TITLES = {
 } as const;
 
 export function EditTransaction({ id }: { id: string }) {
+  const colors = useColors();
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
   const allTransactions = useStore((s) => s.transactions);
@@ -91,10 +95,12 @@ export function EditTransaction({ id }: { id: string }) {
   // A transfer is reconciled if either side is: editing one side changes the other.
   const pair = t.transferPairId ? allTransactions.find((x) => x.transferPairId === t.transferPairId && x.id !== t.id) : undefined;
   const locked = isLocked(t) || (!!pair && isLocked(pair));
-  const spending = t.kind === 'spend' || t.kind === 'slip';
   const account = [...cash, ...debts].find((a) => a.id === accountId);
+  // Money into a bank account goes to Ready to assign (income) unless it's given an envelope (a refund).
+  const inflow = t.amount > 0 && (t.kind === 'income' || t.kind === 'spend') && !!account && isCashAccount(account);
+  const spending = !inflow && (t.kind === 'spend' || t.kind === 'slip');
   const onCard = !!account && !isCashAccount(account);
-  const kind = spending ? (onCard ? 'slip' : 'spend') : t.kind;
+  const kind = inflow ? (envelopeId ? 'inflow' : 'income') : spending ? (onCard ? 'slip' : 'spend') : t.kind;
   const signedAmount = amount === null ? t.amount : t.amount < 0 ? -amount : amount;
 
   const accountOptions: DropdownOption<string>[] = [
@@ -142,7 +148,12 @@ export function EditTransaction({ id }: { id: string }) {
       memo: memo.trim() || undefined,
     };
     // Moving spending to a card turns it into a slip (and back); the store handles that.
-    update(t.id, { ...fields, amount, accountId: spending ? accountId : undefined });
+    update(t.id, {
+      ...fields,
+      amount,
+      accountId: spending ? accountId : undefined,
+      ...(inflow ? { kind: envelopeId ? ('spend' as const) : ('income' as const) } : {}),
+    });
     if (flag !== (t.flagged ? (t.flagColor ?? 'red') : null)) setFlag(t.id, flag);
     haptic('success');
     closeSheet();
@@ -178,6 +189,16 @@ export function EditTransaction({ id }: { id: string }) {
             onChange={setEnvelopeId}
             searchable
             placeholder="Choose"
+          />
+        )}
+        {inflow && (
+          <Dropdown
+            variant="row"
+            label="Goes to"
+            value={envelopeId ?? READY}
+            options={[{ value: READY, label: 'Ready to assign', dot: colors.positive }, ...envelopeOptions]}
+            onChange={(v) => setEnvelopeId(v === READY ? undefined : v)}
+            searchable
           />
         )}
         <DateRow label="Date" value={date} onChange={setDate} max={today()} last />

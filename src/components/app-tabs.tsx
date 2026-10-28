@@ -62,8 +62,8 @@ function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
       accessibilityRole="tab"
       accessibilityLabel={tab.label}
       accessibilityState={{ selected: !!isFocused }}
-      // Seven tabs: each takes its label's width plus an equal share of what's left, so none truncate.
-      style={{ flexGrow: 1, flexBasis: 'auto', alignItems: 'center', gap: 3, paddingTop: 7, paddingHorizontal: 1 }}
+      // Seven equal tabs, so the icons sit evenly across the bar.
+      style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 3, paddingTop: 7 }}
     >
       <Icon
         sf={isFocused ? tab.sfOn : tab.sf}
@@ -72,7 +72,15 @@ function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
         color={color}
         weight={isFocused ? 'semibold' : 'regular'}
       />
-      <Text variant="caption" weight={isFocused ? '600' : '500'} color={color} numberOfLines={1}>
+      {/* Small enough that "Transactions" fits its seventh of the bar; phones shrink it further if needed. */}
+      <Text
+        weight={isFocused ? '600' : '500'}
+        color={color}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+        style={{ fontSize: 10, lineHeight: 13, letterSpacing: -0.1 }}
+      >
         {tab.label}
       </Text>
     </Pressable>

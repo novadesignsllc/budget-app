@@ -1,7 +1,7 @@
 import { useSegments } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Animated, {
 
 import { Sidebar } from '@/desktop/sidebar';
 import { useProfiles } from '@/sync/profiles';
+import { shownTabs, useTabBar } from '@/sync/tab-bar';
 import { spacing, useColors } from '@/theme';
 
 import { useDock, useIsDesktop } from './dock';
@@ -20,7 +21,7 @@ import { ProfileBar } from './profile-bar';
 import { QuickAddBar } from './quick-add-bar';
 import { Text } from './text';
 
-const TABS = [
+export const TABS = [
   { name: 'home', href: '/', label: 'Home', sf: 'house', sfOn: 'house.fill', md: 'home' },
   {
     name: 'transactions',
@@ -44,14 +45,11 @@ const TABS = [
   { name: 'settings', href: '/settings', label: 'Settings', sf: 'gearshape', sfOn: 'gearshape.fill', md: 'settings' },
 ] as const;
 
-/** The phone tab bar puts Home in the middle. (The hidden TabList keeps Home first, so the app opens on it.) */
-const BAR_ORDER = ['recurring', 'transactions', 'income', 'home', 'budget', 'debt', 'settings'] as const;
-const BAR = BAR_ORDER.map((name) => TABS.find((t) => t.name === name)!);
 
 type Tab = (typeof TABS)[number];
 type TabProps = Omit<TabTriggerSlotProps, 'ref'> & { ref?: React.Ref<React.ComponentRef<typeof View>> };
 
-/** One item in the bottom tab bar: icon over a small label, purple when selected. */
+/** One item in the bottom tab bar: just the icon, purple when selected. Its name is for screen readers. */
 function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
   const colors = useColors();
   const color = isFocused ? colors.accent : colors.textTertiary;
@@ -62,27 +60,16 @@ function BarTab({ tab, isFocused, ref, ...props }: TabProps & { tab: Tab }) {
       accessibilityRole="tab"
       accessibilityLabel={tab.label}
       accessibilityState={{ selected: !!isFocused }}
-      // Seven equal tabs, so the icons sit evenly across the bar.
-      style={{ flex: 1, minWidth: 0, alignItems: 'center', gap: 3, paddingTop: 7 }}
+      // Equal tabs, so the icons sit evenly across the bar.
+      style={{ flex: 1, minWidth: 0, height: 44, alignItems: 'center', justifyContent: 'center' }}
     >
       <Icon
         sf={isFocused ? tab.sfOn : tab.sf}
         md={tab.md}
-        size={21}
+        size={22}
         color={color}
         weight={isFocused ? 'semibold' : 'regular'}
       />
-      {/* Small enough that "Transactions" fits its seventh of the bar; phones shrink it further if needed. */}
-      <Text
-        weight={isFocused ? '600' : '500'}
-        color={color}
-        numberOfLines={1}
-        adjustsFontSizeToFit
-        minimumFontScale={0.8}
-        style={{ fontSize: 10, lineHeight: 13, letterSpacing: -0.1 }}
-      >
-        {tab.label}
-      </Text>
     </Pressable>
   );
 }
@@ -92,6 +79,13 @@ function Dock() {
   const colors = useColors();
   const { paddingBottom } = useDock();
   const profileTabs = useProfiles((s) => s.list.length > 1);
+  // The account's own order and picks, set in Settings; Settings itself is always last.
+  const order = useTabBar((s) => s.order);
+  const hidden = useTabBar((s) => s.hidden);
+  const bar = useMemo(
+    () => shownTabs({ order, hidden }).map((name) => TABS.find((t) => t.name === name)!).filter(Boolean),
+    [order, hidden],
+  );
   return (
     <View>
       <View
@@ -116,7 +110,7 @@ function Dock() {
           paddingBottom: profileTabs ? 4 : paddingBottom + 4,
         }}
       >
-        {BAR.map((t) => (
+        {bar.map((t) => (
           <TabTrigger key={t.name} name={t.name} href={t.href} resetOnFocus asChild>
             <BarTab tab={t} />
           </TabTrigger>

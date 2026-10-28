@@ -124,7 +124,10 @@ export function DeleteAccount() {
       await withTimeout(
         backend.commit(
           user.uid,
-          list.map((p) => ({ collection: 'profiles', id: p.id, data: null })),
+          [
+            ...list.map((p) => ({ collection: 'profiles', id: p.id, data: null })),
+            { collection: 'prefs', id: 'tabBar', data: null },
+          ],
         ),
         20000,
       );

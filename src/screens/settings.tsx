@@ -12,6 +12,7 @@ import { Text, type TextTone } from '@/components/text';
 import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
 import { DarkModeRow } from '@/components/dark-mode-row';
+import { TabBarCard } from '@/components/tab-bar-card';
 import { useSession } from '@/sync/session';
 import { useStore } from '@/store';
 import { loadSampleData } from '@/store/sample-data';
@@ -75,6 +76,8 @@ export function Settings() {
         <Card>
           <DarkModeRow />
         </Card>
+
+        <TabBarCard />
 
         <PayeesCard searching={searching} adding={adding} onDoneAdding={() => setAdding(false)} />
 

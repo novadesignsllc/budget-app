@@ -16,7 +16,7 @@ export function useIsDesktop() {
 /** Quick-add strip above the tab bar. */
 export const QUICK_ADD_HEIGHT = 8 + 40 + 8;
 /** Tab bar row, not counting the home indicator. */
-export const TAB_BAR_HEIGHT = 7 + 22 + 3 + 13 + 4;
+export const TAB_BAR_HEIGHT = 44 + 4;
 /** Profile tabs under the tab bar (plus their top border), not counting the home indicator. */
 export const PROFILE_BAR_HEIGHT = 36;
 

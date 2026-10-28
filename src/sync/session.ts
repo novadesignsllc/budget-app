@@ -10,6 +10,7 @@ import { initialState, resetStore, useStore, type State } from '@/store';
 import { startSync } from './engine';
 import { listenToProfiles, MAIN_PROFILE, rememberedProfile, rememberProfile, scopeFor, useProfiles } from './profiles';
 import { useSyncStatus } from './status';
+import { listenToTabBar, resetTabBar } from './tab-bar';
 
 type Session = {
   status: 'loading' | 'signedOut' | 'signedIn';
@@ -22,6 +23,7 @@ export const useSession = create<Session>()(() => ({ status: 'loading', user: nu
 
 let stopSync: (() => void) | undefined;
 let stopProfiles: (() => void) | undefined;
+let stopTabBar: (() => void) | undefined;
 
 function runSync(user: SessionUser) {
   stopSync?.();
@@ -93,6 +95,9 @@ export function useSessionBootstrap() {
       pauseSync();
       stopProfiles?.();
       stopProfiles = undefined;
+      stopTabBar?.();
+      stopTabBar = undefined;
+      resetTabBar();
       seen.clear();
       resetStore();
       useSyncStatus.getState().reset();
@@ -103,6 +108,7 @@ export function useSessionBootstrap() {
       }
       useProfiles.setState({ activeId: rememberedProfile(user.uid), switching: false });
       stopProfiles = listenToProfiles(user.uid);
+      stopTabBar = listenToTabBar(user.uid);
       useSession.setState({ status: 'signedIn', user, dataReady: false });
       runSync(user);
     });
@@ -110,6 +116,7 @@ export function useSessionBootstrap() {
       unsubscribe();
       pauseSync();
       stopProfiles?.();
+      stopTabBar?.();
     };
   }, []);
 }

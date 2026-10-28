@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 
-import { normalizeLayout, shownTabs } from './tab-bar';
+import { normalizeLayout, shownTabs } from '@/domain/tab-layout';
 
 describe('tab bar layout', () => {
   it('keeps Settings last and always shown', () => {

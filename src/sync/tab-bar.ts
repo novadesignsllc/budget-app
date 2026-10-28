@@ -9,25 +9,11 @@ import type { Unsubscribe } from '@/backend/types';
  * Stored at users/{uid}/prefs/tabBar, and kept on the device too so the bar never jumps
  * while Firebase loads.
  */
-export const BAR_TABS = ['recurring', 'transactions', 'income', 'home', 'budget', 'debt', 'settings'] as const;
-export type BarTab = (typeof BAR_TABS)[number];
-export type TabBarLayout = { order: BarTab[]; hidden: BarTab[] };
+import { BAR_TABS, normalizeLayout, type TabBarLayout } from '@/domain/tab-layout';
+
+export { BAR_TABS, normalizeLayout, shownTabs, type BarTab, type TabBarLayout } from '@/domain/tab-layout';
 
 const DEFAULT: TabBarLayout = { order: [...BAR_TABS], hidden: [] };
-
-/** A saved layout made whole: unknown tabs dropped, new ones added before Settings, Settings last and never hidden. */
-export function normalizeLayout(saved: Partial<TabBarLayout> | undefined): TabBarLayout {
-  const known = new Set<string>(BAR_TABS);
-  const order = (saved?.order ?? []).filter((t, i, all) => known.has(t) && all.indexOf(t) === i && t !== 'settings');
-  for (const t of BAR_TABS) if (t !== 'settings' && !order.includes(t)) order.push(t);
-  const hidden = (saved?.hidden ?? []).filter((t) => known.has(t) && t !== 'settings');
-  return { order: [...order, 'settings'], hidden };
-}
-
-/** The tabs on the bar, in order. */
-export function shownTabs(layout: TabBarLayout): BarTab[] {
-  return layout.order.filter((t) => !layout.hidden.includes(t));
-}
 
 const storageKey = (uid: string) => `slip-tab-bar:${uid}`;
 function cached(uid: string): TabBarLayout {

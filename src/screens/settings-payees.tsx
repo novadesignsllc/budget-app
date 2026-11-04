@@ -54,6 +54,7 @@ function InputRow({
           height: 32,
           paddingHorizontal: 9,
           borderRadius: radius.button,
+          borderCurve: 'continuous',
           backgroundColor: colors.control,
         }}
       >

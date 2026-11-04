@@ -50,6 +50,7 @@ export function QuickAddBar() {
   const box = {
     height: 40,
     borderRadius: radius.control,
+    borderCurve: 'continuous',
     borderWidth: 1,
     borderColor: colors.borderStrong,
     backgroundColor: colors.surface,

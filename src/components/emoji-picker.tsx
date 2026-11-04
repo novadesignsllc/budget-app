@@ -80,6 +80,7 @@ export function EmojiPicker({ value, onChange }: { value?: string; onChange: (em
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: radius.menu,
+        borderCurve: 'continuous',
         overflow: 'hidden',
       }}
     >
@@ -91,7 +92,8 @@ export function EmojiPicker({ value, onChange }: { value?: string; onChange: (em
             gap: 6,
             height: 34,
             paddingHorizontal: spacing.sm + 2,
-            borderRadius: 9,
+            borderRadius: radius.button,
+            borderCurve: 'continuous',
             backgroundColor: colors.control,
           }}
         >
@@ -215,6 +217,7 @@ export function EmojiPicker({ value, onChange }: { value?: string; onChange: (em
                       flex: 1,
                       height: CELL,
                       borderRadius: 10,
+                      borderCurve: 'continuous',
                       borderWidth: 2,
                       borderColor: on ? colors.accent : 'transparent',
                       backgroundColor: on ? colors.accentSoft : pressed ? colors.control : 'transparent',

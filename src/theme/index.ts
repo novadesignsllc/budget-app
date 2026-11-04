@@ -309,7 +309,14 @@ export const flagHues = {
   purple: '#8E4EC6',
 } as const;
 
+/**
+ * The one corner scale. Tiny marks (swatches, checkboxes, key caps, mini cards) 4; chips
+ * inside rows 6; buttons and compact fields 8; form fields 10; menus 14; cards 16; sheets
+ * 22. Dots and round buttons are circles (half their size). Nothing else.
+ */
 export const radius = {
+  tiny: 4,
+  chip: 6,
   /** Buttons. */
   button: 8,
   /** Inputs and dropdown fields. */

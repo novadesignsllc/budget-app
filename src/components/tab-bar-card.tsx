@@ -38,12 +38,13 @@ export function TabBarCard() {
       accessibilityRole="button"
       accessibilityLabel={`Move ${label(tab)} ${by < 0 ? 'up' : 'down'}`}
       disabled={disabled}
-      hitSlop={4}
+      hitSlop={6}
       onPress={() => move(tab, by)}
       style={({ pressed }) => ({
-        width: 32,
-        height: 32,
+        width: 34,
+        height: 34,
         borderRadius: 8,
+        borderCurve: 'continuous',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: pressed ? colors.fill : colors.control,

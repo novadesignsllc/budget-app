@@ -55,7 +55,7 @@ SF Pro. Small and dense; numbers are the only big type.
 ## Spacing and shape
 
 - Spacing: 2 / 4 / 8 / 12 / 16 / 24 / 32 / 48. Screen gutter is 16.
-- Radius: buttons 8, controls 10, menus 14, cards 16.
+- Radius, one scale: tiny marks 4 (swatches, checkboxes, key caps, mini cards), chips 6, buttons and compact fields 8, form fields and keypad keys 10, menus 14, cards 16, sheets 22. Dots and round buttons are circles. Every rounded rectangle uses `borderCurve: 'continuous'` (iOS squircle; ignored on the web).
 - Heights: buttons 28 / 34 / 44, fields 40.
 - No shadows, no blur, no glass.
 

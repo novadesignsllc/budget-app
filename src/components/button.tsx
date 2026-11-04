@@ -59,6 +59,7 @@ export function Button({
           height: heights[size],
           paddingHorizontal: size === 'sm' ? spacing.md - 1 : spacing.md + 2,
           borderRadius: radius.button,
+          borderCurve: 'continuous',
           borderWidth: 1,
           borderColor: l.border,
           backgroundColor: l.bg,

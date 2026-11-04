@@ -19,7 +19,7 @@ import { useEntryOptions } from '@/hooks/use-entry-options';
 import { useAccounts } from '@/hooks/use-ledger';
 import { isListed, newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
-import { spacing, type as typeScale, useColors } from '@/theme';
+import { type as typeScale, radius, spacing, useColors } from '@/theme';
 import { useMonthOptions } from '@/utils/month-options';
 
 import { FLEX, GAP, Pill, RegisterHeader, RegisterRow, W } from './register';
@@ -291,7 +291,8 @@ function EntryRow({ defaultAccountId }: { defaultAccountId: string | null }) {
           paddingHorizontal: 8,
           borderWidth: 1,
           borderColor: colors.borderStrong,
-          borderRadius: 7,
+          borderRadius: radius.button,
+          borderCurve: 'continuous',
           backgroundColor: colors.surface,
           color: colors.text,
           outlineColor: colors.accent,

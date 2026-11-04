@@ -122,6 +122,7 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
                     paddingHorizontal: wide ? 8 : 1,
                     paddingVertical: wide ? 8 : 4,
                     borderRadius: 8,
+                    borderCurve: 'continuous',
                     borderWidth: 1,
                     borderColor: on ? colors.accent : wide ? colors.hairline : 'transparent',
                     backgroundColor: on ? colors.accentSoft : pressed || hovered ? colors.control : colors.surface,

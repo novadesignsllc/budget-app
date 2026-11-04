@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 
 import type { CreditUse } from '@/domain/debt';
-import { useColors } from '@/theme';
+import { radius, useColors } from '@/theme';
 
 import { Text } from './text';
 
@@ -22,7 +22,8 @@ export function CreditUsePill({ use, compact }: { use: CreditUse; compact?: bool
         alignSelf: 'flex-start',
         paddingHorizontal: 7,
         height: compact ? 20 : 22,
-        borderRadius: 6,
+        borderRadius: radius.chip,
+        borderCurve: 'continuous',
         justifyContent: 'center',
         backgroundColor: look.bg,
       }}

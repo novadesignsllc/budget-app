@@ -5,7 +5,7 @@ import Svg, { Line, Rect } from 'react-native-svg';
 
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
-import { spacing, type as typeScale, useColors } from '@/theme';
+import { type as typeScale, radius, spacing, useColors } from '@/theme';
 
 /** Corner radius of desktop cards: a touch tighter than the phone's, for denser tables. */
 export const D_RADIUS = 14;
@@ -34,7 +34,8 @@ export function Kbd({ children, onAccent }: { children: string; onAccent?: boole
       style={{
         paddingHorizontal: 6,
         height: 18,
-        borderRadius: 5,
+        borderRadius: radius.tiny,
+        borderCurve: 'continuous',
         justifyContent: 'center',
         backgroundColor: onAccent ? 'rgba(255,255,255,0.18)' : colors.control,
       }}
@@ -117,6 +118,7 @@ function BackLink({ label }: { label: string }) {
         paddingRight: 10,
         marginLeft: -6,
         borderRadius: 8,
+        borderCurve: 'continuous',
         backgroundColor: hovered ? colors.control : 'transparent',
       })}
     >
@@ -196,7 +198,8 @@ export function DButton({
         {
           height: 34,
           paddingHorizontal: 12,
-          borderRadius: 9,
+          borderRadius: radius.button,
+          borderCurve: 'continuous',
           borderWidth: accent ? 0 : 1,
           borderColor: colors.borderStrong,
           backgroundColor: accent ? colors.accent : pressed || hovered ? colors.control : colors.surface,
@@ -255,7 +258,8 @@ export function SearchField({
         paddingHorizontal: 10,
         borderWidth: 1,
         borderColor: colors.borderStrong,
-        borderRadius: 9,
+        borderRadius: radius.button,
+        borderCurve: 'continuous',
         backgroundColor: colors.surface,
       }}
     >

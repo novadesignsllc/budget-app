@@ -116,6 +116,7 @@ export function ActionMenu({
                     minHeight: 40,
                     paddingHorizontal: 9,
                     borderRadius: radius.button,
+                    borderCurve: 'continuous',
                     backgroundColor: pressed ? colors.control : 'transparent',
                     opacity: item.disabled ? 0.4 : 1,
                   })}

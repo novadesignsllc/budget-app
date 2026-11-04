@@ -182,6 +182,7 @@ function Tile({
             width: 36,
             height: 36,
             borderRadius: 10,
+            borderCurve: 'continuous',
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: onCard ? softOf(colors.negativeStrong, 0.14) : colors.control,

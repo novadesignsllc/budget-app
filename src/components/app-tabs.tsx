@@ -1,14 +1,6 @@
-import { useSegments } from 'expo-router';
 import { TabList, TabSlot, TabTrigger, Tabs, type TabTriggerSlotProps } from 'expo-router/ui';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
-import { useEffect, useMemo } from 'react';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { useMemo } from 'react';
 
 import { Sidebar } from '@/desktop/sidebar';
 import { useProfiles } from '@/sync/profiles';
@@ -122,21 +114,6 @@ function Dock() {
   );
 }
 
-/** A short fade when you switch tabs. Opacity only, nothing moves. */
-function useTabFade() {
-  const tab = useSegments()[1];
-  const reduceMotion = useReducedMotion();
-  const progress = useSharedValue(1);
-  useEffect(() => {
-    if (reduceMotion) return;
-    progress.value = 0;
-    progress.value = withTiming(1, { duration: 220, easing: Easing.inOut(Easing.quad) });
-  }, [tab, reduceMotion, progress]);
-  return useAnimatedStyle(() => ({
-    opacity: 0.35 + progress.value * 0.65,
-  }));
-}
-
 /** While another profile's data loads, a quiet cover so the old one never shows under the new name. */
 function SwitchingCover() {
   const colors = useColors();
@@ -164,14 +141,12 @@ export function AppTabs() {
   const colors = useColors();
   const desktop = useIsDesktop();
   const switching = useProfiles((s) => s.switching);
-  const fade = useTabFade();
   return (
     <Tabs style={{ flex: 1, flexDirection: desktop ? 'row' : 'column', backgroundColor: colors.background }}>
       {desktop ? <Sidebar tabs={TABS} /> : null}
       <View style={{ flex: 1 }}>
-        <Animated.View style={[{ flex: 1 }, fade]}>
-          <TabSlot style={{ flex: 1 }} />
-        </Animated.View>
+        {/* Switching tabs is instant, like the system's own tab bars. */}
+        <TabSlot style={{ flex: 1 }} />
         {switching && <SwitchingCover />}
         {desktop ? <ProfileBar /> : null}
       </View>

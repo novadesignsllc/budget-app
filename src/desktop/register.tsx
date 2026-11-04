@@ -5,7 +5,7 @@ import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
 import { formatMoney } from '@/domain/money';
 import type { Account, Envelope, Transaction } from '@/domain/types';
-import { flagHues, spacing, useColors } from '@/theme';
+import { flagHues, radius, spacing, useColors } from '@/theme';
 
 import { shortDate } from './budget';
 
@@ -113,7 +113,8 @@ export function RegisterRow({
               style={{
                 width: 18,
                 height: 18,
-                borderRadius: 5,
+                borderRadius: radius.tiny,
+                borderCurve: 'continuous',
                 borderWidth: select.selected ? 0 : 1.5,
                 borderColor: colors.borderStrong,
                 backgroundColor: select.selected ? colors.accent : colors.surface,

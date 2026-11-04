@@ -255,6 +255,7 @@ export function Budget() {
               paddingHorizontal: spacing.lg,
               paddingVertical: spacing.md,
               borderRadius: radius.card,
+              borderCurve: 'continuous',
               backgroundColor: colors.textSecondary,
             }}
           >
@@ -269,6 +270,7 @@ export function Budget() {
                 height: 30,
                 paddingHorizontal: spacing.md,
                 borderRadius: radius.button,
+                borderCurve: 'continuous',
                 justifyContent: 'center',
                 backgroundColor: colors.surface,
                 opacity: pressed ? 0.8 : 1,
@@ -290,6 +292,7 @@ export function Budget() {
               paddingHorizontal: spacing.lg,
               paddingVertical: spacing.md,
               borderRadius: radius.card,
+              borderCurve: 'continuous',
               backgroundColor: colors.accentSoft,
             }}
           >
@@ -306,6 +309,7 @@ export function Budget() {
                 height: 30,
                 paddingHorizontal: spacing.md,
                 borderRadius: radius.button,
+                borderCurve: 'continuous',
                 justifyContent: 'center',
                 backgroundColor: colors.surface,
                 opacity: pressed ? 0.8 : 1,
@@ -636,7 +640,8 @@ export function LeftCell({
           width,
           height: 24,
           paddingHorizontal: COL_PAD,
-          borderRadius: 6,
+          borderRadius: radius.chip,
+          borderCurve: 'continuous',
           justifyContent: 'center',
           backgroundColor: pill?.bg ?? (open || pressed ? colors.control : 'transparent'),
           opacity: pressed && pill ? 0.7 : 1,
@@ -941,6 +946,7 @@ function ControlRow({
           width: 28,
           height: 28,
           borderRadius: 8,
+          borderCurve: 'continuous',
           backgroundColor: soft,
           alignItems: 'center',
           justifyContent: 'center',
@@ -1022,6 +1028,7 @@ function SplitToAssign({
     <View
       style={{
         borderRadius: radius.card,
+        borderCurve: 'continuous',
         borderWidth: 1,
         borderColor: colors.border,
         overflow: 'hidden',
@@ -1061,6 +1068,7 @@ function SplitToAssign({
                 style={({ pressed }) => ({
                   height: 40,
                   borderRadius: radius.control,
+                  borderCurve: 'continuous',
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: colors.accent,
@@ -1078,6 +1086,7 @@ function SplitToAssign({
               style={({ pressed }) => ({
                 height: 40,
                 borderRadius: radius.control,
+                borderCurve: 'continuous',
                 borderWidth: 1,
                 borderColor: colors.borderStrong,
                 alignItems: 'center',
@@ -1114,6 +1123,7 @@ function LeftToAssign({ cents, past }: { cents: number; past: boolean }) {
           gap: spacing.sm,
           padding: spacing.lg,
           borderRadius: radius.card,
+          borderCurve: 'continuous',
           borderWidth: 1,
           borderColor: colors.border,
           backgroundColor: colors.neutralSoft,
@@ -1148,6 +1158,7 @@ function LeftToAssign({ cents, past }: { cents: number; past: boolean }) {
         gap: 2,
         padding: spacing.lg,
         borderRadius: radius.card,
+        borderCurve: 'continuous',
         borderWidth: 1,
         borderColor: past ? colors.border : over ? colors.negativeBorder : colors.positiveBorder,
         backgroundColor: past ? colors.neutralSoft : over ? colors.negativeSoft : colors.okSoft,

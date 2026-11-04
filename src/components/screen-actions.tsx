@@ -73,6 +73,7 @@ export function ActionButton({
         minWidth: 34,
         paddingHorizontal: label ? spacing.md - 1 : 0,
         borderRadius: radius.button,
+        borderCurve: 'continuous',
         borderWidth: variant === 'outline' ? 1 : 0,
         borderColor: colors.borderStrong,
         backgroundColor: bg,

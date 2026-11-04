@@ -7,7 +7,7 @@ import { isDebtAccount, type Account, type Envelope, type Transaction } from '@/
 import { useStore } from '@/store';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
-import { flagHues, spacing, useColors } from '@/theme';
+import { flagHues, radius, spacing, useColors } from '@/theme';
 
 import { Icon } from './icon';
 import { Text } from './text';
@@ -123,7 +123,8 @@ export function TransactionRow({
             width: 18,
             height: 18,
             marginRight: 2,
-            borderRadius: 5,
+            borderRadius: radius.tiny,
+            borderCurve: 'continuous',
             borderWidth: select.selected ? 0 : 1.5,
             borderColor: colors.borderStrong,
             backgroundColor: select.selected ? colors.accent : colors.surface,

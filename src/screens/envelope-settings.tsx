@@ -19,7 +19,7 @@ import { GROUPS, type BudgetGroup, type TargetKind } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
 import { router } from 'expo-router';
-import { groupColor, spacing, useColors } from '@/theme';
+import { groupColor, radius, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
@@ -57,7 +57,7 @@ export function EmojiHeader({ emoji, onChange }: { emoji: string; onChange: (emo
               style={{
                 width: 64,
                 height: 64,
-                borderRadius: 18,
+                borderRadius: radius.card,
                 borderCurve: 'continuous',
                 borderWidth: 1,
                 borderColor: open ? colors.accent : colors.borderStrong,

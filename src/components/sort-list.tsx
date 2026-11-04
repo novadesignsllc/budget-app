@@ -168,6 +168,7 @@ export function SortList({
                 style={{
                   height: blockHeight(g),
                   borderRadius: radius.card,
+                  borderCurve: 'continuous',
                   borderWidth: 1.5,
                   borderStyle: 'dashed',
                   borderColor: colors.accent,
@@ -182,6 +183,7 @@ export function SortList({
               layout={MOTION}
               style={{
                 borderRadius: radius.card,
+                borderCurve: 'continuous',
                 borderWidth: EDGE,
                 borderColor: colors.border,
                 backgroundColor: colors.surface,
@@ -204,6 +206,7 @@ export function SortList({
                         style={{
                           flex: 1,
                           borderRadius: 10,
+                          borderCurve: 'continuous',
                           borderWidth: 1.5,
                           borderStyle: 'dashed',
                           borderColor: colors.accent,

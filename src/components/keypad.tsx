@@ -196,7 +196,7 @@ function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
         height: 52,
         alignItems: 'center',
         justifyContent: 'center',
-        borderRadius: 12,
+        borderRadius: radius.control,
         borderCurve: 'continuous',
         backgroundColor: pressed ? colors.control : 'transparent',
       })}
@@ -245,6 +245,7 @@ function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
           borderWidth: 1,
           borderColor: colors.separator,
           borderRadius: radius.card,
+          borderCurve: 'continuous',
         },
       ]}
     >
@@ -354,7 +355,7 @@ function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
             onPress={done}
             style={({ pressed }) => ({
               flex: 1,
-              borderRadius: 22,
+              borderRadius: radius.control,
               borderCurve: 'continuous',
               alignItems: 'center',
               justifyContent: 'center',

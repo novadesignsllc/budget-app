@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { textCents } from '@/domain/keypad';
 import { formatDollars } from '@/domain/money';
 import type { Cents } from '@/domain/types';
-import { type as typeScale, useColors } from '@/theme';
+import { type as typeScale, radius, useColors } from '@/theme';
 
 import { useIsDesktop } from './dock';
 import { Caret, useKeypadField, type KeypadAction } from './keypad';
@@ -72,7 +72,8 @@ export function InlineAmount({
     height: 24,
     ...(exact ? {} : align === 'right' ? { marginRight: -PAD } : { marginLeft: -PAD }),
     paddingHorizontal: PAD - 1.5,
-    borderRadius: 6,
+    borderRadius: radius.chip,
+    borderCurve: 'continuous',
     borderWidth: 1.5,
     flexDirection: 'row',
     alignItems: 'center',

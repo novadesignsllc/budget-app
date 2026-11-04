@@ -24,6 +24,7 @@ export function RangePills<T extends string | number>({
         padding: 2,
         gap: 2,
         borderRadius: radius.button,
+        borderCurve: 'continuous',
         backgroundColor: colors.control,
       }}
     >
@@ -39,6 +40,7 @@ export function RangePills<T extends string | number>({
               height: 26,
               paddingHorizontal: 10,
               borderRadius: radius.button - 2,
+              borderCurve: 'continuous',
               justifyContent: 'center',
               backgroundColor: on ? colors.surface : 'transparent',
             }}

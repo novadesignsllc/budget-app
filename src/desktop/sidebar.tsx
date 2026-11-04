@@ -10,7 +10,7 @@ import { Text } from '@/components/text';
 import { formatMoney } from '@/domain/money';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useSyncStatus } from '@/sync/status';
-import { softOf, spacing, useColors } from '@/theme';
+import { radius, softOf, spacing, useColors } from '@/theme';
 
 import { focusSearch, Kbd, SlipMark, usePageKeys } from './ui';
 
@@ -57,7 +57,8 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
             justifyContent: 'space-between',
             height: 38,
             paddingHorizontal: 12,
-            borderRadius: 9,
+            borderRadius: radius.button,
+            borderCurve: 'continuous',
             backgroundColor: colors.accent,
             opacity: pressed ? 0.85 : 1,
           })}
@@ -106,6 +107,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
                         paddingHorizontal: 10,
                         paddingVertical: 6,
                         borderRadius: 8,
+                        borderCurve: 'continuous',
                         backgroundColor: pathname === `/${g.debt ? 'debt' : 'account'}/${a.id}` ? colors.accentSoft : 'transparent',
                       }}
                     >
@@ -148,6 +150,7 @@ function SideItem({ label, shortcut, isFocused: tabFocused, ref, ...props }: Ite
         height: 36,
         paddingHorizontal: 10,
         borderRadius: 8,
+        borderCurve: 'continuous',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',

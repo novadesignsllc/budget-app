@@ -14,7 +14,7 @@ import type { Account } from '@/domain/types';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { axisMoney, debtColor, endAtPayoff, horizonTicks, payoffLabel } from '@/screens/debt';
 import { useStore } from '@/store';
-import { spacing, useColors } from '@/theme';
+import { radius, spacing, useColors } from '@/theme';
 
 import { Label } from './register';
 import { DButton, DCard, DPage, PageTitle, Spacer } from './ui';
@@ -245,7 +245,7 @@ export function DesktopDebt() {
                 {i + 1}
               </Text>
               <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-                <View style={{ width: 28, height: 18, borderRadius: 4, backgroundColor: debtColor(debts, a.id) }} />
+                <View style={{ width: 28, height: 18, borderRadius: radius.tiny, backgroundColor: debtColor(debts, a.id) }} />
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text variant="body" weight="600" numberOfLines={1}>
                     {a.name}

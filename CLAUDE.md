@@ -7,6 +7,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - **Expo skills** in `.claude/skills/expo-*` and `eas-*`. Start with `expo-overview` for any Expo task. Use `expo-native-ui`, `expo-ui`, and `expo-design-system` for UI work, and `expo-router` for navigation.
 - **Product designer** (`.claude/agents/product-designer.md`) for any screen, component, style, or UI copy. `DESIGN.md` is the design system, and `src/theme/index.ts` holds the tokens.
 - **Humanizer** (`.claude/skills/humanizer`) for UI copy, docs, commit messages, and PR descriptions.
+- **Appllama app design skill** (`.claude/skills/appllama-app-design-skill`) as a second checklist for any screen: anti-slop counts, the corner scale, motion, navigation, states. **Anything the owner has decided overrides it** (`docs/design-principles.md`, `DESIGN.md`, memory). Known overrides: custom dropdowns instead of native pickers; our own flat header instead of the native nav bar (no liquid glass); no shadows at all; the custom keypad on phones; emoji are content on envelopes and profiles; the desktop web build follows the same rules where they make sense. The Appllama MCP isn't connected, so its "study 20+ reference screens" step doesn't apply.
 
 ## Product rules (don't break these)
 

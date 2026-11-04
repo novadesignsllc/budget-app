@@ -42,7 +42,7 @@ function Leading<T extends string>({ o }: { o: DropdownOption<T> }) {
         colors={[f.from, f.to]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={{ width: 20, height: 13, borderRadius: 3 }}
+        style={{ width: 20, height: 13, borderRadius: radius.tiny }}
       />
     );
   }
@@ -52,7 +52,8 @@ function Leading<T extends string>({ o }: { o: DropdownOption<T> }) {
         style={{
           width: 20,
           height: 13,
-          borderRadius: 3,
+          borderRadius: radius.tiny,
+          borderCurve: 'continuous',
           backgroundColor: o.swatch,
         }}
       />
@@ -212,6 +213,7 @@ export function Dropdown<T extends string>({
           height: 34,
           paddingHorizontal: spacing.sm + 2,
           borderRadius: radius.button,
+          borderCurve: 'continuous',
           borderWidth: 1,
           borderColor: open ? colors.accent : colors.borderStrong,
           backgroundColor: pressed ? colors.control : colors.surface,
@@ -237,6 +239,7 @@ export function Dropdown<T extends string>({
           height: 30,
           paddingHorizontal: 9,
           borderRadius: radius.button,
+          borderCurve: 'continuous',
           borderWidth: 1,
           borderColor: open ? colors.accent : colors.borderStrong,
           backgroundColor: pressed ? colors.fill : colors.control,
@@ -338,6 +341,7 @@ export function Dropdown<T extends string>({
                 marginBottom: 5,
                 paddingHorizontal: 9,
                 borderRadius: radius.button,
+                borderCurve: 'continuous',
                 backgroundColor: colors.control,
               }}
             >
@@ -397,6 +401,7 @@ export function Dropdown<T extends string>({
                       minHeight: o.description ? 48 : 36,
                       paddingHorizontal: 9,
                       borderRadius: radius.button,
+                      borderCurve: 'continuous',
                       backgroundColor: isSelected ? colors.accentSoft : pressed ? colors.control : 'transparent',
                       opacity: o.disabled ? 0.45 : 1,
                     })}

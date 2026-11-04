@@ -36,7 +36,7 @@ import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
 import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools } from '@/hooks/use-pools';
 import { isManagedGroup, useStore } from '@/store';
-import { groupColor, spacing, useColors } from '@/theme';
+import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary, monthName, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
@@ -528,6 +528,7 @@ function ReadyPill({ cents, past, what }: { cents: number; past: boolean; what?:
         paddingHorizontal: 14,
         paddingVertical: 6,
         borderRadius: 10,
+        borderCurve: 'continuous',
         backgroundColor: look.bg,
       }}
     >
@@ -806,6 +807,7 @@ function Inspector({
               paddingHorizontal: 12,
               paddingVertical: 9,
               borderRadius: 10,
+              borderCurve: 'continuous',
               backgroundColor: colors.background,
             }}
           >
@@ -867,7 +869,8 @@ function Inspector({
               flex: 1,
               height: 34,
               paddingHorizontal: 12,
-              borderRadius: 9,
+              borderRadius: radius.button,
+              borderCurve: 'continuous',
               borderWidth: 1,
               borderColor: open ? colors.accent : colors.borderStrong,
               backgroundColor: pressed ? colors.control : colors.surface,
@@ -907,7 +910,8 @@ function Inspector({
                   paddingHorizontal: 10,
                   borderWidth: 1.5,
                   borderColor: colors.accent,
-                  borderRadius: 9,
+                  borderRadius: radius.button,
+                  borderCurve: 'continuous',
                   backgroundColor: colors.surface,
                   fontSize: 15,
                   fontWeight: '600',
@@ -1036,6 +1040,7 @@ function MonthStep({
         width: 32,
         height: 32,
         borderRadius: 8,
+        borderCurve: 'continuous',
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: hovered && !disabled ? colors.control : 'transparent',
@@ -1108,6 +1113,7 @@ function Starters({
               height: 32,
               paddingHorizontal: 12,
               borderRadius: 8,
+              borderCurve: 'continuous',
               borderWidth: 1,
               borderColor: colors.borderStrong,
               backgroundColor: hovered ? colors.control : colors.surface,

@@ -69,7 +69,7 @@ export function NewEnvelope({ month: monthParam }: { month?: MonthKey }) {
         />
       </FormCard>
       <Button
-        title={duplicate ? 'You already have this envelope' : 'Create envelope'}
+        title={duplicate ? 'You already have this envelope' : 'Add envelope'}
         size="lg"
         disabled={!name.trim() || duplicate}
         onPress={() => {

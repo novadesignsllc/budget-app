@@ -368,7 +368,7 @@ export function SegmentRow<T extends string>({
     <FormRow label={label}>
       <View
         accessibilityRole="radiogroup"
-        style={{ flexDirection: 'row', padding: 2, gap: 2, borderRadius: 9, backgroundColor: colors.control }}
+        style={{ flexDirection: 'row', padding: 2, gap: 2, borderRadius: radius.button, backgroundColor: colors.control }}
       >
         {options.map((o) => {
           const on = o.value === value;
@@ -388,7 +388,7 @@ export function SegmentRow<T extends string>({
                 height: 30,
                 minWidth: 72,
                 paddingHorizontal: spacing.md,
-                borderRadius: 7,
+                borderRadius: radius.chip,
                 borderCurve: 'continuous',
                 alignItems: 'center',
                 justifyContent: 'center',

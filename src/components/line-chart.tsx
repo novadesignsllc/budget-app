@@ -249,6 +249,7 @@ export function LineChart({
                 minWidth: 120,
                 backgroundColor: colors.ink,
                 borderRadius: radius.button,
+                borderCurve: 'continuous',
                 paddingHorizontal: 9,
                 paddingVertical: 6,
                 gap: 2,

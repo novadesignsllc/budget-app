@@ -1,5 +1,14 @@
 import { create } from 'zustand';
 
+import {
+  nameKey,
+  planSync,
+  type BankChoice,
+  slipBalance,
+  type BankLink,
+  type BankTransaction,
+  type SyncResult,
+} from '@/domain/bank';
 import { today } from '@/domain/dates';
 import type { Strategy } from '@/domain/debt';
 import type { MonthKey } from '@/domain/months';
@@ -91,7 +100,13 @@ export type State = {
   /** Legacy payee memory, read only for migrating into `payees`. */
   merchantMemory: Record<string, string>;
   settings: Settings;
+  /** Linked banks (Plaid items). */
+  bankLinks: BankLink[];
+  /** The bank's copy of each transaction since linking. */
+  bankTransactions: BankTransaction[];
 };
+
+export type { BankChoice };
 
 export { isLocked };
 
@@ -189,6 +204,7 @@ type Actions = {
    * reconciled; an error adjustment (`fix`) is a plain transaction.
    */
   addAdjustment: (accountId: string, amount: Cents, opts?: { fix?: boolean }) => void;
+  /** Returns the pair id both halves share. */
   transfer: (input: {
     fromAccountId: string;
     toAccountId: string;
@@ -196,7 +212,23 @@ type Actions = {
     date: ISODate;
     envelopeId?: string;
     payee?: string;
-  }) => void;
+  }) => string | undefined;
+  /** Takes the lock off transactions reconciled a moment ago (Undo). They stay posted. */
+  unreconcile: (ids: string[]) => void;
+
+  /** Adds or replaces a linked bank. */
+  saveBankLink: (link: BankLink) => void;
+  updateBankLink: (id: string, patch: Partial<Omit<BankLink, 'id'>>) => void;
+  /** Forgets a bank and its copies. Your transactions stay; they just aren't linked anymore. */
+  removeBankLink: (id: string) => void;
+  /** Applies what one sync brought: new and changed bank transactions, links, balances. */
+  applyBankSync: (linkId: string, result: SyncResult) => void;
+  /** Makes a Slip transaction from a bank transaction waiting on Home. Returns its id. */
+  approveBank: (bankId: string, choice: BankChoice) => string | undefined;
+  /** Links a bank transaction to one you entered. The bank's amount wins. */
+  linkBank: (bankId: string, transactionId: string) => void;
+  /** Takes a bank transaction off Home without adding it. */
+  skipBank: (bankId: string) => void;
 
   /** Marks everything except `pendingIds` cleared and posts any difference as an adjustment. */
   reconcile: (accountId: string, bankBalance: Cents, pendingIds: string[]) => void;
@@ -241,6 +273,8 @@ export const initialState: State = {
   payees: [],
   merchantMemory: {},
   settings: defaultSettings,
+  bankLinks: [],
+  bankTransactions: [],
 };
 
 export function newId(): string {
@@ -256,6 +290,24 @@ function learnPayee(payees: Payee[], name: string, envelopeId?: string): Payee[]
   // A paycheck payee stays with Ready to assign.
   if (!envelopeId || existing.income || existing.envelopeId === envelopeId) return payees;
   return payees.map((p) => (p.id === existing.id ? { ...p, envelopeId } : p));
+}
+
+/** Remembers how the bank writes a payee, so the next one links and gets your name for it. */
+function learnBankName(payees: Payee[], payee: string, bank: Pick<BankTransaction, 'name' | 'raw'>): Payee[] {
+  const existing = findPayee(payees, payee);
+  if (!existing) return payees;
+  const keys = [...new Set([nameKey(bank.raw), nameKey(bank.name)])].filter((k) => k.length >= 3 && k !== nameKey(existing.name));
+  const known = existing.bankNames ?? [];
+  const add = keys.filter((k) => !known.includes(k));
+  if (!add.length) return payees;
+  return payees.map((p) => (p.id === existing.id ? { ...p, bankNames: [...known, ...add].slice(-8) } : p));
+}
+
+/** The name a bank transaction goes in as: your name for that payee if you've linked it before. */
+export function bankPayeeName(payees: Payee[], bank: Pick<BankTransaction, 'name' | 'raw'>): string {
+  const keys = [nameKey(bank.raw), nameKey(bank.name)];
+  const learned = payees.find((p) => p.bankNames?.some((k) => keys.includes(k)));
+  return learned?.name ?? findPayee(payees, bank.name)?.name ?? bank.name;
 }
 
 function signed(kind: NewTransaction['kind'], amount: Cents): Cents {
@@ -539,7 +591,7 @@ export const useStore = create<Store>()((set, get) => ({
     const accounts = get().accounts;
     const from = accounts.find((a) => a.id === fromAccountId);
     const to = accounts.find((a) => a.id === toAccountId);
-    if (!from || !to) return;
+    if (!from || !to) return undefined;
     const now = Date.now();
     // Paying a debt from cash always comes out of that debt's payment envelope.
     const paymentEnvelope =
@@ -576,7 +628,223 @@ export const useStore = create<Store>()((set, get) => ({
         },
       ],
     }));
+    return pair;
   },
+
+  unreconcile: (ids) =>
+    set((s) => {
+      const undo = new Set(ids);
+      return { transactions: s.transactions.map((t) => (undo.has(t.id) ? { ...t, reconciled: false } : t)) };
+    }),
+
+  saveBankLink: (link) =>
+    set((s) => ({ bankLinks: [...s.bankLinks.filter((l) => l.id !== link.id), link] })),
+
+  updateBankLink: (id, patch) =>
+    set((s) => ({ bankLinks: s.bankLinks.map((l) => (l.id === id ? { ...l, ...patch } : l)) })),
+
+  removeBankLink: (id) =>
+    set((s) => {
+      const gone = new Set(s.bankTransactions.filter((b) => b.linkId === id).map((b) => b.id));
+      return {
+        bankLinks: s.bankLinks.filter((l) => l.id !== id),
+        bankTransactions: s.bankTransactions.filter((b) => b.linkId !== id),
+        transactions: s.transactions.map((t) => {
+          if (!t.bankId || !gone.has(t.bankId)) return t;
+          const { bankId: _unlinked, ...rest } = t;
+          return rest;
+        }),
+      };
+    }),
+
+  applyBankSync: (linkId, result) =>
+    set((s) => {
+      const link = s.bankLinks.find((l) => l.id === linkId);
+      if (!link) return s;
+      const plan = planSync({
+        link,
+        result,
+        bankTransactions: s.bankTransactions.filter((b) => b.linkId === linkId),
+        transactions: s.transactions,
+        payees: s.payees,
+        now: Date.now(),
+      });
+      // Only bank transactions that changed are new objects, so sync writes just those.
+      const before = new Map(s.bankTransactions.map((b) => [b.id, b]));
+      const next = new Map(s.bankTransactions.filter((b) => b.linkId !== linkId).map((b) => [b.id, b]));
+      for (const b of plan.bankTransactions) {
+        const old = before.get(b.id);
+        next.set(b.id, old && JSON.stringify(old) === JSON.stringify(b) ? old : b);
+      }
+      let transactions = s.transactions;
+      if (plan.patches.length) {
+        const byId = new Map(plan.patches.map((p) => [p.id, p]));
+        const pairAmount = new Map<string, Cents>();
+        transactions = transactions.map((t) => {
+          const p = byId.get(t.id);
+          if (!p) return t;
+          const { bankId, cleared, amount, flag } = p;
+          const next: Transaction = { ...t };
+          if (bankId === null) delete next.bankId;
+          else if (bankId !== undefined) next.bankId = bankId;
+          if (cleared !== undefined) next.cleared = cleared;
+          if (amount !== undefined) {
+            next.amount = amount;
+            if (t.transferPairId) pairAmount.set(t.transferPairId, Math.abs(amount));
+          }
+          if (flag && !t.flagged) {
+            next.flagged = true;
+            next.flagColor = 'orange';
+          }
+          return next;
+        });
+        // The other half of a transfer keeps the same amount.
+        if (pairAmount.size) {
+          transactions = transactions.map((t) =>
+            t.transferPairId && pairAmount.has(t.transferPairId) && !byId.has(t.id)
+              ? { ...t, amount: Math.sign(t.amount) * pairAmount.get(t.transferPairId)! }
+              : t,
+          );
+        }
+      }
+      const balances = new Map(result.accounts.map((a) => [a.plaidAccountId, a]));
+      const accounts = link.accounts.map((a) => {
+        const b = balances.get(a.plaidAccountId);
+        if (!b) return a;
+        const balance = slipBalance(a.type, b.current);
+        return {
+          ...a,
+          ...(balance !== undefined ? { balance } : {}),
+          ...(b.available !== undefined ? { available: b.available } : {}),
+          ...(b.limit !== undefined ? { limit: b.limit } : {}),
+        };
+      });
+      return {
+        bankTransactions: [...next.values()],
+        transactions,
+        bankLinks: s.bankLinks.map((l) =>
+          l.id === linkId ? { ...l, accounts, cursor: result.cursor, syncedAt: Date.now(), needsLogin: false } : l,
+        ),
+      };
+    }),
+
+  approveBank: (bankId, choice) => {
+    const s = get();
+    const bank = s.bankTransactions.find((b) => b.id === bankId);
+    if (!bank || bank.status !== 'new') return undefined;
+    const account = s.accounts.find((a) => a.id === bank.accountId);
+    if (!account) return undefined;
+    const cash = isCashAccount(account);
+    const payee = bankPayeeName(s.payees, bank);
+    const cleared = !bank.pending;
+    const now = Date.now();
+    let txnId: string | undefined;
+
+    if (choice.type === 'transfer') {
+      const out = bank.amount < 0;
+      const pair = get().transfer({
+        fromAccountId: out ? bank.accountId : choice.accountId,
+        toAccountId: out ? choice.accountId : bank.accountId,
+        amount: Math.abs(bank.amount),
+        date: bank.date,
+      });
+      if (!pair) return undefined;
+      txnId = get().transactions.find((t) => t.transferPairId === pair && t.accountId === bank.accountId)?.id;
+      if (txnId) {
+        const id = txnId;
+        set((st) => ({ transactions: st.transactions.map((t) => (t.id === id ? { ...t, bankId, cleared } : t)) }));
+      }
+    } else {
+      const recurring = choice.type === 'bill' ? s.recurring.find((r) => r.id === choice.recurringId) : undefined;
+      // One id per bank transaction (or per bill and due date), so approving twice can't add it twice.
+      const id = recurring ? `${recurring.id}-${recurring.nextDue}` : `bank-${bankId}`;
+      if (s.transactions.some((t) => t.id === id)) {
+        get().linkBank(bankId, id);
+        if (recurring) get().updateRecurring(recurring.id, { nextDue: advance(recurring) });
+        return id;
+      }
+      const envelopeId =
+        choice.type === 'envelope' ? choice.envelopeId : recurring ? recurring.envelopeId : undefined;
+      const kind: TransactionKind =
+        choice.type === 'income'
+          ? 'income'
+          : choice.type === 'interest'
+            ? 'interest'
+            : choice.type === 'adjustment'
+              ? 'adjustment'
+              : cash
+                ? 'spend'
+                : 'slip';
+      const row: Transaction = {
+        id,
+        date: bank.date,
+        accountId: bank.accountId,
+        amount: bank.amount,
+        kind,
+        payee: recurring ? recurring.name : payee,
+        ...(envelopeId && kind !== 'income' ? { envelopeId } : {}),
+        ...(recurring ? { recurringId: recurring.id } : {}),
+        cleared,
+        bankId,
+        createdAt: now,
+      };
+      txnId = id;
+      set((st) => ({
+        transactions: [...st.transactions, row],
+        payees:
+          kind === 'income' || kind === 'spend' || kind === 'slip'
+            ? learnBankName(learnPayee(st.payees, row.payee, kind === 'income' ? undefined : envelopeId), row.payee, bank)
+            : st.payees,
+      }));
+      if (recurring) get().updateRecurring(recurring.id, { nextDue: advance(recurring) });
+    }
+    if (!txnId) return undefined;
+    const linked = txnId;
+    set((st) => ({
+      bankTransactions: st.bankTransactions.map((b) =>
+        b.id === bankId ? { ...b, status: 'linked' as const, transactionId: linked } : b,
+      ),
+    }));
+    return txnId;
+  },
+
+  linkBank: (bankId, transactionId) =>
+    set((s) => {
+      const bank = s.bankTransactions.find((b) => b.id === bankId);
+      const target = s.transactions.find((t) => t.id === transactionId);
+      if (!bank || !target) return s;
+      const magnitude = Math.abs(bank.amount);
+      const transactions = s.transactions.map((t) => {
+        if (t.id === transactionId) {
+          // Reconciled ones keep their amount; the lock means it was already checked.
+          return t.reconciled
+            ? { ...t, bankId }
+            : { ...t, bankId, amount: bank.amount, cleared: !bank.pending };
+        }
+        if (!target.reconciled && target.transferPairId && t.transferPairId === target.transferPairId) {
+          return { ...t, amount: Math.sign(t.amount) * magnitude };
+        }
+        return t;
+      });
+      return {
+        transactions,
+        payees: learnBankName(s.payees, target.payee, bank),
+        bankTransactions: s.bankTransactions.map((b) => {
+          if (b.id === bankId) return { ...b, status: 'linked' as const, transactionId };
+          // Anything else that was linked to it lets go.
+          if (b.transactionId === transactionId && b.status === 'linked') {
+            const { transactionId: _t, ...rest } = b;
+            return { ...rest, status: 'new' as const };
+          }
+          return b;
+        }),
+      };
+    }),
+
+  skipBank: (bankId) =>
+    set((s) => ({
+      bankTransactions: s.bankTransactions.map((b) => (b.id === bankId ? { ...b, status: 'skipped' as const } : b)),
+    })),
 
   reconcile: (accountId, bankBalance, pendingIds) => {
     const day = today();

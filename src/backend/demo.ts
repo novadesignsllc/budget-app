@@ -25,6 +25,8 @@ export function createDemoBackend(): Backend {
     createAccount: async () => {},
     sendPasswordReset: async () => {},
     signInWithApple: async () => {},
+    // The demo never talks to Slip's server, so bank sync stays off.
+    idToken: async () => null,
     // Signing out of the demo means leaving it.
     signOut: () => setDemoMode(false),
   };

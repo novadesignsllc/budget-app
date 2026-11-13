@@ -34,6 +34,8 @@ export type Backend = {
   reauthenticate(password?: string): Promise<void>;
   /** Deletes the sign-in itself (and revokes Apple's token). Call after their data is gone. */
   deleteSignIn(): Promise<void>;
+  /** A short-lived Firebase ID token proving who's signed in, for Slip's own server. Null when signed out or offline-only. */
+  idToken(): Promise<string | null>;
 
   listen(
     /** The user's id, or `{uid}/profiles/{id}` for one of their other profiles. */

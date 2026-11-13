@@ -88,6 +88,8 @@ function createNativeBackend(): Backend {
       await deleteUser(user);
     },
 
+    idToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
+
     listen: (uid, name, onDocs, onError) => {
       let delivered = false;
       return onSnapshot(

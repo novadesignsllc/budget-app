@@ -409,6 +409,8 @@ export function generateDemo(asOf: ISODate = todayISO()): State {
     payees,
     merchantMemory,
     settings: { debtStrategy: 'snowball', monthlyDebtPayment: MONTHLY_DEBT_PAYMENT },
+    bankLinks: [],
+    bankTransactions: [],
   };
 }
 
@@ -423,6 +425,8 @@ export function demoDocs(asOf?: ISODate) {
     allocations: clean(s.allocations),
     recurring: clean(s.recurring),
     payees: clean(s.payees),
+    bankLinks: [],
+    bankTransactions: [],
     meta: [{ id: 'state', settings: s.settings, merchantMemory: s.merchantMemory }],
   };
 }

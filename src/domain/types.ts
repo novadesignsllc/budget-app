@@ -129,6 +129,8 @@ export type Transaction = {
   /** Matched against the bank statement and locked. Editing it asks first. */
   reconciled?: boolean;
   recurringId?: string;
+  /** The bank's copy of this transaction (a BankTransaction id), once bank sync links them. */
+  bankId?: string;
   createdAt: number;
 };
 
@@ -139,6 +141,8 @@ export type Payee = {
   envelopeId?: string;
   /** Money from this payee always goes to Ready to assign (a paycheck), never an envelope. */
   income?: boolean;
+  /** How the bank writes this payee (`nameKey` form), learned from linking. */
+  bankNames?: string[];
 };
 
 /** Money assigned to (positive) or pulled from (negative) an envelope. */

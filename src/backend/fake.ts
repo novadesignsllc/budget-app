@@ -120,6 +120,8 @@ export function createFakeBackend(opts: { latencyMs?: number; persist?: boolean;
     async deleteSignIn() {
       return api.signOut();
     },
+    // The local test server (scripts/plaid-dev) accepts this in sandbox only.
+    idToken: async () => (user ? 'fake-token' : null),
     async signOut() {
       user = null;
       storage?.removeItem(USER);

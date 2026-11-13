@@ -87,6 +87,8 @@ function createWebBackend(): Backend {
       if (auth.currentUser) await deleteUser(auth.currentUser);
     },
 
+    idToken: async () => (auth.currentUser ? auth.currentUser.getIdToken() : null),
+
     listen: (uid, name, onDocs, onError) =>
       onSnapshot(
         collection(db, `users/${uid}/${name}`),

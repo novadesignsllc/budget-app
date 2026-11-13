@@ -32,7 +32,7 @@ export type DropdownOption<T extends string> = {
   disabled?: boolean;
 };
 
-type Variant = 'field' | 'row' | 'compact' | 'inline' | 'title';
+type Variant = 'field' | 'row' | 'compact' | 'inline' | 'title' | 'link';
 
 function Leading<T extends string>({ o }: { o: DropdownOption<T> }) {
   if (o.face !== undefined) {
@@ -163,7 +163,7 @@ export function Dropdown<T extends string>({
   const roomAbove = frame.y - 6 - 54;
   const menuWidth = Math.min(
     window.width - spacing.lg * 2,
-    Math.max(variant === 'compact' || variant === 'inline' || variant === 'title' ? 240 : frame.w, 220),
+    Math.max(variant === 'compact' || variant === 'inline' || variant === 'title' || variant === 'link' ? 240 : frame.w, 220),
   );
   const below = estimate <= roomBelow || roomBelow >= roomAbove;
   const maxHeight = Math.max(96, Math.min(360, below ? roomBelow : roomAbove));
@@ -253,6 +253,23 @@ export function Dropdown<T extends string>({
           {valueText}
         </Text>
         <Chevrons color={colors.textSecondary} size={9} />
+      </Pressable>
+    );
+  } else if (variant === 'link') {
+    // Small accent text with ⇅, for a choice inside a dense row (a bank transaction's envelope).
+    trigger = (
+      <Pressable
+        ref={triggerRef}
+        accessibilityRole="button"
+        accessibilityLabel={a11y}
+        onPress={openMenu}
+        hitSlop={{ top: 10, bottom: 10, left: 4, right: 8 }}
+        style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 3, flexShrink: 1, opacity: pressed ? 0.6 : 1 })}
+      >
+        <Text variant="caption" weight="600" color={selected ? colors.accent : colors.orange} numberOfLines={1} style={{ flexShrink: 1 }}>
+          {valueText}
+        </Text>
+        <Chevrons color={selected ? colors.accent : colors.orange} size={8} />
       </Pressable>
     );
   } else if (variant === 'title') {

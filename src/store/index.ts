@@ -229,6 +229,8 @@ type Actions = {
   linkBank: (bankId: string, transactionId: string) => void;
   /** Takes a bank transaction off Home without adding it. */
   skipBank: (bankId: string) => void;
+  /** Undo for Approve and Skip: puts a bank transaction back on Home and removes what approving added. */
+  restoreBank: (bankId: string) => void;
 
   /** Marks everything except `pendingIds` cleared and posts any difference as an adjustment. */
   reconcile: (accountId: string, bankBalance: Cents, pendingIds: string[]) => void;
@@ -845,6 +847,28 @@ export const useStore = create<Store>()((set, get) => ({
     set((s) => ({
       bankTransactions: s.bankTransactions.map((b) => (b.id === bankId ? { ...b, status: 'skipped' as const } : b)),
     })),
+
+  restoreBank: (bankId) =>
+    set((s) => {
+      const bank = s.bankTransactions.find((b) => b.id === bankId);
+      if (!bank) return s;
+      const made = bank.transactionId ? s.transactions.find((t) => t.id === bank.transactionId) : undefined;
+      // Only what approving made goes away; a transaction you entered yourself just unlinks.
+      const approved = !!made && (made.id === `bank-${bankId}` || (!!made.transferPairId && made.createdAt >= bank.createdAt));
+      const pair = approved && made?.transferPairId;
+      const transactions = approved
+        ? s.transactions.filter((t) => t.id !== made!.id && !(pair && t.transferPairId === pair))
+        : s.transactions.map((t) => {
+            if (t.id !== bank.transactionId) return t;
+            const { bankId: _unlinked, ...rest } = t;
+            return rest;
+          });
+      const { transactionId: _t, ...rest } = bank;
+      return {
+        transactions,
+        bankTransactions: s.bankTransactions.map((b) => (b.id === bankId ? { ...rest, status: 'new' as const } : b)),
+      };
+    }),
 
   reconcile: (accountId, bankBalance, pendingIds) => {
     const day = today();

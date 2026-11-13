@@ -5,6 +5,7 @@ import { Pressable, View } from 'react-native';
 import { backend, inDemo } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
 import { Text, type TextTone } from '@/components/text';
+import { BankLinksCard } from '@/components/bank-links';
 import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
 import { DarkModeRow } from '@/components/dark-mode-row';
@@ -66,6 +67,7 @@ export function DesktopSettings() {
 
         <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 320, maxWidth: 420, gap: 14 }}>
           <ProfilesCard />
+          <BankLinksCard />
           <DCard>
             <SectionTitle>Appearance</SectionTitle>
             <DarkModeRow paddingHorizontal={18} />

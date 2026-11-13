@@ -11,6 +11,7 @@ import { MiniCard } from '@/components/mini-card';
 import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
 import { ScreenTitle } from '@/components/screen-title';
+import { BankQueueCard } from '@/components/bank-queue';
 import { AssignedAheadNote, BudgetCheckCard, MonthlyCard, useAssignedAhead } from '@/components/home-cards';
 import { RangePills } from '@/components/range-pills';
 import { Text } from '@/components/text';
@@ -147,6 +148,8 @@ export function Home() {
           </Pressable>
         </Card>
       )}
+
+      <BankQueueCard />
 
       {wealth && (
         <Card padded>

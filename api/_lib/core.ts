@@ -212,7 +212,7 @@ const cents = (n: number | null | undefined) => (typeof n === 'number' ? Math.ro
 function accountOut(a: PlaidAccount): BankAccountOut {
   return {
     plaidAccountId: a.account_id,
-    name: a.official_name || a.name,
+    name: a.name || a.official_name || 'Account',
     mask: a.mask ?? undefined,
     type: a.type,
     subtype: a.subtype ?? undefined,

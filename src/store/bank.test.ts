@@ -163,3 +163,33 @@ describe('bank sync in the store', () => {
     expect(useStore.getState().transactions[0]).toMatchObject({ reconciled: false, cleared: true });
   });
 });
+
+describe('undo', () => {
+  it('puts an approved one back on Home and removes what it added', () => {
+    const { groceries } = setup();
+    useStore.getState().applyBankSync('item', result([{ id: 'k', plaidAccountId: 'pc', date: '2026-11-04', name: 'Kroger', amount: -5000, pending: false }]));
+    useStore.getState().approveBank('k', { type: 'envelope', envelopeId: groceries });
+    useStore.getState().restoreBank('k');
+    expect(useStore.getState().transactions).toHaveLength(0);
+    expect(useStore.getState().bankTransactions[0]).toMatchObject({ status: 'new' });
+    expect(useStore.getState().bankTransactions[0].transactionId).toBeUndefined();
+  });
+
+  it('unlinks, but keeps, one you entered yourself', () => {
+    const { check, groceries } = setup();
+    useStore.getState().addTransaction({ date: '2026-11-10', accountId: check, amount: 4840, kind: 'spend', payee: 'Olive Garden', envelopeId: groceries });
+    useStore.getState().applyBankSync('item', result([{ id: 'og', plaidAccountId: 'pc', date: '2026-11-11', name: 'OLIVE GARDEN', amount: -5840, pending: false }]));
+    useStore.getState().linkBank('og', useStore.getState().transactions[0].id);
+    useStore.getState().restoreBank('og');
+    expect(useStore.getState().transactions).toHaveLength(1);
+    expect(useStore.getState().transactions[0].bankId).toBeUndefined();
+  });
+
+  it('removes both halves of an approved transfer', () => {
+    const { card } = setup();
+    useStore.getState().applyBankSync('item', result([{ id: 'out', plaidAccountId: 'pc', date: '2026-11-06', name: 'AUTOPAY', amount: -25000, pending: false }]));
+    useStore.getState().approveBank('out', { type: 'transfer', accountId: card });
+    useStore.getState().restoreBank('out');
+    expect(useStore.getState().transactions).toHaveLength(0);
+  });
+});

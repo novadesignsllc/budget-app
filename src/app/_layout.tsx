@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useIsDesktop } from '@/components/dock';
+import { useBankAutoSync } from '@/bank/sync';
 import { KeypadHost } from '@/components/keypad';
 import { SyncIndicator } from '@/components/sync-indicator';
 import { ToastHost } from '@/components/toast';
@@ -20,6 +21,12 @@ const sheet = {
   sheetGrabberVisible: true,
   headerShown: false,
 } as const;
+
+/** Checks linked banks while signed in: when the data loads and whenever the app comes back. */
+function BankAutoSync() {
+  useBankAutoSync();
+  return null;
+}
 
 export default function RootLayout() {
   useSessionBootstrap();
@@ -80,12 +87,15 @@ export default function RootLayout() {
               <Stack.Screen name="statement" options={sheetStyle} />
               <Stack.Screen name="edit-recurring" options={sheetStyle} />
               <Stack.Screen name="debt-plan" options={sheetStyle} />
+              <Stack.Screen name="bank-setup" options={sheetStyle} />
+              <Stack.Screen name="bank-match" options={sheetStyle} />
             </Stack.Protected>
             <Stack.Protected guard={status !== 'signedIn'}>
               <Stack.Screen name="sign-in" options={{ headerShown: false }} />
             </Stack.Protected>
           </Stack>
         </KeypadHost>
+        {status === 'signedIn' && <BankAutoSync />}
         <SyncIndicator />
         <ToastHost />
       </ThemeProvider>

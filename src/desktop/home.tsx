@@ -23,7 +23,10 @@ import { chartCash, chartDebt, spacing, useColors } from '@/theme';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 
 import { shortDate } from './budget';
-import { DButton, DCard, DPage, PageTitle } from './ui';
+import { useLinkBank } from '@/components/bank-links';
+
+import { DesktopBankQueue } from './bank-queue';
+import { DButton, DCard, DPage, PageTitle, Spacer } from './ui';
 
 const monthShort = new Intl.DateTimeFormat('en-US', { month: 'short' });
 const monthName = new Intl.DateTimeFormat('en-US', { month: 'long' });
@@ -35,6 +38,7 @@ function monthDate(key: string) {
 
 /** Home on a computer: everything at once in a grid instead of one long column. */
 export function DesktopHome() {
+  const linkBank = useLinkBank();
   const colors = useColors();
   const ledger = useLedger();
   const { all } = useAccounts();
@@ -95,6 +99,8 @@ export function DesktopHome() {
               ? `Last day of ${monthName.format(now)}`
               : `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left in ${monthName.format(now)}`}
           </Text>
+          <Spacer />
+          <DButton label={linkBank.busy ? 'Opening…' : 'Link a bank'} onPress={() => void linkBank.start()} />
         </View>
       }
     >
@@ -108,6 +114,8 @@ export function DesktopHome() {
           </View>
         </DCard>
       )}
+
+      <DesktopBankQueue />
 
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'flex-start' }}>
         {wealth && (

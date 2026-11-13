@@ -9,13 +9,14 @@ import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
 import { flagHues, radius, spacing, useColors } from '@/theme';
 
+import { LinkedMark, StatusButton } from './bank';
 import { Icon } from './icon';
 import { Text } from './text';
 
 const month = new Intl.DateTimeFormat('en-US', { month: 'short' });
 
 /** Column widths shared by the row and its TableHeader. Put an empty-label `emoji` column after Date. */
-export const TXN_COLUMNS = { date: 36, emoji: 20, money: 72, amount: 80, check: 20 } as const;
+export const TXN_COLUMNS = { date: 36, emoji: 20, money: 72, amount: 80, check: 20, status: 28 } as const;
 /** Every row is the same height, note or not. */
 const ROW_HEIGHT = 46;
 /** The table runs a size smaller than the rest of the app so the money columns breathe. */
@@ -67,6 +68,7 @@ export function TransactionRow({
   showAccount,
   columns = 'split',
   select,
+  status,
   last,
 }: {
   t: Transaction;
@@ -77,6 +79,8 @@ export function TransactionRow({
   columns?: 'split' | 'single';
   /** Reconcile mode. */
   select?: { selected: boolean; disabled?: boolean; onToggle: () => void };
+  /** The status column (pending, posted, reconciled), on an account's register. Called to switch it. */
+  status?: () => void;
   last?: boolean;
 }) {
   const colors = useColors();
@@ -93,7 +97,8 @@ export function TransactionRow({
         ? [account.name, base].filter(Boolean).join(' · ')
         : base;
 
-  return (
+  const rowBg = done ? colors.control : slip ? colors.negativeTint : colors.surface;
+  const row = (
     <Pressable
       accessibilityRole={select ? 'checkbox' : 'button'}
       accessibilityState={select ? { checked: select.selected, disabled: select.disabled } : undefined}
@@ -111,9 +116,11 @@ export function TransactionRow({
         alignItems: 'center',
         gap: spacing.sm,
         paddingHorizontal: spacing.md,
-        borderBottomWidth: last ? 0 : 1,
-        borderBottomColor: colors.hairline,
-        backgroundColor: pressed ? colors.fill : done ? colors.control : slip ? colors.negativeTint : colors.surface,
+        // With the status column, the row's line and color belong to the wrapper.
+        ...(status
+          ? { flex: 1, paddingRight: spacing.sm }
+          : { borderBottomWidth: last ? 0 : 1, borderBottomColor: colors.hairline }),
+        backgroundColor: pressed ? colors.fill : rowBg,
         opacity: select?.disabled ? 0.55 : 1,
       })}
     >
@@ -155,6 +162,7 @@ export function TransactionRow({
             {t.payee || 'Untitled'}
           </Text>
           {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={flagHues[t.flagColor ?? 'red']} />}
+          {t.bankId && <LinkedMark size={10} />}
         </View>
         {note ? (
           <Text
@@ -197,5 +205,22 @@ export function TransactionRow({
         </Text>
       )}
     </Pressable>
+  );
+  if (!status) return row;
+  // The status button sits beside the row, not inside it, so tapping it never opens the editor.
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingRight: spacing.xs,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: colors.hairline,
+        backgroundColor: rowBg,
+      }}
+    >
+      {row}
+      <StatusButton t={t} onToggle={status} width={TXN_COLUMNS.status} height={ROW_HEIGHT} />
+    </View>
   );
 }

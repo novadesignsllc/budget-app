@@ -393,6 +393,58 @@ export function linkPreview(input: {
   return { matched, fresh, missing };
 }
 
+/**
+ * How far Slip will be from the bank once an account is linked and everything waiting on
+ * Home is approved: the bank's posted balance against your posted (and reconciled) ones,
+ * counting what links and what's new. History before `since` counts as posted. Linking
+ * posts this as one Error adjustment.
+ */
+export function linkGap(input: {
+  account: Pick<Account, 'id' | 'openingBalance'>;
+  since: ISODate;
+  plaidAccountId: string;
+  synced: SyncedTxn[];
+  transactions: Transaction[];
+  payees: Payee[];
+  bankBalance: Cents;
+  remove?: Set<string>;
+}): Cents {
+  const { account, since, plaidAccountId, payees, bankBalance } = input;
+  const mine = input.transactions
+    .filter((t) => t.accountId === account.id && !input.remove?.has(t.id))
+    .map((t) => (t.date < since && !t.reconciled ? { ...t, cleared: true } : t));
+  const preview: BankLink = {
+    id: 'preview',
+    institution: '',
+    token: '',
+    linkedAt: 0,
+    accounts: [{ plaidAccountId, name: '', type: '', accountId: account.id, since }],
+  };
+  const plan = planSync({
+    link: preview,
+    result: { added: input.synced, modified: [], removed: [] },
+    bankTransactions: [],
+    transactions: mine,
+    payees,
+    now: 0,
+  });
+  const patched = new Map(plan.patches.map((p) => [p.id, p]));
+  let posted = account.openingBalance;
+  for (const t of mine) {
+    const p = patched.get(t.id);
+    if (p?.cleared ?? (t.cleared || t.reconciled)) posted += p?.amount ?? t.amount;
+  }
+  const queued = plan.bankTransactions.filter((b) => b.status === 'new' && !b.pending).reduce((a, b) => a + b.amount, 0);
+  return bankBalance - posted - queued;
+}
+
+/** A new account's opening balance: the bank's balance before the posted transactions that come in to approve. */
+export function openingFromBank(bankBalance: Cents, synced: SyncedTxn[], plaidAccountId: string, since: ISODate): Cents {
+  return synced
+    .filter((s) => s.plaidAccountId === plaidAccountId && s.date >= since && !s.pending)
+    .reduce((a, s) => a - s.amount, bankBalance);
+}
+
 /** The start of a new account's history: a week back, so the last 7 days come in to approve. */
 export function newAccountSince(day: ISODate): ISODate {
   return addDays(day, -6);

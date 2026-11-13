@@ -9,6 +9,7 @@ import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
 import { Text, type TextTone } from '@/components/text';
+import { BankLinksCard } from '@/components/bank-links';
 import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
 import { DarkModeRow } from '@/components/dark-mode-row';
@@ -72,6 +73,8 @@ export function Settings() {
         <ScreenTitle title="Settings" />
 
         <ProfilesCard />
+
+        <BankLinksCard />
 
         <Card>
           <DarkModeRow />

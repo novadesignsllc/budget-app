@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { LinkedMark, StatusButton } from '@/components/bank';
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
 import { formatMoney } from '@/domain/money';
@@ -10,12 +11,12 @@ import { flagHues, radius, spacing, useColors } from '@/theme';
 import { shortDate } from './budget';
 
 /** Column widths, shared by the header, the entry row and every transaction. */
-export const W = { check: 22, date: 76, out: 110, in: 110 } as const;
+export const W = { check: 22, date: 76, out: 110, in: 110, status: 32 } as const;
 export const FLEX = { payee: 1.6, envelope: 1.1, account: 1, note: 1.1 } as const;
 export const GAP = 12;
 
 /** Which optional columns a register shows: an account's page drops Account, an envelope's drops Envelope. */
-export type RegisterColumns = { envelope?: boolean; account?: boolean; check?: boolean };
+export type RegisterColumns = { envelope?: boolean; account?: boolean; check?: boolean; status?: boolean };
 
 /** The column labels across the top of a register. */
 export function RegisterHeader({ columns }: { columns: RegisterColumns }) {
@@ -44,6 +45,7 @@ export function RegisterHeader({ columns }: { columns: RegisterColumns }) {
       <Label width={W.in} right>
         Inflow
       </Label>
+      {columns.status && <View style={{ width: W.status }} />}
     </View>
   );
 }
@@ -73,6 +75,7 @@ export function RegisterRow({
   envelope,
   columns,
   select,
+  status,
 }: {
   t: Transaction;
   account?: Account;
@@ -80,6 +83,8 @@ export function RegisterRow({
   envelope?: Envelope;
   columns: RegisterColumns;
   select?: { selected: boolean; disabled?: boolean; onToggle: () => void };
+  /** The status column: switches pending and posted. */
+  status?: () => void;
 }) {
   const colors = useColors();
   const done = !!t.reconciled;
@@ -87,7 +92,7 @@ export function RegisterRow({
   const ink = done ? colors.textTertiary : colors.text;
   const sub = done ? colors.textMuted : colors.textSecondary;
   const outColor = done ? colors.textTertiary : t.kind === 'slip' ? colors.negative : colors.text;
-  return (
+  const row = (
     <Pressable
       accessibilityRole={select ? 'checkbox' : 'button'}
       accessibilityState={select ? { checked: select.selected, disabled: select.disabled } : undefined}
@@ -100,8 +105,7 @@ export function RegisterRow({
         gap: GAP,
         minHeight: 40,
         paddingHorizontal: 16,
-        borderTopWidth: 1,
-        borderTopColor: colors.hairline,
+        ...(columns.status ? { flex: 1, paddingRight: 0 } : { borderTopWidth: 1, borderTopColor: colors.hairline }),
         opacity: select?.disabled ? 0.55 : 1,
         backgroundColor: hovered ? (done ? colors.rowDoneHover : colors.tableHeader) : done ? colors.rowDone : 'transparent',
       })}
@@ -154,6 +158,7 @@ export function RegisterRow({
           <Text variant="body" weight="500" color={ink} numberOfLines={1} style={{ flexShrink: 1 }}>
             {t.payee}
           </Text>
+          {t.bankId && <LinkedMark size={12} />}
         </View>
       </View>
       {columns.envelope !== false && (
@@ -181,6 +186,24 @@ export function RegisterRow({
         {t.amount > 0 ? formatMoney(t.amount) : ''}
       </Text>
     </Pressable>
+  );
+  if (!columns.status) return row;
+  // The status button sits beside the row, not inside it, so clicking it never opens the editor.
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: GAP,
+        paddingRight: 16,
+        borderTopWidth: 1,
+        borderTopColor: colors.hairline,
+        backgroundColor: done ? colors.rowDone : 'transparent',
+      }}
+    >
+      {row}
+      {status ? <StatusButton t={t} onToggle={status} width={W.status} height={36} /> : <View style={{ width: W.status }} />}
+    </View>
   );
 }
 

@@ -4,6 +4,8 @@ import {
   choiceFromKey,
   choiceKey,
   guessChoice,
+  linkGap,
+  openingFromBank,
   exactMatch,
   kindFits,
   kindFor,
@@ -270,5 +272,29 @@ describe('choices', () => {
 
   test('a paycheck goes to Ready to assign', () => {
     expect(guessChoice(bank('p', '2026-11-13', 193542, 'ACME PAYROLL', { category: 'INCOME' }), ctx())).toEqual({ type: 'income' });
+  });
+});
+
+describe('linking adds up', () => {
+  test('a gap only from history the bank disagrees with', () => {
+    const account = { id: 'check', openingBalance: 100000 };
+    const bankList = [synced('1', '2026-11-03', -5133, 'Kroger'), synced('2', '2026-11-07', -1289, 'Chick-fil-A'), synced('3', '2026-11-08', -500, 'Wawa', { pending: true })];
+    const transactions = [
+      txn('old', '2026-10-20', -20000, 'Rent'),
+      txn('a', '2026-11-03', -5133, 'Kroger'),
+      txn('b', '2026-11-04', -3705, 'Target'),
+    ];
+    // Bank: 100000 - 20000 - 5133 - 1289 = 73578 posted.
+    const gap = (bankBalance: number, remove?: Set<string>) =>
+      linkGap({ account, since: '2026-11-01', plaidAccountId: 'p-check', synced: bankList, transactions, payees: [], bankBalance, remove });
+    expect(gap(73578)).toBe(0);
+    // Target isn't posted at the bank, so deleting it changes the balance but not the posted gap.
+    expect(gap(73578, new Set(['b']))).toBe(0);
+    expect(gap(73000)).toBe(-578);
+  });
+
+  test('a new account opens so it matches once the week comes in', () => {
+    const bankList = [synced('1', '2026-11-08', -5000, 'A'), synced('2', '2026-11-09', 200000, 'Pay'), synced('3', '2026-11-10', -700, 'B', { pending: true })];
+    expect(openingFromBank(300000, bankList, 'p-check', '2026-11-07')).toBe(300000 + 5000 - 200000);
   });
 });

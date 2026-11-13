@@ -33,6 +33,7 @@ fi
 
 echo "› Checking"
 npx tsc --noEmit
+npx tsc --noEmit -p api
 npx eslint src
 npx jest --silent
 

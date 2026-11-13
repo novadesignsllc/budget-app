@@ -64,7 +64,9 @@ SF Pro. Small and dense; numbers are the only big type.
 Screens build only from these (`src/components/`):
 
 - `Card`, `CardHeader`, `CardFooterLink`, `TableHeader`, `IconTile` (card.tsx)
-- `TransactionRow` with `TXN_COLUMNS` (one dense line; slips red; checkbox in reconcile mode)
+- `TransactionRow` with `TXN_COLUMNS` (one dense line; slips red; a status column on account registers; a chain mark when linked to the bank)
+- `StatusIcon` / `StatusButton` / `LinkedMark` / `MatchDialog` (bank.tsx): the pending dash, posted check and reconciled lock share one circle; no emoji
+- `BankQueueCard` (Home's "From your bank") and `BankLinksCard` (Settings › Banks)
 - `Dropdown` (field, row, compact, inline, title variants) for every selector
 - `FilterPills` for sorts and filters only
 - `Button` (primary, ink, secondary, destructive, ghost, tinted), `Field`, `FieldLabel`, `Text`, `Money`

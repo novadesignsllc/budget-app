@@ -11,7 +11,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 
 ## Product rules (don't break these)
 
-1. Every transaction is entered by hand. No bank sync, ever.
+1. Transactions are entered by hand. Bank sync (Plaid, added 2026-11-13) is a check on them, not a replacement: the bank's copy links to one you entered (same amount within 5 days), or waits on Home for you to approve. Nothing from the bank posts without you.
 2. Credit cards are debt. Spending on a card is allowed but recorded as a **slip**: it still comes out of an envelope, the same amount moves into that card's payment envelope, and it's marked red everywhere.
 3. Envelopes always add up to real cash: `readyToAssign + sum(envelopes) === cash in checking/savings/cash`. This holds by construction in `src/domain/ledger.ts`. Never store a balance; always derive it.
 4. Every debt gets a payment envelope automatically. Paying a debt is a transfer from cash out of that envelope.
@@ -24,6 +24,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 - `src/store/`: the Zustand store. It isn't persisted itself; Firestore's on-device cache is the persistence. `sample-data.ts` is dev-only.
 - Profiles (`src/sync/profiles.ts`): up to 3 separate budgets per account. The backend's `uid` argument is really a scope: the user id for the first profile, `{uid}/profiles/{id}` for others. The accent color comes from the open profile (`useAccent` in theme); use `colors.accent`/`accentSoft`/`accentFaint`, never a hard-coded purple.
 - `src/backend/`: Firebase behind one interface. `index.ts` is React Native Firebase (iPhone), `index.web.ts` is the JS SDK with the IndexedDB cache (desktop), and `fake.ts` is an in-memory stand-in for tests and `EXPO_PUBLIC_FAKE_BACKEND=1`.
+- `src/domain/bank.ts`: bank sync rules (matching, what a sync changes, guesses, linking math), tested in `bank.test.ts`. `src/bank/` talks to Slip's server and opens Plaid's sign-in (`plaid-link.ts` native, `.web.ts` the website). `api/plaid.ts` (Vercel) is the only place with the Plaid secret: it checks the Firebase ID token and seals each bank's access token to its user (AES-GCM, `PLAID_TOKEN_KEY`); the app stores the sealed token in `bankLinks`. Vercel env: `PLAID_ENV`, `PLAID_CLIENT_ID`, `PLAID_SECRET`, `PLAID_TOKEN_KEY` (and optionally `PLAID_REDIRECT_URI`, `PLAID_ANDROID_PACKAGE` for OAuth banks). Local keys live in `~/.config/slip/plaid.env`, never in this repo (it's public).
 - `src/sync/`: `engine.ts` diffs the store against Firestore and writes only what changed, applies snapshots from other devices, and holds writes back until everything has loaded once. `status.ts` drives the bottom-left sync pill. `session.ts` follows auth.
 - `src/app/`: routes only. `(tabs)` holds Home, Transactions, Budget, Debt, Recurring, and Settings. Root-level routes are form sheets.
 - `src/screens/`: screen bodies. `src/components/`: shared UI.
@@ -33,7 +34,7 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 
 ## Sync rules
 
-- Data lives at `users/{uid}/{accounts|envelopes|transactions|allocations|recurring|payees}/{id}`, plus `users/{uid}/meta/state` (settings, plus the legacy merchant memory that migrates into payees). `firestore.rules` allows only the owner.
+- Data lives at `users/{uid}/{accounts|envelopes|transactions|allocations|recurring|payees|bankLinks|bankTransactions}/{id}`, plus `users/{uid}/meta/state` (settings, plus the legacy merchant memory that migrates into payees). `firestore.rules` allows only the owner.
 - Offline writes land in Firestore's local cache right away and upload on reconnect. On iPhone the queue is on disk, so it survives the app closing.
 - Never write to Firestore directly from a screen. Change the store; the engine syncs it.
 - Firestore bills a full re-read when a listener has been gone for more than 30 minutes. When the transaction count gets into the thousands, listen to recent months only and load older ones on demand.
@@ -53,3 +54,10 @@ A personal, debt-first, zero-based budgeting app. Expo SDK 58, Expo Router, iPho
 ## Not built yet
 
 Notifications (evening check-in, weekly reconcile, bill due), the iOS widget and Siri shortcut for quick-add, the AI fallback for messy quick-add text, and Apple and email account linking.
+
+## Bank sync, in short
+
+- Each transaction has a status: pending (dash), posted (green check, `cleared`), reconciled (lock). Bank sync sets pending/posted on linked ones; a tap switches it. Reconcile locks everything posted.
+- Exact match: same account, same amount, within 5 days. It links without asking. Close but not exact (a tip, a gas hold, a different day): Approve asks "Same as one you entered?" with Link or Add new. Copy states facts only, never guesses a reason.
+- Linking an account already in Slip keeps everything; history before the 1st counts as posted, and one Error adjustment closes any gap. A new account brings in the last 7 days to approve and opens at the matching balance.
+- Test locally against Plaid's sandbox: run `api/plaid.ts` behind a small server with `PLAID_ENV=sandbox PLAID_DEV_UID=dev-user` (sandbox only) and start the web app with `EXPO_PUBLIC_FAKE_BACKEND=1 EXPO_PUBLIC_API_URL=http://localhost:3005`.

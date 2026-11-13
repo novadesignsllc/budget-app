@@ -18,7 +18,8 @@
       "infoPlist": {
         "NSSpeechRecognitionUsageDescription": "Slip turns what you say, like “McDonald’s 10.99”, into a transaction.",
         "NSMicrophoneUsageDescription": "Slip uses the microphone so you can say a transaction instead of typing it.",
-        "NSPhotoLibraryUsageDescription": "Slip doesn’t use your photos. A library it includes can load images from the photo library, and Apple asks every app with that code to say so."
+        "NSPhotoLibraryUsageDescription": "Slip doesn’t use your photos. A library it includes can load images from the photo library, and Apple asks every app with that code to say so.",
+        "NSCameraUsageDescription": "Slip doesn’t use the camera. Plaid, which signs in to your bank, includes code that can, and Apple asks every app with that code to say so."
       },
       "runtimeVersion": {
         "policy": "fingerprint"

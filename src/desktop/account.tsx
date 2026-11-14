@@ -34,7 +34,6 @@ export function DesktopAccount({ id }: { id: string }) {
   const transactions = useStore((s) => s.transactions);
   const envelopes = useStore((s) => s.envelopes);
   const updateTransaction = useStore((s) => s.updateTransaction);
-  const moveAccount = useStore((s) => s.moveAccount);
   const bank = useBankBalance(id);
   const { ready, reconcile } = useReconcilePosted(id);
   const [limit, setLimit] = useState(PAGE);
@@ -195,21 +194,6 @@ export function DesktopAccount({ id }: { id: string }) {
 
           {debt && <DebtHeader id={id} activityTitle={false} />}
 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: 4 }}>
-            <Text variant="footnote" tone="textSecondary" style={{ flex: 1 }}>
-              Order in the sidebar
-            </Text>
-            <Pressable accessibilityRole="button" onPress={() => moveAccount(id, -1)} hitSlop={6}>
-              <Text variant="footnote" weight="600" tone="accent">
-                Move up
-              </Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => moveAccount(id, 1)} hitSlop={6}>
-              <Text variant="footnote" weight="600" tone="accent">
-                Move down
-              </Text>
-            </Pressable>
-          </View>
         </View>
       </View>
     </DPage>

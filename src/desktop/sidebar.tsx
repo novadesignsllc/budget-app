@@ -10,6 +10,7 @@ import { desktopSheetOpen } from '@/components/screen';
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
 import { formatMoney } from '@/domain/money';
+import type { Account } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
 import { useSyncStatus } from '@/sync/status';
@@ -30,7 +31,6 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
   const colors = useColors();
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
-  const pathname = usePathname();
 
   // N adds a transaction, 1–7 switch sections, / jumps to the page's search.
   usePageKeys((e) => {
@@ -103,38 +103,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
                   {formatMoney(g.rows.reduce((sum, a) => sum + (g.debt ? -1 : 1) * (ledger.balance.get(a.id) ?? 0), 0))}
                 </Text>
               </View>
-              {g.rows.map((a) => {
-                const b = ledger.balance.get(a.id) ?? 0;
-                return (
-                  <Link key={a.id} href={g.debt ? `/debt/${a.id}` : `/account/${a.id}`} asChild>
-                    <Pressable
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: spacing.sm,
-                        paddingHorizontal: 10,
-                        paddingVertical: 6,
-                        borderRadius: 8,
-                        borderCurve: 'continuous',
-                        backgroundColor: pathname === `/${g.debt ? 'debt' : 'account'}/${a.id}` ? colors.accentSoft : 'transparent',
-                      }}
-                    >
-                      <BankMark accountId={a.id} />
-                      <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
-                        {a.name}
-                      </Text>
-                      <Text
-                        variant="body"
-                        tone={!g.debt && b < 0 ? 'negative' : 'textSecondary'}
-                        style={{ fontVariant: ['tabular-nums'] }}
-                      >
-                        {formatMoney(g.debt ? -b : b)}
-                      </Text>
-                    </Pressable>
-                  </Link>
-                );
-              })}
+              <AccountRows rows={g.rows} debt={g.debt} />
             </View>
           ) : null,
         )}
@@ -294,4 +263,130 @@ function ResizeHandle() {
       }
     />
   );
+}
+
+/**
+ * One group of accounts in the sidebar. Drag a row up or down to reorder; a click without
+ * moving opens the account.
+ */
+function AccountRows({ rows, debt }: { rows: Account[]; debt: boolean }) {
+  const colors = useColors();
+  const ledger = useLedger();
+  const pathname = usePathname();
+  const reorder = useStore((s) => s.reorderAccounts);
+  const [dragOrder, setDragOrder] = useState<string[] | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const nodes = useRef(new Map<string, HTMLElement>());
+  const swallowClick = useRef(false);
+  const wired = useRef(new WeakSet<HTMLElement>());
+  const ids = dragOrder ?? rows.map((a) => a.id);
+  const byId = new Map(rows.map((a) => [a.id, a]));
+
+  // Listeners are added once per row, so they call whatever `start` is current.
+  const startRef = useRef<(id: string, e: PointerEvent) => void>(() => {});
+  startRef.current = (id: string, e: PointerEvent) => start(id, e);
+  const start = (id: string, e: PointerEvent) => {
+    if (e.button !== 0) return;
+    const startY = e.clientY;
+    let order = rows.map((a) => a.id);
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      if (!moved && Math.abs(ev.clientY - startY) < 5) return;
+      if (!moved) {
+        moved = true;
+        setDraggingId(id);
+        document.body.style.userSelect = 'none';
+      }
+      // The row goes before the first row whose middle is below the pointer.
+      const others = order.filter((x) => x !== id);
+      let at = others.length;
+      for (let i = 0; i < others.length; i++) {
+        const r = nodes.current.get(others[i])?.getBoundingClientRect();
+        if (r && ev.clientY < r.top + r.height / 2) {
+          at = i;
+          break;
+        }
+      }
+      const next = [...others.slice(0, at), id, ...others.slice(at)];
+      if (next.join() !== order.join()) {
+        order = next;
+        setDragOrder(next);
+      }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      document.body.style.userSelect = '';
+      if (moved) {
+        swallowClick.current = true;
+        if (order.join() !== rows.map((a) => a.id).join()) reorder(order);
+      }
+      setDragOrder(null);
+      setDraggingId(null);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return ids.map((id) => {
+    const a = byId.get(id);
+    if (!a) return null;
+    const b = ledger.balance.get(a.id) ?? 0;
+    const here = pathname === `/${debt ? 'debt' : 'account'}/${a.id}`;
+    return (
+      <View
+        key={a.id}
+        ref={(n) => {
+          const el = n as unknown as HTMLElement | null;
+          if (!el) return;
+          nodes.current.set(a.id, el);
+          // Each row's element gets its listeners once, however often it redraws.
+          if (wired.current.has(el)) return;
+          wired.current.add(el);
+          // Rows are links, and the browser would start dragging the link itself.
+          el.addEventListener('dragstart', (e) => e.preventDefault());
+          el.addEventListener('pointerdown', (e) => startRef.current(a.id, e), true);
+          // A drag ends with a click; it shouldn't open the account.
+          el.addEventListener(
+            'click',
+            (e) => {
+              if (!swallowClick.current) return;
+              swallowClick.current = false;
+              e.preventDefault();
+              e.stopPropagation();
+            },
+            true,
+          );
+        }}
+        style={{ opacity: draggingId === a.id ? 0.85 : 1 }}
+      >
+        <Link href={debt ? `/debt/${a.id}` : `/account/${a.id}`} asChild>
+          <Pressable
+            accessibilityHint="Drag to reorder"
+            // A plain style object: a link row ignores a style function.
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: spacing.sm,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+              borderCurve: 'continuous',
+              backgroundColor: draggingId === a.id ? colors.accentFaint : here ? colors.accentSoft : 'transparent',
+              ...(draggingId === a.id ? { borderWidth: 1, borderColor: colors.accent, paddingHorizontal: 9, paddingVertical: 5 } : {}),
+            }}
+          >
+            <BankMark accountId={a.id} />
+            <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
+              {a.name}
+            </Text>
+            <Text variant="body" tone={!debt && b < 0 ? 'negative' : 'textSecondary'} style={{ fontVariant: ['tabular-nums'] }}>
+              {formatMoney(debt ? -b : b)}
+            </Text>
+          </Pressable>
+        </Link>
+      </View>
+    );
+  });
 }

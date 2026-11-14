@@ -287,38 +287,41 @@ export function DesktopBudget() {
             <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />
           )}
           <Spacer />
-          <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={170} />
-          <DButton
-            label="Auto-assign"
-            icon={{ sf: 'bolt.fill', md: 'bolt' }}
-            disabled={!gaps.some((g) => readyFor(envelopeById.get(g.envelopeId) ?? { group: '' }) >= 100)}
-            onPress={() =>
-              fill(
-                orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
-                `Auto-assigned ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
-              )
-            }
-          />
-          <DButton
-            label="Sort"
-            icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
-            onPress={() =>
-              setSorting(
-                groups.map((g) => ({
-                  name: g.name,
-                  color: groupColor(g.name),
-                  locked: isManagedGroup(g.name),
-                  items: g.items.map((e) => ({ id: e.id, name: e.name })),
-                })),
-              )
-            }
-          />
-          <DButton
-            label="Envelope"
-            icon={{ sf: 'plus', md: 'add' }}
-            accessibilityLabel="New envelope"
-            onPress={() => router.push({ pathname: '/new-envelope', params: { month } })}
-          />
+          {/* The tools stay together: if the header runs out of room they move down as one row. */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginLeft: 'auto' }}>
+            <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={170} />
+            <DButton
+              label="Auto-assign"
+              icon={{ sf: 'bolt.fill', md: 'bolt' }}
+              disabled={!gaps.some((g) => readyFor(envelopeById.get(g.envelopeId) ?? { group: '' }) >= 100)}
+              onPress={() =>
+                fill(
+                  orderedGaps.map((g) => ({ envelopeId: g.envelopeId, amount: g.need })),
+                  `Auto-assigned ${gaps.length} ${gaps.length === 1 ? 'envelope' : 'envelopes'}`,
+                )
+              }
+            />
+            <DButton
+              label="Sort"
+              icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
+              onPress={() =>
+                setSorting(
+                  groups.map((g) => ({
+                    name: g.name,
+                    color: groupColor(g.name),
+                    locked: isManagedGroup(g.name),
+                    items: g.items.map((e) => ({ id: e.id, name: e.name })),
+                  })),
+                )
+              }
+            />
+            <DButton
+              label="Envelope"
+              icon={{ sf: 'plus', md: 'add' }}
+              accessibilityLabel="New envelope"
+              onPress={() => router.push({ pathname: '/new-envelope', params: { month } })}
+            />
+          </View>
         </>
       }
     >

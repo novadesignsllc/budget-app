@@ -119,7 +119,15 @@ export function PayeesCard({
 
   const sorted = useMemo(() => [...payees].sort((a, b) => a.name.localeCompare(b.name)), [payees]);
   const q = searching ? query.trim().toLowerCase() : '';
-  const matches = q ? sorted.filter((p) => p.name.toLowerCase().includes(q)) : sorted;
+  // Search finds a payee by its own name or by how the bank writes it.
+  const matches = q
+    ? sorted.filter(
+        (p) =>
+          p.name.toLowerCase().includes(q) ||
+          Object.values(p.bankLabels ?? {}).some((l) => l.toLowerCase().includes(q)) ||
+          (p.bankNames ?? []).some((k) => k.includes(q.replace(/[^a-z0-9]/g, ''))),
+      )
+    : sorted;
   const shown = q || expanded ? matches : matches.slice(0, PREVIEW);
 
   const submitNew = () => {
@@ -176,23 +184,26 @@ export function PayeesCard({
                   backgroundColor: confirming ? colors.negativeTint : colors.surface,
                 }}
               >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={p.name}
-                  accessibilityHint="Long-press to delete"
-                  accessibilityActions={[{ name: 'delete', label: 'Delete payee' }]}
-                  onAccessibilityAction={(e) => e.nativeEvent.actionName === 'delete' && setConfirm(p.id)}
-                  onLongPress={() => {
-                    haptic('warning');
-                    setConfirm(p.id);
-                  }}
-                  onPress={() => setConfirm(null)}
-                  style={{ flex: 1, minHeight: 30, justifyContent: 'center' }}
-                >
-                  <Text variant="body" weight="500" numberOfLines={1}>
-                    {p.name}
-                  </Text>
-                </Pressable>
+                <View style={{ flex: 1, minWidth: 0, paddingVertical: 2 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={p.name}
+                    accessibilityHint="Long-press to delete"
+                    accessibilityActions={[{ name: 'delete', label: 'Delete payee' }]}
+                    onAccessibilityAction={(e) => e.nativeEvent.actionName === 'delete' && setConfirm(p.id)}
+                    onLongPress={() => {
+                      haptic('warning');
+                      setConfirm(p.id);
+                    }}
+                    onPress={() => setConfirm(null)}
+                    style={{ minHeight: 26, justifyContent: 'center' }}
+                  >
+                    <Text variant="body" weight="500" numberOfLines={1}>
+                      {p.name}
+                    </Text>
+                  </Pressable>
+                  <BankNames payeeId={p.id} names={p.bankNames ?? []} labels={p.bankLabels ?? {}} />
+                </View>
                 {confirming ? (
                   <View style={{ width: ENVELOPE_COLUMN, flexDirection: 'row', gap: 6, justifyContent: 'flex-end' }}>
                     <Button title="Cancel" size="sm" variant="secondary" onPress={() => setConfirm(null)} />
@@ -231,5 +242,83 @@ export function PayeesCard({
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * How the bank writes this payee: each name comes in as this payee from now on. Remove
+ * one with its ×, or add one the bank uses that Slip hasn't seen linked yet.
+ */
+function BankNames({ payeeId, names, labels }: { payeeId: string; names: string[]; labels: Record<string, string> }) {
+  const colors = useColors();
+  const addBankName = useStore((s) => s.addBankName);
+  const removeBankName = useStore((s) => s.removeBankName);
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState('');
+  const submit = () => {
+    if (text.trim()) addBankName(payeeId, text);
+    setText('');
+    setAdding(false);
+  };
+  return (
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4, marginTop: names.length || adding ? 3 : 0 }}>
+      {names.map((k) => (
+        <View
+          key={k}
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 3,
+            height: 20,
+            paddingLeft: 6,
+            paddingRight: 2,
+            borderRadius: radius.chip,
+            backgroundColor: colors.control,
+          }}
+        >
+          <Text variant="caption" tone="textSecondary" numberOfLines={1} style={{ maxWidth: 220 }}>
+            {labels[k] ?? k}
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Stop matching ${labels[k] ?? k}`}
+            hitSlop={6}
+            onPress={() => removeBankName(payeeId, k)}
+            style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Icon sf="xmark" md="close" size={8} color={colors.textTertiary} weight="bold" />
+          </Pressable>
+        </View>
+      ))}
+      {adding ? (
+        <TextInput
+          autoFocus
+          value={text}
+          onChangeText={setText}
+          onSubmitEditing={submit}
+          onBlur={submit}
+          placeholder="Name as the bank writes it"
+          placeholderTextColor={colors.placeholder}
+          style={[
+            typeScale.caption,
+            {
+              height: 22,
+              minWidth: 180,
+              paddingHorizontal: 6,
+              borderRadius: radius.chip,
+              borderWidth: 1,
+              borderColor: colors.accent,
+              color: colors.text,
+            },
+          ]}
+        />
+      ) : (
+        <Pressable accessibilityRole="button" hitSlop={6} onPress={() => setAdding(true)}>
+          <Text variant="caption" weight="600" tone="accent">
+            + Bank name
+          </Text>
+        </Pressable>
+      )}
+    </View>
   );
 }

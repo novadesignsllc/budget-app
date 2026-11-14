@@ -273,6 +273,9 @@ type Actions = {
   renamePayee: (id: string, name: string) => void;
   deletePayee: (id: string) => void;
   setPayeeEnvelope: (id: string, envelopeId: string | undefined) => void;
+  /** Bank text that should come in as this payee (and only this one). */
+  addBankName: (id: string, text: string) => void;
+  removeBankName: (id: string, key: string) => void;
   /** Money from this payee always goes to Ready to assign. */
   setPayeeIncome: (id: string) => void;
   /**
@@ -335,11 +338,23 @@ function learnPayee(payees: Payee[], name: string, envelopeId?: string): Payee[]
 function learnBankName(payees: Payee[], payee: string, bank: Pick<BankTransaction, 'name' | 'raw'>): Payee[] {
   const existing = findPayee(payees, payee);
   if (!existing) return payees;
-  const keys = [...new Set([nameKey(bank.raw), nameKey(bank.name)])].filter((k) => k.length >= 3 && k !== nameKey(existing.name));
+  const own = nameKey(existing.name);
+  const found = new Map<string, string>();
+  for (const text of [bank.raw, bank.name]) {
+    const k = nameKey(text);
+    if (k.length >= 3 && k !== own && !found.has(k)) found.set(k, text);
+  }
   const known = existing.bankNames ?? [];
-  const add = keys.filter((k) => !known.includes(k));
+  const add = [...found.keys()].filter((k) => !known.includes(k));
   if (!add.length) return payees;
-  return payees.map((p) => (p.id === existing.id ? { ...p, bankNames: [...known, ...add].slice(-8) } : p));
+  const labels = { ...existing.bankLabels };
+  for (const k of add) labels[k] = found.get(k)!;
+  const bankNames = [...known, ...add].slice(-12);
+  return payees.map((p) =>
+    p.id === existing.id
+      ? { ...p, bankNames, bankLabels: Object.fromEntries(Object.entries(labels).filter(([k]) => bankNames.includes(k))) }
+      : p,
+  );
 }
 
 /** The name a bank transaction goes in as: your name for that payee if you've linked it before. */
@@ -1097,6 +1112,33 @@ export const useStore = create<Store>()((set, get) => ({
 
   setPayeeEnvelope: (id, envelopeId) =>
     set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId, income: false } : p)) })),
+
+  addBankName: (id, text) =>
+    set((s) => {
+      const key = nameKey(text);
+      if (key.length < 3) return s;
+      return {
+        payees: s.payees.map((p) => {
+          if (p.id === id) {
+            const bankNames = [...(p.bankNames ?? []).filter((k) => k !== key), key];
+            return { ...p, bankNames, bankLabels: { ...p.bankLabels, [key]: text.trim() } };
+          }
+          // A bank name goes to one payee only.
+          if (!p.bankNames?.includes(key)) return p;
+          const { [key]: _gone, ...labels } = p.bankLabels ?? {};
+          return { ...p, bankNames: p.bankNames.filter((k) => k !== key), bankLabels: labels };
+        }),
+      };
+    }),
+
+  removeBankName: (id, key) =>
+    set((s) => ({
+      payees: s.payees.map((p) => {
+        if (p.id !== id) return p;
+        const { [key]: _gone, ...labels } = p.bankLabels ?? {};
+        return { ...p, bankNames: (p.bankNames ?? []).filter((k) => k !== key), bankLabels: labels };
+      }),
+    })),
 
   setPayeeIncome: (id) =>
     set((s) => ({ payees: s.payees.map((p) => (p.id === id ? { ...p, envelopeId: undefined, income: true } : p)) })),

@@ -143,6 +143,8 @@ export type Payee = {
   income?: boolean;
   /** How the bank writes this payee (`nameKey` form), learned from linking. */
   bankNames?: string[];
+  /** The bank's own text for each of `bankNames`, for showing in Settings. */
+  bankLabels?: Record<string, string>;
 };
 
 /** Money assigned to (positive) or pulled from (negative) an envelope. */

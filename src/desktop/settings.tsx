@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useRef, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View } from 'react-native';
 
 import { backend, inDemo } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
@@ -32,15 +32,10 @@ const SHORTCUTS: [string, string][] = [
   ['Esc', 'Cancel typing, or close a form'],
 ];
 
-const SECTIONS = ['Banks', 'Payees', 'Profiles', 'Appearance', 'Account', 'Shortcuts', 'Start over'] as const;
-type Section = (typeof SECTIONS)[number];
+type Section = 'Banks' | 'Payees' | 'Profiles' | 'Appearance' | 'Account' | 'Shortcuts' | 'Start over';
 
-/** Settings on a computer: a short section list on the left, plain sections on the right. */
+/** Settings on a computer: one scrolling column of plain sections. */
 export function DesktopSettings() {
-  const colors = useColors();
-  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
-  const offsets = useRef<Partial<Record<Section, number>>>({});
-  const [current, setCurrent] = useState<Section>('Banks');
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
   const user = useSession((s) => s.user);
@@ -49,7 +44,7 @@ export function DesktopSettings() {
   const profileCount = useProfiles((s) => s.list.length);
 
   const section = (name: Section, children: React.ReactNode, actions?: React.ReactNode, detail?: string) => (
-    <View key={name} onLayout={(e) => (offsets.current[name] = e.nativeEvent.layout.y)} style={{ gap: 10 }}>
+    <View key={name} style={{ gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 30 }}>
         <Text variant="section" weight="700" accessibilityRole="header" style={{ flex: 1 }}>
           {name}
@@ -69,40 +64,9 @@ export function DesktopSettings() {
     <DPage
       title="Settings"
       header={<PageTitle>Settings</PageTitle>}
-      scrollRef={scroll}
-      onScroll={(e) => {
-        const y = e.nativeEvent.contentOffset.y + 40;
-        let at: Section = 'Banks';
-        for (const s of SECTIONS) if ((offsets.current[s] ?? Infinity) <= y) at = s;
-        if (at !== current) setCurrent(at);
-      }}
-      scrollEventThrottle={64}
     >
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 32 }}>
-        <View accessibilityRole="menu" style={{ width: 160, gap: 2 }}>
-          {SECTIONS.map((s) => (
-            <Pressable
-              key={s}
-              accessibilityRole="link"
-              onPress={() => {
-                setCurrent(s);
-                scroll.current?.scrollTo({ y: Math.max(0, (offsets.current[s] ?? 0) - 4), animated: true });
-              }}
-              style={({ hovered }: { hovered?: boolean }) => ({
-                paddingHorizontal: 10,
-                paddingVertical: 6,
-                borderRadius: 8,
-                backgroundColor: current === s ? colors.fill : hovered ? colors.control : 'transparent',
-              })}
-            >
-              <Text variant="callout" weight={current === s ? '600' : '400'} tone={current === s ? 'text' : 'textSecondary'}>
-                {s}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 520, maxWidth: 760, minWidth: 0, gap: 28 }}>
+      <View style={{ width: '100%', maxWidth: 760, gap: 28 }}>
+        <View style={{ gap: 28 }}>
           <BanksSection section={section} />
 
           {section(

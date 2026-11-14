@@ -218,6 +218,15 @@ type Actions = {
     },
   ) => void;
   deleteTransaction: (id: string) => void;
+  /**
+   * Saves a transaction edited in place (the desktop register): the amount is signed, so
+   * it can switch between outflow and inflow. `envelope` 'income' means Ready to assign.
+   * Transfers, interest and adjustments keep their kind; only their details change.
+   */
+  editTransaction: (
+    id: string,
+    fields: { date: ISODate; payee: string; memo: string; amount: Cents; envelope?: string | 'income' },
+  ) => void;
   /** Sets a flag color, or clears the flag with null. */
   setFlag: (id: string, flag: FlagColor | null) => void;
   /**
@@ -597,6 +606,38 @@ export const useStore = create<Store>()((set, get) => ({
         payees: patch.envelopeId || patch.payee ? learnPayee(s.payees, updated.payee, patch.envelopeId) : s.payees,
       };
     }),
+
+  editTransaction: (id, f) => {
+    const s = get();
+    const t = s.transactions.find((x) => x.id === id);
+    if (!t || !f.amount) return;
+    if (t.kind !== 'spend' && t.kind !== 'slip' && t.kind !== 'income') {
+      get().updateTransaction(id, { date: f.date, payee: f.payee.trim() || t.payee, memo: f.memo.trim() || undefined, amount: Math.abs(f.amount) });
+      return;
+    }
+    const account = s.accounts.find((a) => a.id === t.accountId);
+    const cash = !!account && isCashAccount(account);
+    const income = f.amount > 0 && cash && f.envelope === 'income';
+    const envelopeId = income ? undefined : f.envelope && f.envelope !== 'income' ? f.envelope : t.envelopeId;
+    const kind: TransactionKind = income ? 'income' : cash ? 'spend' : 'slip';
+    set((st) => {
+      const transactions = st.transactions.map((x) => {
+        if (x.id !== id) return x;
+        const { envelopeId: _e, memo: _m, ...rest } = x;
+        return {
+          ...rest,
+          date: f.date,
+          payee: f.payee.trim() || x.payee,
+          amount: f.amount,
+          kind,
+          ...(envelopeId ? { envelopeId } : {}),
+          ...(f.memo.trim() ? { memo: f.memo.trim() } : {}),
+        };
+      });
+      const updated = transactions.find((x) => x.id === id)!;
+      return { transactions, payees: learnPayee(st.payees, updated.payee, income ? undefined : envelopeId) };
+    });
+  },
 
   deleteTransaction: (id) =>
     set((s) => {

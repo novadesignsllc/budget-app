@@ -314,3 +314,28 @@ describe('bill targets', () => {
     expect(Object.values(e.targets!)).toEqual([6600]);
   });
 });
+
+describe('editing in place', () => {
+  it('saves every field, and an outflow can become income', () => {
+    const { account, groceries } = setup();
+    useStore.getState().addTransaction({ date: '2026-11-02', accountId: account, amount: 1000, kind: 'spend', payee: 'Kroger', envelopeId: groceries });
+    const id = useStore.getState().transactions[0].id;
+    useStore.getState().editTransaction(id, { date: '2026-11-03', payee: 'Kroger 2', memo: 'eggs', amount: -1234, envelope: groceries });
+    expect(useStore.getState().transactions[0]).toMatchObject({ date: '2026-11-03', payee: 'Kroger 2', memo: 'eggs', amount: -1234, kind: 'spend', envelopeId: groceries });
+    useStore.getState().editTransaction(id, { date: '2026-11-03', payee: 'Refund', memo: '', amount: 5000, envelope: 'income' });
+    const t = useStore.getState().transactions[0];
+    expect(t).toMatchObject({ amount: 5000, kind: 'income' });
+    expect(t.envelopeId).toBeUndefined();
+    expect(t.memo).toBeUndefined();
+  });
+
+  it('a transfer keeps its kind and its other half follows', () => {
+    const { account } = setup();
+    const card = useStore.getState().addAccount({ name: 'Card', kind: 'credit_card', balance: 10000 });
+    useStore.getState().transfer({ fromAccountId: account, toAccountId: card, amount: 5000, date: '2026-11-02' });
+    const out = useStore.getState().transactions.find((t) => t.accountId === account)!;
+    useStore.getState().editTransaction(out.id, { date: '2026-11-04', payee: 'Card payment', memo: '', amount: -6000 });
+    const pair = useStore.getState().transactions.filter((t) => t.transferPairId === out.transferPairId);
+    expect(pair.map((t) => [t.kind, t.amount, t.date]).sort()).toEqual([['transfer', -6000, '2026-11-04'], ['transfer', 6000, '2026-11-04']]);
+  });
+});

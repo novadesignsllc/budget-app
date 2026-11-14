@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { LinkedMark, StatusButton } from '@/components/bank';
@@ -10,6 +10,7 @@ import type { Account, Envelope, Transaction } from '@/domain/types';
 import { flagHues, radius, spacing, useColors } from '@/theme';
 
 import { shortDate } from './budget';
+import { RegisterEditRow } from './edit-row';
 
 /** Column widths, shared by the header, the entry row and every transaction. */
 export const W = { check: 22, date: 76, out: 110, in: 110, status: 32 } as const;
@@ -89,8 +90,13 @@ export function RegisterRow({
   status?: () => void;
 }) {
   const colors = useColors();
+  // Clicking a row opens it for editing right here; the full form is only for new ones.
+  const [editing, setEditing] = useState(false);
   const done = !!t.reconciled;
   const env = envelopeText(t, envelope);
+  if (editing && !select) {
+    return <RegisterEditRow t={t} account={account} columns={columns} envelopeLabel={env.text} onDone={() => setEditing(false)} />;
+  }
   const ink = done ? colors.textTertiary : colors.text;
   const sub = done ? colors.textMuted : colors.textSecondary;
   const outColor = done ? colors.textTertiary : t.kind === 'slip' ? colors.negative : colors.text;
@@ -100,7 +106,7 @@ export function RegisterRow({
       accessibilityState={select ? { checked: select.selected, disabled: select.disabled } : undefined}
       accessibilityLabel={`${t.payee}, ${formatMoney(t.amount)}, ${shortDate(t.date)}${select ? '' : '. Edit'}`}
       disabled={select?.disabled}
-      onPress={() => (select ? select.onToggle() : router.push(`/transaction/${t.id}`))}
+      onPress={() => (select ? select.onToggle() : setEditing(true))}
       style={({ hovered }: { hovered?: boolean }) => ({
         flexDirection: 'row',
         alignItems: 'center',

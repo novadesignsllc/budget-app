@@ -284,7 +284,6 @@ function AccountRows({ rows, debt }: { rows: Account[]; debt: boolean }) {
 
   // Listeners are added once per row, so they call whatever `start` is current.
   const startRef = useRef<(id: string, e: PointerEvent) => void>(() => {});
-  startRef.current = (id: string, e: PointerEvent) => start(id, e);
   const start = (id: string, e: PointerEvent) => {
     if (e.button !== 0) return;
     const startY = e.clientY;
@@ -327,6 +326,10 @@ function AccountRows({ rows, debt }: { rows: Account[]; debt: boolean }) {
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+
+  useEffect(() => {
+    startRef.current = start;
+  });
 
   return ids.map((id) => {
     const a = byId.get(id);

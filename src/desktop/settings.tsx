@@ -1,19 +1,26 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useRef, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { backend, inDemo } from '@/backend';
 import { setDemoMode } from '@/backend/mode';
-import { Text, type TextTone } from '@/components/text';
-import { BankLinksCard } from '@/components/bank-links';
-import { ProfilesCard } from '@/components/profiles-card';
-import { PayeesCard } from '@/screens/settings-payees';
+import { BankError } from '@/bank/api';
+import { reconnectBank, syncBank, unlinkBank } from '@/bank/sync';
+import { useLinkBank } from '@/components/bank-links';
 import { DarkModeRow } from '@/components/dark-mode-row';
+import { ProfilesCard } from '@/components/profiles-card';
+import { Text } from '@/components/text';
+import { useToast } from '@/components/toast';
+import { syncedLabel } from '@/hooks/use-bank';
+import { PayeesCard } from '@/screens/settings-payees';
+import { useStore } from '@/store';
+import { useProfiles } from '@/sync/profiles';
 import { useSession } from '@/sync/session';
 import { useSyncStatus } from '@/sync/status';
-import { useColors } from '@/theme';
+import { spacing, useColors } from '@/theme';
+import { confirmAction } from '@/utils/confirm';
 
-import { DButton, DCard, DPage, Kbd, PageTitle, Spacer } from './ui';
+import { DButton, DCard, DPage, Kbd, PageTitle } from './ui';
 
 const SHORTCUTS: [string, string][] = [
   ['N', 'New transaction'],
@@ -25,133 +32,322 @@ const SHORTCUTS: [string, string][] = [
   ['Esc', 'Cancel typing, or close a form'],
 ];
 
-/** Settings on a computer: payees on the left; your account, shortcuts and the danger zone on the right. */
+const SECTIONS = ['Banks', 'Payees', 'Profiles', 'Appearance', 'Account', 'Shortcuts', 'Start over'] as const;
+type Section = (typeof SECTIONS)[number];
+
+/** Settings on a computer: a short section list on the left, plain sections on the right. */
 export function DesktopSettings() {
-  const user = useSession((s) => s.user);
-  const phase = useSyncStatus((s) => s.phase);
+  const colors = useColors();
+  const scroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const offsets = useRef<Partial<Record<Section, number>>>({});
+  const [current, setCurrent] = useState<Section>('Banks');
   const [searching, setSearching] = useState(false);
   const [adding, setAdding] = useState(false);
+  const user = useSession((s) => s.user);
+  const phase = useSyncStatus((s) => s.phase);
+  const payeeCount = useStore((s) => s.payees.length);
+  const profileCount = useProfiles((s) => s.list.length);
+
+  const section = (name: Section, children: React.ReactNode, actions?: React.ReactNode, detail?: string) => (
+    <View key={name} onLayout={(e) => (offsets.current[name] = e.nativeEvent.layout.y)} style={{ gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 30 }}>
+        <Text variant="section" weight="700" accessibilityRole="header" style={{ flex: 1 }}>
+          {name}
+          {detail ? (
+            <Text variant="callout" tone="textTertiary">
+              {`  ${detail}`}
+            </Text>
+          ) : null}
+        </Text>
+        {actions}
+      </View>
+      {children}
+    </View>
+  );
 
   return (
     <DPage
       title="Settings"
-      header={
-        <>
-          <PageTitle>Settings</PageTitle>
-          <Spacer />
-          <DButton
-            label={searching ? 'Done searching' : 'Search payees'}
-            icon={{ sf: 'magnifyingglass', md: 'search' }}
-            onPress={() => {
-              setSearching(!searching);
-              setAdding(false);
-            }}
-          />
-          <DButton
-            label="Payee"
-            icon={{ sf: 'plus', md: 'add' }}
-            accessibilityLabel="Add a payee"
-            onPress={() => {
-              setAdding(!adding);
-              setSearching(false);
-            }}
-          />
-        </>
-      }
+      header={<PageTitle>Settings</PageTitle>}
+      scrollRef={scroll}
+      onScroll={(e) => {
+        const y = e.nativeEvent.contentOffset.y + 40;
+        let at: Section = 'Banks';
+        for (const s of SECTIONS) if ((offsets.current[s] ?? Infinity) <= y) at = s;
+        if (at !== current) setCurrent(at);
+      }}
+      scrollEventThrottle={64}
     >
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
-        <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 520, minWidth: 0, maxWidth: 760 }}>
-          <PayeesCard searching={searching} adding={adding} onDoneAdding={() => setAdding(false)} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 32 }}>
+        <View accessibilityRole="menu" style={{ width: 160, gap: 2 }}>
+          {SECTIONS.map((s) => (
+            <Pressable
+              key={s}
+              accessibilityRole="link"
+              onPress={() => {
+                setCurrent(s);
+                scroll.current?.scrollTo({ y: Math.max(0, (offsets.current[s] ?? 0) - 4), animated: true });
+              }}
+              style={({ hovered }: { hovered?: boolean }) => ({
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: current === s ? colors.fill : hovered ? colors.control : 'transparent',
+              })}
+            >
+              <Text variant="callout" weight={current === s ? '600' : '400'} tone={current === s ? 'text' : 'textSecondary'}>
+                {s}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
-        <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 320, maxWidth: 420, gap: 14 }}>
-          <ProfilesCard />
-          <BankLinksCard />
-          <DCard>
-            <SectionTitle>Appearance</SectionTitle>
-            <DarkModeRow paddingHorizontal={18} />
-            <View style={{ height: 6 }} />
-          </DCard>
-          <DCard>
-            <SectionTitle>Your account</SectionTitle>
-            {inDemo ? (
-              <Row title="Exit demo" detail="Back to your account ›" onPress={() => void setDemoMode(false)} />
-            ) : (
-              <>
-                <Row title={user?.email ?? 'Signed in with Apple'} detail={phase === 'error' ? 'Not syncing' : 'Syncing with your phone'} />
-                <Row title="Try the demo" detail="Six months of sample data ›" onPress={() => void setDemoMode(true)} />
-                <Row title="Sign out" tone="negative" onPress={() => void backend.signOut()} />
-              </>
-            )}
-          </DCard>
+        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 520, maxWidth: 760, minWidth: 0, gap: 28 }}>
+          <BanksSection section={section} />
 
-          <DCard>
-            <SectionTitle>Keyboard shortcuts</SectionTitle>
-            {SHORTCUTS.map(([keys, what]) => (
-              <View key={keys} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 18, paddingVertical: 7 }}>
-                <View style={{ width: 64, alignItems: 'flex-start' }}>
-                  <Kbd>{keys}</Kbd>
+          {section(
+            'Payees',
+            <PayeesCard bare searching={searching} adding={adding} onDoneAdding={() => setAdding(false)} />,
+            <>
+              <DButton
+                label={searching ? 'Done' : 'Search'}
+                icon={{ sf: 'magnifyingglass', md: 'search' }}
+                onPress={() => {
+                  setSearching(!searching);
+                  setAdding(false);
+                }}
+                style={{ height: 30 }}
+              />
+              <DButton
+                label="Add payee"
+                onPress={() => {
+                  setAdding(!adding);
+                  setSearching(false);
+                }}
+                style={{ height: 30 }}
+              />
+            </>,
+            String(payeeCount),
+          )}
+
+          {section('Profiles', <ProfilesCard bare />, undefined, `${profileCount} of 3`)}
+
+          {section(
+            'Appearance',
+            <DCard style={{ paddingVertical: 4 }}>
+              <DarkModeRow paddingHorizontal={16} />
+            </DCard>,
+          )}
+
+          {section(
+            'Account',
+            <DCard>
+              {inDemo ? (
+                <Row title="You're in the demo" action={<DButton label="Exit demo" onPress={() => void setDemoMode(false)} style={{ height: 28 }} />} />
+              ) : (
+                <>
+                  <Row
+                    title={user?.email ? `Signed in as ${user.email}` : 'Signed in with Apple'}
+                    detail={phase === 'error' ? 'Not syncing' : 'Syncing with your phone'}
+                    action={<DButton label="Sign out" onPress={() => void backend.signOut()} style={{ height: 28 }} />}
+                  />
+                  <Row
+                    title="Try the demo"
+                    detail="Six months of sample data"
+                    action={<DButton label="Open demo" onPress={() => void setDemoMode(true)} style={{ height: 28 }} />}
+                    last
+                  />
+                </>
+              )}
+            </DCard>,
+          )}
+
+          {section(
+            'Shortcuts',
+            <DCard style={{ paddingVertical: 6 }}>
+              {SHORTCUTS.map(([keys, what]) => (
+                <View key={keys} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 6 }}>
+                  <View style={{ width: 64, alignItems: 'flex-start' }}>
+                    <Kbd>{keys}</Kbd>
+                  </View>
+                  <Text variant="callout" tone="textSecondary" style={{ flex: 1 }}>
+                    {what}
+                  </Text>
                 </View>
-                <Text variant="callout" tone="textSecondary" style={{ flex: 1 }}>
-                  {what}
-                </Text>
-              </View>
-            ))}
-            <View style={{ height: 10 }} />
-          </DCard>
+              ))}
+            </DCard>,
+          )}
 
-          <DCard>
-            <SectionTitle>Start over</SectionTitle>
-            <Row title="Fresh start" detail="Clear transactions and balances, keep envelopes, bills and banks" tone="negative" onPress={() => router.push('/fresh-start')} />
-            <Row title="Reset account" detail="Erase everything, stay signed in" tone="negative" onPress={() => router.push('/reset-account')} />
-            {!inDemo && <Row title="Delete account" detail="Erase everything and the sign-in" tone="negative" onPress={() => router.push('/delete-account')} />}
-          </DCard>
+          {section(
+            'Start over',
+            <DCard>
+              <Row
+                title="Fresh start"
+                detail="Clear transactions and balances. Keep envelopes, bills and banks."
+                action={<DangerButton label="Fresh start…" onPress={() => router.push('/fresh-start')} />}
+              />
+              <Row
+                title="Reset this budget"
+                detail="Erase everything in it. You stay signed in."
+                action={<DangerButton label="Reset…" onPress={() => router.push('/reset-account')} />}
+                last={inDemo}
+              />
+              {!inDemo && (
+                <Row
+                  title="Delete account"
+                  detail="Erase everything and the sign-in."
+                  action={<DangerButton label="Delete…" onPress={() => router.push('/delete-account')} />}
+                  last
+                />
+              )}
+            </DCard>,
+          )}
         </View>
       </View>
     </DPage>
   );
 }
 
-function SectionTitle({ children }: { children: string }) {
-  return (
-    <Text variant="callout" weight="700" style={{ paddingHorizontal: 18, paddingTop: 16, paddingBottom: 8 }}>
-      {children}
-    </Text>
+/** Each linked bank with its accounts and last sync, and its actions as plain buttons. */
+function BanksSection({
+  section,
+}: {
+  section: (name: Section, children: React.ReactNode, actions?: React.ReactNode) => React.ReactNode;
+}) {
+  const links = useStore((s) => s.bankLinks);
+  const accounts = useStore((s) => s.accounts);
+  const showToast = useToast((s) => s.show);
+  const { start, busy } = useLinkBank();
+  const fail = (e: unknown) =>
+    showToast({ message: e instanceof BankError || e instanceof Error ? e.message : 'Something went wrong. Try again.' });
+  return section(
+    'Banks',
+    <DCard>
+      {links.length === 0 ? (
+        <Row title="No banks linked" detail="Link one and Slip checks what you enter against it." last />
+      ) : (
+        links.map((l, i) => {
+          const fed = l.accounts.map((a) => accounts.find((x) => x.id === a.accountId)?.name).filter(Boolean) as string[];
+          const setUp = fed.length > 0;
+          return (
+            <Row
+              key={l.id}
+              title={l.institution}
+              detail={!setUp ? 'Not set up yet' : `${fed.join(', ')} · ${l.needsLogin ? 'Wants you to sign in again' : syncedLabel(l.syncedAt)}`}
+              warn={!setUp || l.needsLogin}
+              last={i === links.length - 1}
+              action={
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {!setUp ? (
+                    <LinkButton label="Finish setup" onPress={() => router.push({ pathname: '/bank-setup', params: { id: l.id } })} />
+                  ) : (
+                    <LinkButton
+                      label="Check now"
+                      onPress={() => void syncBank(l.id).then(() => showToast({ message: `${l.institution} is up to date.` }), fail)}
+                    />
+                  )}
+                  <LinkButton label="Reconnect" onPress={() => void reconnectBank(l.id).catch(fail)} />
+                  <LinkButton
+                    label="Unlink"
+                    danger
+                    onPress={async () => {
+                      const yes = await confirmAction(`Unlink ${l.institution}?`, 'Slip stops checking this bank. Your transactions stay.', 'Unlink');
+                      if (yes) await unlinkBank(l.id).then(() => showToast({ message: `${l.institution} is unlinked.` }), fail);
+                    }}
+                  />
+                </View>
+              }
+            />
+          );
+        })
+      )}
+    </DCard>,
+    <DButton label={busy ? 'Opening…' : 'Link a bank'} onPress={() => void start()} style={{ height: 30 }} />,
   );
 }
 
-function Row({ title, detail, tone = 'text', onPress }: { title: string; detail?: string; tone?: TextTone; onPress?: () => void }) {
+function Row({
+  title,
+  detail,
+  action,
+  warn,
+  last,
+}: {
+  title: string;
+  detail?: string;
+  action?: React.ReactNode;
+  warn?: boolean;
+  last?: boolean;
+}) {
   const colors = useColors();
-  const body = (
-    <>
-      <Text variant="body" tone={tone} numberOfLines={1} style={{ flex: 1 }}>
-        {title}
-      </Text>
-      {detail ? (
-        <Text variant="callout" tone="textSecondary" numberOfLines={1}>
-          {detail}
+  return (
+    <View
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        minHeight: 48,
+        paddingHorizontal: 16,
+        paddingVertical: 8,
+        borderBottomWidth: last ? 0 : 1,
+        borderBottomColor: colors.hairline,
+      }}
+    >
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text variant="body" weight="600" numberOfLines={1}>
+          {title}
         </Text>
-      ) : null}
-    </>
+        {detail ? (
+          <Text variant="footnote" tone={warn ? 'orange' : 'textSecondary'} numberOfLines={2}>
+            {detail}
+          </Text>
+        ) : null}
+      </View>
+      {action}
+    </View>
   );
-  const style = {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-    minHeight: 42,
-    paddingHorizontal: 18,
-    borderTopWidth: 1,
-    borderTopColor: colors.hairline,
-  };
-  return onPress ? (
+}
+
+function LinkButton({ label, onPress, danger }: { label: string; onPress: () => void; danger?: boolean }) {
+  const colors = useColors();
+  return (
     <Pressable
       accessibilityRole="button"
       onPress={onPress}
-      style={({ hovered }: { hovered?: boolean }) => [style, { backgroundColor: hovered ? colors.control : 'transparent' }]}
+      style={({ hovered }: { hovered?: boolean }) => ({
+        height: 28,
+        paddingHorizontal: 10,
+        borderRadius: 8,
+        justifyContent: 'center',
+        backgroundColor: hovered ? colors.control : 'transparent',
+      })}
     >
-      {body}
+      <Text variant="callout" weight="600" tone={danger ? 'negative' : 'accent'}>
+        {label}
+      </Text>
     </Pressable>
-  ) : (
-    <View style={style}>{body}</View>
+  );
+}
+
+function DangerButton({ label, onPress }: { label: string; onPress: () => void }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ hovered }: { hovered?: boolean }) => ({
+        height: 28,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: colors.negativeBorder,
+        justifyContent: 'center',
+        backgroundColor: hovered ? colors.negativeSoft : colors.surface,
+      })}
+    >
+      <Text variant="callout" weight="600" tone="negative">
+        {label}
+      </Text>
+    </Pressable>
   );
 }

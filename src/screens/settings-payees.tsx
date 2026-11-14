@@ -85,10 +85,13 @@ export function PayeesCard({
   searching,
   adding,
   onDoneAdding,
+  bare,
 }: {
   searching: boolean;
   adding: boolean;
   onDoneAdding: () => void;
+  /** No title row (the desktop's Settings section already has one). */
+  bare?: boolean;
 }) {
   const colors = useColors();
   const payees = useStore((s) => s.payees);
@@ -131,7 +134,7 @@ export function PayeesCard({
 
   return (
     <Card>
-      <CardHeader title="Payees" detail={`${payees.length}`} />
+      {!bare && <CardHeader title="Payees" detail={`${payees.length}`} />}
       {adding && (
         <InputRow
           icon={{ sf: 'plus', md: 'add' }}

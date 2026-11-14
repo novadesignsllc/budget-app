@@ -41,7 +41,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
 
   return (
     <View style={{ width: SIDEBAR_WIDTH, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 14, paddingVertical: 20, gap: 22 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingVertical: 18, gap: 18 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6 }}>
           <SlipMark />
           <Text style={{ fontSize: 18, lineHeight: 22, fontWeight: '700', letterSpacing: -0.3 }}>Slip</Text>
@@ -72,12 +72,14 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
           <Kbd onAccent>N</Kbd>
         </Pressable>
 
-        <View style={{ gap: 2 }}>
-          {tabs.map((t, i) => (
-            <TabTrigger key={t.name} name={t.name} href={t.href as never} resetOnFocus asChild>
-              <SideItem label={t.label} shortcut={String(i + 1)} />
-            </TabTrigger>
-          ))}
+        <View style={{ gap: 1 }}>
+          {tabs.map((t, i) =>
+            t.name === 'settings' ? null : (
+              <TabTrigger key={t.name} name={t.name} href={t.href as never} resetOnFocus asChild>
+                <SideItem label={t.label} shortcut={String(i + 1)} />
+              </TabTrigger>
+            ),
+          )}
         </View>
 
         {[
@@ -129,6 +131,15 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
           ) : null,
         )}
 
+        {/* Settings sits at the bottom, out of the way of the sections you use every day. */}
+        <View style={{ flex: 1 }} />
+        {tabs.map((t, i) =>
+          t.name === 'settings' ? (
+            <TabTrigger key={t.name} name={t.name} href={t.href as never} resetOnFocus asChild>
+              <SideItem label={t.label} shortcut={String(i + 1)} />
+            </TabTrigger>
+          ) : null,
+        )}
         <SyncLine />
       </ScrollView>
     </View>
@@ -147,7 +158,7 @@ function SideItem({ label, shortcut, isFocused: tabFocused, ref, ...props }: Ite
       accessibilityRole="tab"
       accessibilityState={{ selected: !!isFocused }}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
-        height: 36,
+        height: 32,
         paddingHorizontal: 10,
         borderRadius: 8,
         borderCurve: 'continuous',

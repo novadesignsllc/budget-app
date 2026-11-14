@@ -263,33 +263,6 @@ export function DesktopBudget() {
             <>
               <ReadyPill cents={pools.spending.readyToAssign} past={past} what="spending" />
               <ReadyPill cents={pools.savings.readyToAssign} past={past} what="savings" />
-              {!past &&
-                (['spending', 'savings'] as const)
-                  .filter((p) => floorDollars(pools[p].readyToAssign) < 0)
-                  .slice(0, 1)
-                  .map((p) => (
-                    <View key={p} style={{ flexDirection: 'row', gap: spacing.sm }}>
-                      {floorDollars(pools[p === 'savings' ? 'spending' : 'savings'].readyToAssign) >= 0 && (
-                        <DButton
-                          label={`Move ${formatDollars(moveToCover(pools[p]))} from ${p === 'savings' ? 'checking' : 'savings'}`}
-                          variant="accent"
-                          onPress={() => coverShortfall(pools, p)}
-                        />
-                      )}
-                      <DButton
-                        label="Fix in envelopes"
-                        onPress={() => {
-                          // Open "move money back" on the fullest envelope in that pool.
-                          const fullest = flat
-                            .filter((r) => envelopePool(r.envelope) === p && r.row.available >= 100)
-                            .sort((a, b) => b.row.available - a.row.available)[0];
-                          if (!fullest) return;
-                          setSelectedId(fullest.envelope.id);
-                          setMovingId(fullest.envelope.id);
-                        }}
-                      />
-                    </View>
-                  ))}
             </>
           ) : (
             <ReadyPill cents={rta} past={past} />
@@ -349,6 +322,50 @@ export function DesktopBudget() {
         </>
       }
     >
+      {pools &&
+        !past &&
+        (['spending', 'savings'] as const)
+          .filter((p) => floorDollars(pools[p].readyToAssign) < 0)
+          .slice(0, 1)
+          .map((p) => (
+            <View
+              key={p}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: colors.negativeBorder,
+                backgroundColor: colors.negativeSoft,
+              }}
+            >
+              <Text variant="callout" weight="600" tone="negative" style={{ flex: 1 }}>
+                {p === 'savings' ? 'Savings' : 'Spending'} is {formatDollars(-pools[p].readyToAssign)} short this month.
+              </Text>
+              {floorDollars(pools[p === 'savings' ? 'spending' : 'savings'].readyToAssign) >= 0 && (
+                <DButton
+                  label={`Move ${formatDollars(moveToCover(pools[p]))} from ${p === 'savings' ? 'checking' : 'savings'}`}
+                  variant="accent"
+                  onPress={() => coverShortfall(pools, p)}
+                />
+              )}
+              <DButton
+                label="Fix in envelopes"
+                onPress={() => {
+                  // Open "move money back" on the fullest envelope in that pool.
+                  const fullest = flat
+                    .filter((r) => envelopePool(r.envelope) === p && r.row.available >= 100)
+                    .sort((a, b) => b.row.available - a.row.available)[0];
+                  if (!fullest) return;
+                  setSelectedId(fullest.envelope.id);
+                  setMovingId(fullest.envelope.id);
+                }}
+              />
+            </View>
+          ))}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
         <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 560, maxWidth: 680, minWidth: 0, gap: spacing.md }}>
           {starters.length > 0 && (

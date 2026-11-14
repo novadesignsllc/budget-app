@@ -9,13 +9,14 @@ import { Icon } from './icon';
 import { Text } from './text';
 
 /** Settings' list of profiles: tap one to rename it or change its icon and color, or add one (up to three). */
-export function ProfilesCard() {
+/** `bare` drops the title row (the desktop's Settings section has one). */
+export function ProfilesCard({ bare }: { bare?: boolean } = {}) {
   const colors = useColors();
   const list = useProfiles((s) => s.list);
   const activeId = useProfiles((s) => s.activeId);
   return (
     <Card>
-      <CardHeader title="Profiles" detail={`${list.length} of ${MAX_PROFILES}`} />
+      {!bare && <CardHeader title="Profiles" detail={`${list.length} of ${MAX_PROFILES}`} />}
       {list.map((p) => (
         <Pressable
           key={p.id}

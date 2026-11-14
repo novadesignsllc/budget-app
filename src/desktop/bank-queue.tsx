@@ -17,7 +17,7 @@ import { spacing, useColors } from '@/theme';
 import { shortDate } from './budget';
 import { DButton, DCard } from './ui';
 
-const COL = { date: 64, account: 150, envelope: 190, status: 32, amount: 110, actions: 128 } as const;
+const COL = { date: 56, account: 120, envelope: 168, status: 24, amount: 96, actions: 116 } as const;
 
 function Row({
   item,

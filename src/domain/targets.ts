@@ -55,14 +55,15 @@ export function percentOf(target: Cents, income: Cents): Cents {
 export function targetThisMonth(
   envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate' | 'targetEvery'>,
   target: Cents,
-  row: { carriedIn: Cents; monthIncome?: Cents },
+  row: { carriedIn: Cents; monthIncome?: Cents; percentCarry?: Cents },
   month: MonthKey,
 ): Cents {
   switch (targetKindOf(envelope)) {
     case 'weekly':
       return target * weeksIn(month);
     case 'percent':
-      return percentOf(target, row.monthIncome ?? 0);
+      // This month's share, plus anything earlier months came up short (or minus what they got extra).
+      return Math.max(0, percentOf(target, row.monthIncome ?? 0) + (row.percentCarry ?? 0));
     case 'builder':
       return builderMonthly(envelope, target, row.carriedIn, month);
     case 'repeat': {
@@ -119,7 +120,7 @@ export function builderMonthly(
 export function targetNeed(
   envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate' | 'targetEvery'>,
   target: Cents,
-  row: { assigned: Cents; carriedIn: Cents; available: Cents; monthIncome?: Cents },
+  row: { assigned: Cents; carriedIn: Cents; available: Cents; monthIncome?: Cents; percentCarry?: Cents },
   month: MonthKey,
 ): Cents {
   const kind = targetKindOf(envelope);

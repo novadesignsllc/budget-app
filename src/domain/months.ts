@@ -1,6 +1,6 @@
 import { ceilDollars } from './money';
 import { accountPool, envelopePool, type Pool } from './pools';
-import { targetFor, targetNeed } from './targets';
+import { percentOf, targetFor, targetKindOf, targetNeed } from './targets';
 import { isCashAccount, type Account, type Allocation, type Cents, type Envelope, type ISODate, type Transaction } from './types';
 
 /** `YYYY-MM` */
@@ -59,6 +59,12 @@ export type EnvelopeMonth = {
   available: Cents;
   /** All income that came in this month, for percent-of-income targets. */
   monthIncome?: Cents;
+  /**
+   * Percent-of-income targets: what earlier months still owe (their share of income
+   * minus what was assigned), so a month that came up short carries into the next.
+   * Negative when earlier months got more than their share.
+   */
+  percentCarry?: Cents;
 };
 
 export type BudgetMonth = {
@@ -167,11 +173,41 @@ export function computeMonth(
     }
   }
 
+  // Percent-of-income targets keep a running account from the month they start: each
+  // month owes its share of that month's income, and everything assigned pays it down.
+  const percentEnvelopes = input.envelopes.filter((e) => targetKindOf(e) === 'percent' && e.targets);
+  const percentCarry = new Map<string, Cents>();
+  if (percentEnvelopes.length) {
+    const incomeByMonth = new Map<MonthKey, Cents>();
+    for (const t of input.transactions) {
+      if (t.kind !== 'income' || t.amount <= 0 || t.date >= start) continue;
+      const a = accountById.get(t.accountId);
+      if (!a || !isCashAccount(a)) continue;
+      incomeByMonth.set(monthOf(t.date), (incomeByMonth.get(monthOf(t.date)) ?? 0) + t.amount);
+    }
+    for (const e of percentEnvelopes) {
+      const first = Object.keys(e.targets!)
+        .filter((m) => e.targets![m])
+        .sort()[0];
+      if (!first || first >= month) continue;
+      let owed = 0;
+      for (let m = first; m < month; m = addMonthKey(m, 1)) {
+        const pct = targetFor(e, m);
+        if (pct) owed += percentOf(pct, incomeByMonth.get(m) ?? 0);
+      }
+      for (const al of input.allocations) {
+        if (al.envelopeId === e.id && al.date >= monthStart(first) && al.date < start) owed -= al.amount;
+      }
+      percentCarry.set(e.id, owed);
+    }
+  }
+
   let total = 0;
   let savingsTotal = 0;
   for (const [id, r] of rows) {
     r.available = r.carriedIn + r.assigned + r.activity;
     r.monthIncome = income;
+    if (percentCarry.has(id)) r.percentCarry = percentCarry.get(id);
     total += r.available;
     if (savingsEnvelopes.has(id)) savingsTotal += r.available;
   }

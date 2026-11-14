@@ -6,6 +6,11 @@ export type LedgerInput = {
   envelopes: Envelope[];
   transactions: Transaction[];
   allocations: Allocation[];
+  /**
+   * Today. Money assigned to a later month (budgeting ahead) isn't in the envelope yet,
+   * so it's counted as assigned ahead instead. Without it, every assignment counts now.
+   */
+  asOf?: ISODate;
 };
 
 export type Ledger = {
@@ -19,7 +24,9 @@ export type Ledger = {
   cashTotal: Cents;
   /** Total owed across debt accounts, as a positive number. */
   debtTotal: Cents;
-  /** Cash that hasn't been given a job yet. Cash total minus every envelope. */
+  /** Money assigned to months after this one: promised, but not in any envelope yet. */
+  assignedAhead: Cents;
+  /** Cash that hasn't been given a job yet. Cash total minus every envelope and what's assigned ahead. */
   readyToAssign: Cents;
 };
 
@@ -34,7 +41,7 @@ export type Ledger = {
  *   now set aside to pay the card back.
  * - No envelope (income, interest, cash-to-cash transfers): no envelope changes.
  */
-export function computeLedger({ accounts, envelopes, transactions, allocations }: LedgerInput): Ledger {
+export function computeLedger({ accounts, envelopes, transactions, allocations, asOf }: LedgerInput): Ledger {
   const accountById = new Map(accounts.map((a) => [a.id, a]));
   const paymentEnvelopeByDebt = new Map<string, string>();
   for (const e of envelopes) {
@@ -53,7 +60,13 @@ export function computeLedger({ accounts, envelopes, transactions, allocations }
   const bump = (map: Map<string, Cents>, key: string, by: Cents) =>
     map.set(key, (map.get(key) ?? 0) + by);
 
-  for (const al of allocations) bump(available, al.envelopeId, al.amount);
+  // The last day of this month: assignments dated after it belong to a later month.
+  const monthEnd = asOf ? endOfMonth(asOf) : null;
+  let assignedAhead = 0;
+  for (const al of allocations) {
+    if (monthEnd && al.date > monthEnd) assignedAhead += al.amount;
+    else bump(available, al.envelopeId, al.amount);
+  }
 
   for (const t of transactions) {
     const account = accountById.get(t.accountId);
@@ -86,8 +99,14 @@ export function computeLedger({ accounts, envelopes, transactions, allocations }
     available,
     cashTotal,
     debtTotal,
-    readyToAssign: cashTotal - assigned,
+    assignedAhead,
+    readyToAssign: cashTotal - assigned - assignedAhead,
   };
+}
+
+function endOfMonth(day: ISODate): ISODate {
+  const [y, m] = day.split('-').map(Number);
+  return `${day.slice(0, 7)}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
 }
 
 /** Total spent from an envelope within [from, to], as a positive number. */

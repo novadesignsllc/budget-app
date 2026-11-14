@@ -16,8 +16,9 @@ export type BudgetHealth = {
  * anymore, so it's the one thing Home shouts about. Card slips never cause it: they move
  * money between envelopes and leave cash alone.
  */
-export function budgetHealth(ledger: Pick<Ledger, 'cashTotal' | 'available'>): BudgetHealth {
-  let assigned = 0;
+export function budgetHealth(ledger: Pick<Ledger, 'cashTotal' | 'available'> & { assignedAhead?: Cents }): BudgetHealth {
+  // Money assigned ahead is promised too.
+  let assigned = ledger.assignedAhead ?? 0;
   for (const v of ledger.available.values()) assigned += v;
   return { cash: ledger.cashTotal, assigned, short: Math.max(0, assigned - ledger.cashTotal) };
 }

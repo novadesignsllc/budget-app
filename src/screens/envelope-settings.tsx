@@ -186,6 +186,7 @@ export function ThisMonthRow({
   every,
   carriedIn,
   income,
+  percentCarry,
   month,
 }: {
   kind: TargetKind;
@@ -194,10 +195,12 @@ export function ThisMonthRow({
   every: number;
   carriedIn: number;
   income: number;
+  /** Percent of income: what earlier months still owe. */
+  percentCarry?: number;
   month: MonthKey;
 }) {
   const target = ceilDollars(parseMoney(amount) ?? 0);
-  const monthly = targetThisMonth({ targetKind: kind, group: '', targetDate: date, targetEvery: every }, target, { carriedIn, monthIncome: income }, month);
+  const monthly = targetThisMonth({ targetKind: kind, group: '', targetDate: date, targetEvery: every }, target, { carriedIn, monthIncome: income, percentCarry }, month);
   return (
     <FormRow label="This month">
       <Text variant="body" weight="600" tone={target ? 'text' : 'textTertiary'} style={{ fontVariant: ['tabular-nums'] }}>
@@ -217,6 +220,7 @@ export function TargetExtraRows(props: {
   onEvery: (n: number) => void;
   carriedIn: number;
   income: number;
+  percentCarry?: number;
   month: MonthKey;
 }) {
   const { kind, date, onDate, every, onEvery, month } = props;
@@ -305,6 +309,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             onEvery={setEvery}
             carriedIn={carriedIn}
             income={budget.income ?? 0}
+            percentCarry={budget.envelopes.get(id)?.percentCarry}
             month={month}
           />
         )}

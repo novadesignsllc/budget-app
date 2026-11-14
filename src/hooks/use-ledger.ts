@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { comparePlan, estimateMinPayment, type DebtInput, type Strategy } from '@/domain/debt';
+import { today } from '@/domain/dates';
 import { computeLedger, type Ledger, type LedgerInput } from '@/domain/ledger';
 import { isCashAccount, isDebtAccount, type Account } from '@/domain/types';
 import { useStore } from '@/store';
@@ -18,7 +19,8 @@ function sharedLedger(input: LedgerInput): Ledger {
     last.accounts === input.accounts &&
     last.envelopes === input.envelopes &&
     last.transactions === input.transactions &&
-    last.allocations === input.allocations
+    last.allocations === input.allocations &&
+    last.asOf === input.asOf
   ) {
     return lastLedger!.ledger;
   }
@@ -36,7 +38,8 @@ export function useLedger() {
       allocations: s.allocations,
     })),
   );
-  return useMemo(() => sharedLedger(input), [input]);
+  // As of today, so money assigned to next month isn't counted as in its envelope yet.
+  return useMemo(() => sharedLedger({ ...input, asOf: today() }), [input]);
 }
 
 export function useAccounts() {

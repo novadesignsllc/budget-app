@@ -104,6 +104,7 @@ export function DesktopSettings() {
 
           <DCard>
             <SectionTitle>Start over</SectionTitle>
+            <Row title="Fresh start" detail="Clear transactions and balances, keep envelopes, bills and banks" tone="negative" onPress={() => router.push('/fresh-start')} />
             <Row title="Reset account" detail="Erase everything, stay signed in" tone="negative" onPress={() => router.push('/reset-account')} />
             {!inDemo && <Row title="Delete account" detail="Erase everything and the sign-in" tone="negative" onPress={() => router.push('/delete-account')} />}
           </DCard>

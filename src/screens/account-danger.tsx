@@ -33,6 +33,45 @@ function ConfirmWord({ word, value, onChange }: { word: string; value: string; o
   );
 }
 
+/**
+ * Starts the money over but keeps the setup: transactions and assigned amounts go,
+ * accounts restart today, and envelopes, targets, bills and linked banks stay.
+ */
+export function FreshStart() {
+  const showToast = useToast((s) => s.show);
+  const freshStart = useStore((s) => s.freshStart);
+  const linked = useStore((s) => s.bankLinks.some((l) => l.accounts.some((a) => a.accountId)));
+  const [typed, setTyped] = useState('');
+  const ready = typed.trim().toUpperCase() === 'FRESH';
+  return (
+    <SheetScreen>
+      <SheetHeader title="Fresh start" />
+      <Text variant="callout" tone="textSecondary">
+        {`Deletes every transaction and everything assigned to envelopes. Accounts start over today${
+          linked ? ' at your bank’s balance, or $0 if they aren’t linked' : ' at $0'
+        }.`}
+      </Text>
+      <Text variant="callout" tone="textSecondary">
+        Keeps your accounts, envelopes and targets, bills and subscriptions with their accounts, payees, settings and linked
+        banks. This can’t be undone.
+      </Text>
+      <ConfirmWord word="FRESH" value={typed} onChange={setTyped} />
+      <Button
+        title="Start fresh"
+        variant="destructive"
+        size="lg"
+        disabled={!ready}
+        onPress={() => {
+          freshStart();
+          haptic('success');
+          showToast({ message: 'Fresh start. Your envelopes are ready to fill.' });
+          closeSheet();
+        }}
+      />
+    </SheetScreen>
+  );
+}
+
 /** Erases the whole budget and starts over empty. You stay signed in. */
 export function ResetAccount() {
   const showToast = useToast((s) => s.show);

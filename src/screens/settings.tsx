@@ -104,6 +104,12 @@ export function Settings() {
 
         <Card>
           <ActionRow
+            title="Fresh start"
+            detail="Clear transactions, keep the setup"
+            tone="negative"
+            onPress={() => router.push('/fresh-start')}
+          />
+          <ActionRow
             title="Reset account"
             detail="Start over empty"
             tone="negative"

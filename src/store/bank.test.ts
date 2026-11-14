@@ -193,3 +193,32 @@ describe('undo', () => {
     expect(useStore.getState().transactions).toHaveLength(0);
   });
 });
+
+describe('fresh start', () => {
+  it('clears money and history, keeps the setup', () => {
+    const { check, card, groceries } = setup();
+    const s0 = useStore.getState();
+    s0.addAccount({ name: 'Cash jar', kind: 'cash', balance: 5000 });
+    s0.assign(groceries, 20000);
+    s0.setTarget(groceries, '2026-11', 40000);
+    const rid = s0.addRecurring({ name: 'Netflix', kind: 'subscription', amount: 1549, accountId: card, frequency: 'monthly', nextDue: '2026-11-20' });
+    s0.addTransaction({ date: '2026-11-02', accountId: check, amount: 910, kind: 'spend', payee: "McDonald's", envelopeId: groceries });
+    s0.applyBankSync('item', result([{ id: 'k', plaidAccountId: 'pc', date: '2026-11-04', name: 'Kroger', amount: -5000, pending: false }], {
+      accounts: [{ plaidAccountId: 'pc', name: 'Checking', type: 'depository', current: 123456 }],
+      cursor: 'c9',
+    }));
+    useStore.getState().freshStart();
+    const s = useStore.getState();
+    expect(s.transactions).toEqual([]);
+    expect(s.allocations).toEqual([]);
+    expect(s.bankTransactions).toEqual([]);
+    expect(s.accounts.find((a) => a.id === check)?.openingBalance).toBe(123456);
+    expect(s.accounts.find((a) => a.name === 'Cash jar')?.openingBalance).toBe(0);
+    expect(s.accounts.find((a) => a.id === card)?.openingBalance).toBe(0);
+    expect(s.envelopes.find((e) => e.id === groceries)?.targets).toEqual({ '2026-11': 40000 });
+    expect(s.recurring.find((r) => r.id === rid)).toMatchObject({ accountId: card, nextDue: '2026-11-20' });
+    expect(s.payees.some((p) => p.name === "McDonald's")).toBe(true);
+    expect(s.bankLinks[0]).toMatchObject({ cursor: 'c9' });
+    expect(s.bankLinks[0].accounts[0].since).toBe(s.accounts[0].openedOn);
+  });
+});

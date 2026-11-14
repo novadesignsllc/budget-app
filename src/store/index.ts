@@ -259,6 +259,12 @@ type Actions = {
   normalizeGroups: () => void;
 
   updateSettings: (patch: Partial<Settings>) => void;
+  /**
+   * Starts the money over while keeping the setup: every transaction and assigned amount
+   * goes, accounts restart today (linked ones at the bank's balance, the rest at $0), and
+   * envelopes, targets, bills, payees, settings and linked banks stay.
+   */
+  freshStart: () => void;
   replaceAll: (state: State) => void;
 };
 
@@ -1100,6 +1106,22 @@ export const useStore = create<Store>()((set, get) => ({
     }),
 
   updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
+
+  freshStart: () =>
+    set((s) => {
+      const day = today();
+      const bankBalance = new Map<string, Cents>();
+      for (const l of s.bankLinks)
+        for (const a of l.accounts) if (a.accountId && a.balance !== undefined) bankBalance.set(a.accountId, a.balance);
+      return {
+        accounts: s.accounts.map((a) => ({ ...a, openingBalance: bankBalance.get(a.id) ?? 0, openedOn: day, lastReconciledOn: day })),
+        transactions: [],
+        allocations: [],
+        // Banks stay linked (relinking would use up Plaid slots); only what's new from today comes in.
+        bankTransactions: [],
+        bankLinks: s.bankLinks.map((l) => ({ ...l, accounts: l.accounts.map((a) => (a.accountId ? { ...a, since: day } : a)) })),
+      };
+    }),
 
   replaceAll: (state) => set(state),
 }));

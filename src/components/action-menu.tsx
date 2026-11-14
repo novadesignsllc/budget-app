@@ -4,6 +4,7 @@ import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
 import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
+import { pageZoom } from '@/utils/zoom';
 
 import { Icon } from './icon';
 import { Text } from './text';
@@ -46,14 +47,16 @@ export function ActionMenu({
   hitSlop?: number;
 }) {
   const colors = useColors();
-  const window = useWindowDimensions();
+  const screen = useWindowDimensions();
+  const z = pageZoom();
+  const window = { width: screen.width / z, height: screen.height / z };
   const reduceMotion = useReducedMotion();
   const anchor = useRef<React.ComponentRef<typeof View>>(null);
   const [frame, setFrame] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const open = () => {
     haptic('selection');
-    anchor.current?.measureInWindow((x: number, y: number, w: number, h: number) => setFrame({ x, y, w, h }));
+    anchor.current?.measureInWindow((x: number, y: number, w: number, h: number) => setFrame({ x: x / z, y: y / z, w: w / z, h: h / z }));
   };
   const close = () => setFrame(null);
 

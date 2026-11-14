@@ -4,6 +4,7 @@ import { Modal, Pressable, ScrollView, TextInput, View, useWindowDimensions } fr
 import Animated, { Keyframe, useReducedMotion } from 'react-native-reanimated';
 
 import { haptic } from '@/utils/haptics';
+import { pageZoom } from '@/utils/zoom';
 import { keyboardTopIn, rememberFocus } from '@/utils/keyboard';
 import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/theme';
 
@@ -102,7 +103,10 @@ export function Dropdown<T extends string>({
 }) {
   const colors = useColors();
   const reduceMotion = useReducedMotion();
-  const window = useWindowDimensions();
+  const screen = useWindowDimensions();
+  // On the website at desktop size the page is zoomed; work in its unzoomed units.
+  const z = pageZoom();
+  const window = { width: screen.width / z, height: screen.height / z };
   const triggerRef = useRef<React.ComponentRef<typeof View>>(null);
   const [open, setOpen] = useState(false);
   const [frame, setFrame] = useState({ x: 0, y: 0, w: 0, h: 0 });
@@ -127,12 +131,12 @@ export function Dropdown<T extends string>({
     // Positions are relative to whatever the menu draws in: the sheet's layer or the window.
     const inContainer = (cb: (c: { x: number; y: number; h: number }) => void) => {
       if (host?.ref.current)
-        host.ref.current.measureInWindow((x: number, y: number, _w: number, h: number) => cb({ x, y, h }));
+        host.ref.current.measureInWindow((x: number, y: number, _w: number, h: number) => cb({ x: x / z, y: y / z, h: h / z }));
       else cb({ x: 0, y: 0, h: window.height });
     };
     triggerRef.current?.measureInWindow((x: number, y: number, w: number, h: number) =>
       inContainer((c) => {
-        setFrame({ x: x - c.x, y: y - c.y, w, h });
+        setFrame({ x: x / z - c.x, y: y / z - c.y, w: w / z, h: h / z });
         setContainerHeight(c.h);
         setFloor(keyboardTopIn(c.h));
         setQuery('');

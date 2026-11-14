@@ -9,7 +9,6 @@ import { BankLinksCard } from '@/components/bank-links';
 import { ProfilesCard } from '@/components/profiles-card';
 import { PayeesCard } from '@/screens/settings-payees';
 import { DarkModeRow } from '@/components/dark-mode-row';
-import { TabBarCard } from '@/components/tab-bar-card';
 import { useSession } from '@/sync/session';
 import { useSyncStatus } from '@/sync/status';
 import { useColors } from '@/theme';
@@ -73,7 +72,6 @@ export function DesktopSettings() {
             <DarkModeRow paddingHorizontal={18} />
             <View style={{ height: 6 }} />
           </DCard>
-          <TabBarCard />
           <DCard>
             <SectionTitle>Your account</SectionTitle>
             {inDemo ? (

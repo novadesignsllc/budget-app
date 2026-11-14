@@ -65,7 +65,7 @@ export function DesktopSettings() {
       title="Settings"
       header={<PageTitle>Settings</PageTitle>}
     >
-      <View style={{ width: '100%', maxWidth: 760, gap: 28 }}>
+      <View style={{ width: '100%', maxWidth: 760, alignSelf: 'center', gap: 28 }}>
         <View style={{ gap: 28 }}>
           <BanksSection section={section} />
 

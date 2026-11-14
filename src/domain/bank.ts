@@ -450,10 +450,18 @@ export function newAccountSince(day: ISODate): ISODate {
   return addDays(day, -6);
 }
 
-/** An existing account starts matching from the 1st of this month. */
-export function existingAccountSince(day: ISODate): ISODate {
-  return `${day.slice(0, 7)}-01`;
+/**
+ * An account already in Slip matches from the 1st of this month, or from the day it was
+ * opened if that's later (a new account, or one that just had a fresh start), so nothing
+ * from before it existed comes in to approve.
+ */
+export function existingAccountSince(day: ISODate, openedOn?: ISODate): ISODate {
+  const first = `${day.slice(0, 7)}-01`;
+  return openedOn && openedOn > first ? openedOn : first;
 }
+
+/** The payee of the one transaction that brings a new account's bank balance into Slip. */
+export const STARTING_BALANCE = 'Starting balance';
 
 /**
  * What approving a bank transaction makes of it: spending from (or a refund to) an

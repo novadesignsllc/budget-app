@@ -98,7 +98,8 @@ export function BankSetup({ id }: { id: string }) {
 
   const tracked = useMemo(() => (link ? link.accounts.filter(trackable) : []), [link]);
   const existing = tracked.filter((a) => map[a.plaidAccountId] && map[a.plaidAccountId] !== NEW && map[a.plaidAccountId] !== SKIP);
-  const since = existingAccountSince(day);
+  // Per account: the 1st of the month, or the day it opened if that's later.
+  const sinceFor = (accountId: string) => existingAccountSince(day, accounts.find((x) => x.id === accountId)?.openedOn);
 
   if (!link) {
     return (
@@ -142,6 +143,7 @@ export function BankSetup({ id }: { id: string }) {
       const account = s.accounts.find((x) => x.id === accountId);
       const bal = balanceOf(a);
       if (!account || bal === undefined) continue;
+      const since = sinceFor(accountId);
       gaps.set(
         accountId,
         linkGap({ account, since, plaidAccountId: a.plaidAccountId, synced: result.added, transactions: s.transactions, payees: s.payees, bankBalance: bal, remove }),
@@ -170,7 +172,7 @@ export function BankSetup({ id }: { id: string }) {
         useStore.getState().updateAccount(newId, { openingBalance: opening, openedOn: start });
         return { ...a, accountId: newId, since: start };
       }
-      return { ...a, accountId: choice, since };
+      return { ...a, accountId: choice, since: sinceFor(choice) };
     });
 
     // Accounts already in Slip: history before the 1st is posted, and what you chose to delete goes.
@@ -178,11 +180,20 @@ export function BankSetup({ id }: { id: string }) {
     useStore.setState((st) => ({
       transactions: st.transactions
         .filter((t) => !remove.has(t.id))
-        .map((t) => (existingIds.has(t.accountId) && t.date < since && !t.cleared && !t.reconciled ? { ...t, cleared: true } : t)),
+        .map((t) =>
+          existingIds.has(t.accountId) && t.date < sinceFor(t.accountId) && !t.cleared && !t.reconciled ? { ...t, cleared: true } : t,
+        ),
     }));
     useStore.getState().saveBankLink({ ...link, accounts: mapped });
     useStore.getState().applyBankSync(link.id, result);
-    if (result.ready) for (const [accountId, gap] of gaps) if (gap !== 0) useStore.getState().addAdjustment(accountId, gap, { fix: true });
+    // An account that only starts today gets its bank balance as a Starting balance (Ready to
+    // assign, not income); one with history gets an Error adjustment for the gap.
+    if (result.ready)
+      for (const [accountId, gap] of gaps) {
+        if (gap === 0) continue;
+        const fresh = sinceFor(accountId) !== existingAccountSince(day);
+        useStore.getState().addAdjustment(accountId, gap, fresh ? { starting: true } : { fix: true });
+      }
 
     const waitingNow = waiting(useStore.getState().bankTransactions).filter((b) => b.linkId === link.id).length;
     haptic('success');
@@ -200,6 +211,7 @@ export function BankSetup({ id }: { id: string }) {
           const accountId = map[a.plaidAccountId];
           const account = accounts.find((x) => x.id === accountId)!;
           const bal = balanceOf(a);
+          const since = sinceFor(accountId);
           const preview = linkPreview({ accountId, since, synced: result?.added ?? [], plaidAccountId: a.plaidAccountId, transactions, payees });
           const gap =
             result && bal !== undefined
@@ -231,7 +243,9 @@ export function BankSetup({ id }: { id: string }) {
                     {preview.fresh.length}
                   </Text>
                 </FormRow>
-                <FormRow label={result?.ready === false ? 'Difference (still loading)' : 'Difference'}>
+                <FormRow
+                  label={`${since !== existingAccountSince(day) ? 'Starting balance' : 'Difference'}${result?.ready === false ? ' (still loading)' : ''}`}
+                >
                   <Money cents={gap} weight="600" signed={gap !== 0} tone={gap === 0 ? 'positive' : 'auto'} />
                 </FormRow>
               </FormCard>
@@ -296,7 +310,7 @@ export function BankSetup({ id }: { id: string }) {
             const account = accounts.find((x) => x.id === accountId);
             const bal = balanceOf(a);
             if (!account || bal === undefined || !result?.ready) return sum;
-            return sum + Math.abs(linkGap({ account, since, plaidAccountId: a.plaidAccountId, synced: result.added, transactions, payees, bankBalance: bal, remove }));
+            return sum + Math.abs(linkGap({ account, since: sinceFor(accountId), plaidAccountId: a.plaidAccountId, synced: result.added, transactions, payees, bankBalance: bal, remove }));
           }, 0);
           return (
             <Button

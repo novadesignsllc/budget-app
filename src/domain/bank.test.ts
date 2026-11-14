@@ -3,6 +3,7 @@ import { describe, expect, test } from '@jest/globals';
 import {
   choiceFromKey,
   choiceKey,
+  existingAccountSince,
   guessChoice,
   linkGap,
   openingFromBank,
@@ -296,5 +297,28 @@ describe('linking adds up', () => {
   test('a new account opens so it matches once the week comes in', () => {
     const bankList = [synced('1', '2026-11-08', -5000, 'A'), synced('2', '2026-11-09', 200000, 'Pay'), synced('3', '2026-11-10', -700, 'B', { pending: true })];
     expect(openingFromBank(300000, bankList, 'p-check', '2026-11-07')).toBe(300000 + 5000 - 200000);
+  });
+});
+
+describe('where matching starts', () => {
+  test('the 1st of the month, or the day a newer account opened', () => {
+    expect(existingAccountSince('2026-11-14')).toBe('2026-11-01');
+    expect(existingAccountSince('2026-11-14', '2025-03-02')).toBe('2026-11-01');
+    expect(existingAccountSince('2026-11-14', '2026-11-14')).toBe('2026-11-14');
+  });
+
+  test('an empty account opened today takes the whole bank balance as its starting balance', () => {
+    const list = [synced('1', '2026-11-03', -5000, 'Kroger'), synced('2', '2026-11-14', -700, 'Wawa')];
+    const gap = linkGap({
+      account: { id: 'check', openingBalance: 0 },
+      since: existingAccountSince('2026-11-14', '2026-11-14'),
+      plaidAccountId: 'p-check',
+      synced: list,
+      transactions: [],
+      payees: [],
+      bankBalance: 200000,
+    });
+    // Only today's Wawa comes in to approve, so the starting balance is the bank's balance before it.
+    expect(gap).toBe(200700);
   });
 });

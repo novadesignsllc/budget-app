@@ -3,6 +3,7 @@ import { create } from 'zustand';
 import {
   nameKey,
   planSync,
+  STARTING_BALANCE,
   type BankChoice,
   slipBalance,
   type BankLink,
@@ -203,7 +204,7 @@ type Actions = {
    * Posts a balance correction with no envelope. From reconciling it's already
    * reconciled; an error adjustment (`fix`) is a plain transaction.
    */
-  addAdjustment: (accountId: string, amount: Cents, opts?: { fix?: boolean }) => void;
+  addAdjustment: (accountId: string, amount: Cents, opts?: { fix?: boolean; starting?: boolean }) => void;
   /** Returns the pair id both halves share. */
   transfer: (input: {
     fromAccountId: string;
@@ -585,9 +586,9 @@ export const useStore = create<Store>()((set, get) => ({
           accountId,
           amount,
           kind: 'adjustment',
-          payee: opts?.fix ? 'Error adjustment' : 'Balance adjustment',
+          payee: opts?.starting ? STARTING_BALANCE : opts?.fix ? 'Error adjustment' : 'Balance adjustment',
           cleared: true,
-          reconciled: !opts?.fix,
+          reconciled: !opts?.fix && !opts?.starting,
           createdAt: Date.now(),
         },
       ],

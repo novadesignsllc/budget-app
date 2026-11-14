@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { LinkedMark, StatusButton } from '@/components/bank';
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
+import { STARTING_BALANCE } from '@/domain/bank';
 import { formatMoney } from '@/domain/money';
 import type { Account, Envelope, Transaction } from '@/domain/types';
 import { flagHues, radius, spacing, useColors } from '@/theme';
@@ -60,6 +61,7 @@ function envelopeText(
   // The payee already says where it went ("To Car Loan"), so the column just says what it is.
   if (t.kind === 'transfer') return { text: 'Transfer', tone: 'textSecondary' };
   if (t.kind === 'interest') return { text: 'Interest', tone: 'textSecondary' };
+  if (t.kind === 'adjustment' && t.payee === STARTING_BALANCE) return { text: 'Ready to assign', tone: 'positive' };
   if (t.kind === 'adjustment') return { text: 'Balance adjustment', tone: 'textSecondary' };
   return { text: 'No envelope', tone: 'orange' };
 }

@@ -222,3 +222,13 @@ describe('fresh start', () => {
     expect(s.bankLinks[0].accounts[0].since).toBe(s.accounts[0].openedOn);
   });
 });
+
+describe('starting balance', () => {
+  it('lands in Ready to assign and is not income', () => {
+    const { check } = setup();
+    useStore.getState().addAdjustment(check, 250000, { starting: true });
+    const t = useStore.getState().transactions[0];
+    expect(t).toMatchObject({ payee: 'Starting balance', kind: 'adjustment', cleared: true, reconciled: false });
+    expect(t.envelopeId).toBeUndefined();
+  });
+});

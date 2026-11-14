@@ -21,7 +21,7 @@ import { radius, spacing, useColors } from '@/theme';
 import { haptic } from '@/utils/haptics';
 import { setKeypadHeight } from '@/utils/keyboard';
 
-import { SIDEBAR_WIDTH, useIsDesktop } from './dock';
+import { useIsDesktop, useSidebarWidth } from './dock';
 import { Icon } from './icon';
 import { Text } from './text';
 
@@ -183,6 +183,7 @@ function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const desktop = useIsDesktop();
+  const sidebarWidth = useSidebarWidth((s) => s.width);
   const math = hasMath(session.expr);
 
   const key = (k: KeypadKey, content: React.ReactNode, label: string) => (
@@ -241,7 +242,7 @@ function KeypadPanel({ session, root }: { session: Session; root?: boolean }) {
           left: '50%',
           right: undefined,
           width: DESKTOP_PAD_WIDTH,
-          marginLeft: SIDEBAR_WIDTH / 2 - DESKTOP_PAD_WIDTH / 2,
+          marginLeft: sidebarWidth / 2 - DESKTOP_PAD_WIDTH / 2,
           borderWidth: 1,
           borderColor: colors.separator,
           borderRadius: radius.card,

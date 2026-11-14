@@ -287,7 +287,7 @@ export function DesktopBudget() {
             <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />
           )}
           <Spacer />
-          <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={210} />
+          <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={170} />
           <DButton
             label="Auto-assign"
             icon={{ sf: 'bolt.fill', md: 'bolt' }}
@@ -367,7 +367,7 @@ export function DesktopBudget() {
             </View>
           ))}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
-        <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 560, maxWidth: 680, minWidth: 0, gap: spacing.md }}>
+        <View style={{ flexGrow: 3, flexShrink: 1, flexBasis: 560, maxWidth: 1000, minWidth: 0, gap: spacing.md }}>
           {starters.length > 0 && (
             <Starters
               starters={starters}
@@ -766,7 +766,7 @@ function Inspector({
   const leftColor = row.available < 0 ? colors.negative : row.available < 100 ? colors.textSecondary : colors.positive;
 
   return (
-    <View style={{ flexGrow: 1, flexShrink: 0, flexBasis: 360, maxWidth: 480, gap: 14 }}>
+    <View style={{ flexGrow: 2, flexShrink: 0, flexBasis: 360, maxWidth: 560, gap: 14 }}>
       <DCard padded>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1, gap: 2 }}>

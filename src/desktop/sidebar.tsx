@@ -1,16 +1,20 @@
 import { Link, router, usePathname } from 'expo-router';
 import { TabTrigger, type TabTriggerSlotProps } from 'expo-router/ui';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import Svg, { Path, Rect } from 'react-native-svg';
 
-import { SIDEBAR_WIDTH } from '@/components/dock';
+import { useSidebarWidth } from '@/components/dock';
 import { keypadIsOpen } from '@/components/keypad';
 import { desktopSheetOpen } from '@/components/screen';
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
 import { formatMoney } from '@/domain/money';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
+import { useStore } from '@/store';
 import { useSyncStatus } from '@/sync/status';
 import { radius, softOf, spacing, useColors } from '@/theme';
+import { pageZoom } from '@/utils/zoom';
 
 import { focusSearch, Kbd, SlipMark, usePageKeys } from './ui';
 
@@ -22,6 +26,7 @@ type ItemProps = Omit<TabTriggerSlotProps, 'ref'> & { ref?: React.Ref<React.Comp
  * keyboard), every account with its balance, and whether the phone is in sync.
  */
 export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
+  const width = useSidebarWidth((st) => st.width);
   const colors = useColors();
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
@@ -40,7 +45,8 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
   });
 
   return (
-    <View style={{ width: SIDEBAR_WIDTH, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
+    <View style={{ width, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface }}>
+      <ResizeHandle />
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 12, paddingVertical: 18, gap: 18 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 6 }}>
           <SlipMark />
@@ -104,6 +110,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
                     <Pressable
                       style={{
                         flexDirection: 'row',
+                        alignItems: 'center',
                         justifyContent: 'space-between',
                         gap: spacing.sm,
                         paddingHorizontal: 10,
@@ -113,6 +120,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
                         backgroundColor: pathname === `/${g.debt ? 'debt' : 'account'}/${a.id}` ? colors.accentSoft : 'transparent',
                       }}
                     >
+                      <BankMark accountId={a.id} />
                       <Text variant="body" numberOfLines={1} style={{ flex: 1 }}>
                         {a.name}
                       </Text>
@@ -203,5 +211,87 @@ function SyncLine() {
         {look.label}
       </Text>
     </View>
+  );
+}
+
+/**
+ * Before each account: a chain when it's linked to a bank (green when the bank is
+ * sending, red when it wants you to sign in again), or a plain wallet when it isn't, so
+ * the names always line up.
+ */
+function BankMark({ accountId }: { accountId: string }) {
+  const colors = useColors();
+  const link = useStore((s) => s.bankLinks.find((l) => l.accounts.some((a) => a.accountId === accountId)));
+  if (link) {
+    const broken = !!link.needsLogin;
+    return (
+      <View accessible accessibilityLabel={broken ? `${link.institution} needs you to sign in again` : `Linked to ${link.institution}`}>
+        <Svg width={14} height={14} viewBox="0 0 12 12">
+          <Path
+            d="M5 7l2-2M4.2 5.3 3.1 6.4a1.9 1.9 0 0 0 2.7 2.7l1.1-1.1M7.8 6.7l1.1-1.1a1.9 1.9 0 0 0-2.7-2.7L5.1 4"
+            fill="none"
+            stroke={broken ? colors.negativeStrong : colors.positive}
+            strokeWidth={1.4}
+            strokeLinecap="round"
+          />
+        </Svg>
+      </View>
+    );
+  }
+  return (
+    <View accessible accessibilityLabel="Not linked to a bank">
+      <Svg width={14} height={14} viewBox="0 0 14 14">
+        <Rect x={1.75} y={3.25} width={10.5} height={7.5} rx={1.6} fill="none" stroke={colors.disabled} strokeWidth={1.3} />
+        <Path d="M1.75 6h10.5" stroke={colors.disabled} strokeWidth={1.3} />
+      </Svg>
+    </View>
+  );
+}
+
+/** The sidebar's right edge: drag it to make the sidebar wider or narrower. */
+function ResizeHandle() {
+  const colors = useColors();
+  const setWidth = useSidebarWidth((s) => s.set);
+  const ref = useRef<React.ComponentRef<typeof View>>(null);
+  const [active, setActive] = useState(false);
+  useEffect(() => {
+    const node = ref.current as unknown as HTMLElement | null;
+    if (!node || typeof window === 'undefined') return;
+    const down = (e: PointerEvent) => {
+      e.preventDefault();
+      setActive(true);
+      const move = (ev: PointerEvent) => setWidth(ev.clientX / pageZoom());
+      const up = () => {
+        setActive(false);
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    };
+    node.addEventListener('pointerdown', down);
+    return () => node.removeEventListener('pointerdown', down);
+  }, [setWidth]);
+  return (
+    <View
+      ref={ref}
+      accessibilityLabel="Drag to resize the sidebar"
+      style={
+        {
+          position: 'absolute',
+          top: 0,
+          bottom: 0,
+          right: -4,
+          width: 8,
+          zIndex: 10,
+          cursor: 'col-resize',
+          backgroundColor: active ? colors.accentSoft : 'transparent',
+        } as object
+      }
+    />
   );
 }

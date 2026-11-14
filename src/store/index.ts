@@ -65,6 +65,29 @@ function monthlyBudget(r: Pick<Recurring, 'amount' | 'frequency'>): Cents {
   return ceilDollars(monthlyCost(r));
 }
 
+/**
+ * The target a bill's envelope gets. A monthly (or more often) bill budgets what it costs
+ * a month. A quarterly or yearly bill builds up to its full amount by the month it's due,
+ * then starts over: a $2,003 yearly bill due in December needs $2,003 by December, not
+ * $167 a month.
+ */
+export function billTarget(r: Pick<Recurring, 'amount' | 'frequency' | 'nextDue'>): {
+  amount: Cents;
+  targetKind?: TargetKind;
+  targetDate?: string;
+  targetEvery?: number;
+} {
+  if (r.frequency === 'yearly' || r.frequency === 'quarterly') {
+    return {
+      amount: ceilDollars(r.amount),
+      targetKind: 'repeat',
+      targetDate: r.nextDue.slice(0, 7),
+      targetEvery: r.frequency === 'yearly' ? 12 : 3,
+    };
+  }
+  return { amount: monthlyBudget(r) };
+}
+
 export type Settings = {
   debtStrategy: Strategy;
   /** Total the user plans to put toward debt each month, minimums included. */
@@ -141,6 +164,8 @@ type Actions = {
     >,
   ) => void;
   moveAccount: (id: string, direction: -1 | 1) => void;
+  /** Puts these accounts in this order, keeping every other account where it was. */
+  reorderAccounts: (ids: string[]) => void;
 
   /** `month` is when the target starts; it defaults to the current month. */
   addEnvelope: (input: {
@@ -250,6 +275,11 @@ type Actions = {
   setPayeeEnvelope: (id: string, envelopeId: string | undefined) => void;
   /** Money from this payee always goes to Ready to assign. */
   setPayeeIncome: (id: string) => void;
+  /**
+   * Yearly and quarterly bills budget up to their full amount by the due date. Envelopes
+   * made before that budgeted a twelfth (or a third) a month; this switches them once.
+   */
+  fixBillTargets: () => void;
   /** One-time move of the old merchant memory into `payees`. Does nothing once payees exist. */
   migrateMerchantMemory: () => void;
   /**
@@ -380,6 +410,19 @@ export const useStore = create<Store>()((set, get) => ({
       if (i < 0 || j < 0 || j >= sorted.length) return s;
       [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
       return { accounts: sorted.map((a, order) => ({ ...a, order })) };
+    }),
+
+  reorderAccounts: (ids) =>
+    set((s) => {
+      const sorted = [...s.accounts].sort((a, b) => a.order - b.order);
+      const moving = new Set(ids);
+      // The slots these accounts held, refilled in the new order.
+      const slots = sorted.map((a, i) => (moving.has(a.id) ? i : -1)).filter((i) => i >= 0);
+      const byId = new Map(sorted.map((a) => [a.id, a]));
+      const next = [...sorted];
+      slots.forEach((slot, k) => (next[slot] = byId.get(ids[k])!));
+      // Only accounts whose place changed are new objects, so sync writes just those.
+      return { accounts: next.map((a, order) => (a.order === order ? a : { ...a, order })) };
     }),
 
   addEnvelope: ({ name, group, monthlyTarget, month, emoji, targetKind, targetDate, targetEvery }) => {
@@ -943,10 +986,14 @@ export const useStore = create<Store>()((set, get) => ({
     const id = newId();
     // Every bill and subscription gets its own envelope in Bills or Subscriptions, budgeted to
     // what it costs a month, so approving it always spends money that was set aside for it.
+    const plan = billTarget(r);
     const envelopeId = get().addEnvelope({
       name: r.name,
       group: recurringGroup(r.kind),
-      monthlyTarget: monthlyBudget(r),
+      monthlyTarget: plan.amount,
+      targetKind: plan.targetKind,
+      targetDate: plan.targetDate,
+      targetEvery: plan.targetEvery,
     });
     get().updateEnvelope(envelopeId, { recurringId: id });
     set((s) => ({ recurring: [...s.recurring, { ...r, envelopeId, id, active: true }] }));
@@ -954,6 +1001,24 @@ export const useStore = create<Store>()((set, get) => ({
   },
 
   updateRecurring: (id, patch) => {
+    const applyBillTarget = (envelopeId: string, r: Recurring) => {
+      const plan = billTarget(r);
+      const e = get().envelopes.find((x) => x.id === envelopeId);
+      if (!e) return;
+      set((s) => ({
+        envelopes: s.envelopes.map((x) => {
+          if (x.id !== envelopeId) return x;
+          const { targetKind: _k, targetDate: _d, targetEvery: _e, ...rest } = x;
+          return {
+            ...rest,
+            ...(plan.targetKind ? { targetKind: plan.targetKind } : {}),
+            ...(plan.targetDate ? { targetDate: plan.targetDate } : {}),
+            ...(plan.targetEvery ? { targetEvery: plan.targetEvery } : {}),
+          };
+        }),
+      }));
+      get().setTarget(envelopeId, today().slice(0, 7), plan.amount);
+    };
     const before = get().recurring.find((r) => r.id === id);
     set((s) => ({ recurring: s.recurring.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
     const after = get().recurring.find((r) => r.id === id);
@@ -967,8 +1032,15 @@ export const useStore = create<Store>()((set, get) => ({
       const order = get().envelopes.filter((e) => e.group === group).length;
       get().updateEnvelope(envelope.id, { group, order });
     }
-    if (after.amount !== before.amount || after.frequency !== before.frequency) {
-      get().setTarget(envelope.id, today().slice(0, 7), monthlyBudget(after));
+    // Approving moves the due date on by one period; the repeating target already follows
+    // that. Any other change to what's due, how much, or how often resets the target.
+    const approved = after.nextDue !== before.nextDue && after.nextDue === advance(before);
+    if (
+      after.amount !== before.amount ||
+      after.frequency !== before.frequency ||
+      (after.nextDue !== before.nextDue && !approved)
+    ) {
+      applyBillTarget(envelope.id, after);
     }
   },
 
@@ -1090,6 +1162,28 @@ export const useStore = create<Store>()((set, get) => ({
       get().updateEnvelope(envelopeId, { recurringId: r.id });
       set((st) => ({ recurring: st.recurring.map((x) => (x.id === r.id ? { ...x, envelopeId } : x)) }));
     }
+  },
+
+  fixBillTargets: () => {
+    const month = today().slice(0, 7);
+    const s = get();
+    const changes = s.recurring
+      .map((r) => ({ r, plan: billTarget(r), e: s.envelopes.find((x) => x.id === r.envelopeId && x.recurringId === r.id) }))
+      .filter(({ plan, e }) => e && plan.targetKind === 'repeat' && e.targetKind !== 'repeat');
+    if (!changes.length) return;
+    set((st) => ({
+      envelopes: st.envelopes.map((x) => {
+        const c = changes.find((c) => c.e!.id === x.id);
+        if (!c) return x;
+        return {
+          ...x,
+          targetKind: 'repeat' as const,
+          targetDate: c.plan.targetDate,
+          targetEvery: c.plan.targetEvery,
+          targets: withTarget(x, month, c.plan.amount),
+        };
+      }),
+    }));
   },
 
   migrateMerchantMemory: () =>

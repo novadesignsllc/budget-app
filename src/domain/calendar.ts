@@ -1,25 +1,23 @@
-import { isCashAccount, type Account, type Cents, type Transaction } from './types';
+import type { Account, Cents, Transaction } from './types';
 import type { MonthKey } from './months';
 
-export type DayFlow = { income: Cents; spending: Cents };
+export type DayFlow = { inflow: Cents; outflow: Cents };
 
 /**
- * Money in and out for each day of `month`, by day of the month. Income is money into a
- * bank account that went to Ready to assign. Spending is money out of an envelope, on a
- * bank account or a card. Transfers, refunds and debt payments are neither.
+ * Money in and out for each day of `month`, by day of the month: every transaction on
+ * every account, inflow and outflow, so in minus out is what's left over. Transfers
+ * between your own accounts and balance adjustments (starting balances, corrections)
+ * aren't money coming or going, so they're left out.
  */
-export function dailyFlow(accounts: Account[], transactions: Transaction[], month: MonthKey): Map<number, DayFlow> {
-  const byId = new Map(accounts.map((a) => [a.id, a]));
+export function dailyFlow(_accounts: Account[], transactions: Transaction[], month: MonthKey): Map<number, DayFlow> {
   const days = new Map<number, DayFlow>();
   for (const t of transactions) {
-    if (!t.date.startsWith(month)) continue;
-    const income = t.kind === 'income' && t.amount > 0 && isCashAccount(byId.get(t.accountId) ?? ({} as Account));
-    const spending = (t.kind === 'spend' || t.kind === 'slip') && t.amount < 0;
-    if (!income && !spending) continue;
+    if (!t.date.startsWith(month) || !t.amount) continue;
+    if (t.kind === 'transfer' || t.kind === 'adjustment') continue;
     const day = Number(t.date.slice(8, 10));
-    const d = days.get(day) ?? { income: 0, spending: 0 };
-    if (income) d.income += t.amount;
-    else d.spending += -t.amount;
+    const d = days.get(day) ?? { inflow: 0, outflow: 0 };
+    if (t.amount > 0) d.inflow += t.amount;
+    else d.outflow += -t.amount;
     days.set(day, d);
   }
   return days;

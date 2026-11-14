@@ -26,7 +26,7 @@ describe('calendar', () => {
     expect(weeks[4]).toEqual([25, 26, 27, 28, 29, 30, 31]);
   });
 
-  it('counts income to Ready to assign and envelope spending, nothing else', () => {
+  it('counts every inflow and outflow, but not transfers or adjustments', () => {
     const days = dailyFlow(
       accounts,
       [
@@ -35,11 +35,12 @@ describe('calendar', () => {
         tx('2026-10-02', -4000, 'slip', 'visa'),
         tx('2026-10-02', 2500, 'spend'), // a refund
         tx('2026-10-02', -45500, 'transfer'),
+        tx('2026-10-02', 300000, 'adjustment'),
         tx('2026-09-30', -1000, 'spend'),
       ],
       '2026-10',
     );
-    expect(days.get(2)).toEqual({ income: 193542, spending: 19200 });
+    expect(days.get(2)).toEqual({ inflow: 193542 + 2500, outflow: 19200 });
     expect(days.size).toBe(1);
   });
 });

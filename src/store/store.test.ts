@@ -278,3 +278,39 @@ describe('snoozing a target', () => {
     expect(targetFor(useStore.getState().envelopes.find((x) => x.id === groceries)!, '2026-10')).toBe(40000);
   });
 });
+
+describe('bill targets', () => {
+  it('a yearly bill builds up to the full amount by its due month', () => {
+    const { account } = setup();
+    const rid = useStore.getState().addRecurring({ name: 'Progressive', kind: 'bill', amount: 200300, accountId: account, frequency: 'yearly', nextDue: '2026-12-03' });
+    const e = useStore.getState().envelopes.find((x) => x.recurringId === rid)!;
+    expect(e).toMatchObject({ targetKind: 'repeat', targetDate: '2026-12', targetEvery: 12 });
+    expect(Object.values(e.targets!)).toEqual([200300]);
+  });
+
+  it('switches old yearly bills once, and approving keeps the target', () => {
+    const { account } = setup();
+    const rid = useStore.getState().addRecurring({ name: 'Progressive', kind: 'bill', amount: 200300, accountId: account, frequency: 'monthly', nextDue: '2026-12-03' });
+    // An envelope from before: a twelfth a month, no target type.
+    useStore.setState((s) => ({
+      recurring: s.recurring.map((r) => (r.id === rid ? { ...r, frequency: 'yearly' as const } : r)),
+      envelopes: s.envelopes.map((e) => (e.recurringId === rid ? { ...e, targets: { '2026-10': 16700 } } : e)),
+    }));
+    useStore.getState().fixBillTargets();
+    useStore.getState().fixBillTargets();
+    const e = useStore.getState().envelopes.find((x) => x.recurringId === rid)!;
+    expect(e).toMatchObject({ targetKind: 'repeat', targetDate: '2026-12', targetEvery: 12 });
+    expect(e.targets!['2026-10']).toBe(16700);
+    expect(Object.values(e.targets!)).toContain(200300);
+    useStore.getState().approveRecurring(rid);
+    expect(useStore.getState().envelopes.find((x) => x.recurringId === rid)).toMatchObject({ targetDate: '2026-12' });
+  });
+
+  it('a monthly bill still budgets what it costs a month', () => {
+    const { account } = setup();
+    const rid = useStore.getState().addRecurring({ name: 'Verizon', kind: 'bill', amount: 6512, accountId: account, frequency: 'monthly', nextDue: '2026-11-20' });
+    const e = useStore.getState().envelopes.find((x) => x.recurringId === rid)!;
+    expect(e.targetKind).toBeUndefined();
+    expect(Object.values(e.targets!)).toEqual([6600]);
+  });
+});

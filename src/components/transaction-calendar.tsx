@@ -21,7 +21,7 @@ const longMonth = new Intl.DateTimeFormat('en-US', { month: 'long' });
 const dollars = (cents: number, sign: boolean) => `${sign ? '$' : ''}${Math.ceil(cents / 100).toLocaleString('en-US')}`;
 
 /**
- * Transactions as a month calendar: each day's income (green) and spending (red), the
+ * Transactions as a month calendar: each day's money in (green) and out (red), the
  * month's totals on top, and the picked day's transactions underneath (or beside it on a
  * computer).
  */
@@ -38,13 +38,13 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
   const days = useMemo(() => dailyFlow(accounts, transactions, month), [accounts, transactions, month]);
   const weeks = useMemo(() => monthGrid(month), [month]);
   const total = useMemo(() => {
-    let income = 0;
-    let spending = 0;
+    let inflow = 0;
+    let outflow = 0;
     for (const d of days.values()) {
-      income += d.income;
-      spending += d.spending;
+      inflow += d.inflow;
+      outflow += d.outflow;
     }
-    return { income, spending };
+    return { inflow, outflow };
   }, [days]);
 
   // Today in this month; otherwise the last day with anything, else the 1st.
@@ -62,11 +62,11 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
   const [y, m] = month.split('-').map(Number);
   const weekday = WEEKDAYS[new Date(y, m - 1, selected).getDay()];
   const flow = days.get(selected);
-  const summary = [flow?.income ? `${formatMoney(flow.income)} in` : '', flow?.spending ? `${formatMoney(flow.spending)} out` : '']
+  const summary = [flow?.inflow ? `${formatMoney(flow.inflow)} in` : '', flow?.outflow ? `${formatMoney(flow.outflow)} out` : '']
     .filter(Boolean)
     .join(' · ');
 
-  const left = total.income - total.spending;
+  const left = total.inflow - total.outflow;
   const stat = (label: string, value: string, tone?: 'positive' | 'negative') => (
     <View style={{ flex: 1, gap: 1 }}>
       <Text variant="footnote" tone="textSecondary">
@@ -113,7 +113,7 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
                   key={j}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
-                  accessibilityLabel={`${longMonth.format(new Date(y, m - 1, n))} ${n}${d?.income ? `, ${formatMoney(d.income)} in` : ''}${d?.spending ? `, ${formatMoney(d.spending)} spent` : ''}`}
+                  accessibilityLabel={`${longMonth.format(new Date(y, m - 1, n))} ${n}${d?.inflow ? `, ${formatMoney(d.inflow)} in` : ''}${d?.outflow ? `, ${formatMoney(d.outflow)} out` : ''}`}
                   onPress={() => setPicked({ month, day: n })}
                   style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
                     flex: 1,
@@ -148,22 +148,22 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
                       {n}
                     </Text>
                   </View>
-                  {d?.income ? (
+                  {d?.inflow ? (
                     <Text
                       numberOfLines={1}
                       style={{ fontSize: wide ? 12 : 10, lineHeight: wide ? 16 : 12, fontWeight: '600', fontVariant: ['tabular-nums'] }}
                       color={colors.positive}
                     >
-                      +{dollars(d.income, !!wide)}
+                      +{dollars(d.inflow, !!wide)}
                     </Text>
                   ) : null}
-                  {d?.spending ? (
+                  {d?.outflow ? (
                     <Text
                       numberOfLines={1}
                       style={{ fontSize: wide ? 12 : 10, lineHeight: wide ? 16 : 12, fontWeight: '600', fontVariant: ['tabular-nums'] }}
                       color={colors.negative}
                     >
-                      {dollars(d.spending, !!wide)}
+                      {dollars(d.outflow, !!wide)}
                     </Text>
                   ) : null}
                 </Pressable>
@@ -202,8 +202,8 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
     <View style={{ gap: wide ? spacing.lg : spacing.md }}>
       <Card>
         <View style={{ flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md }}>
-          {stat('Income', dollars(total.income, true), total.income ? 'positive' : undefined)}
-          {stat('Spending', dollars(total.spending, true), total.spending ? 'negative' : undefined)}
+          {stat('Inflow', dollars(total.inflow, true), total.inflow ? 'positive' : undefined)}
+          {stat('Outflow', dollars(total.outflow, true), total.outflow ? 'negative' : undefined)}
           {stat('Left over', `${left < 0 ? '-' : '+'}${dollars(Math.abs(left), true)}`)}
         </View>
       </Card>

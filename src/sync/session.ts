@@ -38,6 +38,8 @@ function runSync(user: SessionUser) {
       useStore.getState().migrateMerchantMemory();
       // Groups are fixed now: rename Everyday to Daily and fold custom groups into it.
       useStore.getState().normalizeGroups();
+      // Yearly and quarterly bills build up to their full amount by the due date.
+      useStore.getState().fixBillTargets();
       useSession.setState({ dataReady: true });
       useProfiles.setState({ switching: false });
     },

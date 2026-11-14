@@ -450,14 +450,28 @@ export function newAccountSince(day: ISODate): ISODate {
   return addDays(day, -6);
 }
 
+/** How far back Plaid sends history when a bank is linked (days_requested in api/_lib/core.ts). */
+export const LINK_HISTORY_DAYS = 30;
+
 /**
- * An account already in Slip matches from the 1st of this month, or from the day it was
- * opened if that's later (a new account, or one that just had a fresh start), so nothing
- * from before it existed comes in to approve.
+ * Where matching starts when a bank is linked to an account already in Slip.
+ *
+ * - An empty account (new, or after a fresh start) starts today: the bank's balance comes
+ *   in as one Starting balance and nothing older is asked about.
+ * - An account with history starts on the last day its balance was confirmed against the
+ *   bank (when it was opened or last reconciled), or as far back as Plaid sends, whichever
+ *   is later. Anything the bank has in that window that you didn't enter waits on Home, so a
+ *   missed transaction shows up as itself instead of hiding in an adjustment.
  */
-export function existingAccountSince(day: ISODate, openedOn?: ISODate): ISODate {
-  const first = `${day.slice(0, 7)}-01`;
-  return openedOn && openedOn > first ? openedOn : first;
+export function existingAccountSince(
+  day: ISODate,
+  account: Pick<Account, 'openedOn' | 'lastReconciledOn'>,
+  hasHistory: boolean,
+): ISODate {
+  if (!hasHistory) return day;
+  const confirmed = account.lastReconciledOn ?? account.openedOn;
+  const window = addDays(day, -LINK_HISTORY_DAYS);
+  return confirmed > window ? confirmed : window;
 }
 
 /** The payee of the one transaction that brings a new account's bank balance into Slip. */

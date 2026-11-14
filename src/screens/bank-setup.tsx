@@ -99,7 +99,11 @@ export function BankSetup({ id }: { id: string }) {
   const tracked = useMemo(() => (link ? link.accounts.filter(trackable) : []), [link]);
   const existing = tracked.filter((a) => map[a.plaidAccountId] && map[a.plaidAccountId] !== NEW && map[a.plaidAccountId] !== SKIP);
   // Per account: the 1st of the month, or the day it opened if that's later.
-  const sinceFor = (accountId: string) => existingAccountSince(day, accounts.find((x) => x.id === accountId)?.openedOn);
+  const hasHistory = (accountId: string) => transactions.some((t) => t.accountId === accountId);
+  const sinceFor = (accountId: string) => {
+    const account = accounts.find((x) => x.id === accountId);
+    return account ? existingAccountSince(day, account, hasHistory(accountId)) : day;
+  };
 
   if (!link) {
     return (
@@ -191,7 +195,7 @@ export function BankSetup({ id }: { id: string }) {
     if (result.ready)
       for (const [accountId, gap] of gaps) {
         if (gap === 0) continue;
-        const fresh = sinceFor(accountId) !== existingAccountSince(day);
+        const fresh = !hasHistory(accountId);
         useStore.getState().addAdjustment(accountId, gap, fresh ? { starting: true } : { fix: true });
       }
 
@@ -244,7 +248,7 @@ export function BankSetup({ id }: { id: string }) {
                   </Text>
                 </FormRow>
                 <FormRow
-                  label={`${since !== existingAccountSince(day) ? 'Starting balance' : 'Difference'}${result?.ready === false ? ' (still loading)' : ''}`}
+                  label={`${!hasHistory(accountId) ? 'Starting balance' : 'Difference'}${result?.ready === false ? ' (still loading)' : ''}`}
                 >
                   <Money cents={gap} weight="600" signed={gap !== 0} tone={gap === 0 ? 'positive' : 'auto'} />
                 </FormRow>

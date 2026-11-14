@@ -301,17 +301,21 @@ describe('linking adds up', () => {
 });
 
 describe('where matching starts', () => {
-  test('the 1st of the month, or the day a newer account opened', () => {
-    expect(existingAccountSince('2026-11-14')).toBe('2026-11-01');
-    expect(existingAccountSince('2026-11-14', '2025-03-02')).toBe('2026-11-01');
-    expect(existingAccountSince('2026-11-14', '2026-11-14')).toBe('2026-11-14');
+  test('an empty account starts today', () => {
+    expect(existingAccountSince('2026-11-14', { openedOn: '2026-11-14' }, false)).toBe('2026-11-14');
+    expect(existingAccountSince('2026-11-14', { openedOn: '2025-03-02' }, false)).toBe('2026-11-14');
+  });
+  test('an account with history starts where it was last confirmed, within what Plaid sends', () => {
+    expect(existingAccountSince('2026-11-14', { openedOn: '2026-10-27' }, true)).toBe('2026-10-27');
+    expect(existingAccountSince('2026-11-14', { openedOn: '2026-10-27', lastReconciledOn: '2026-11-05' }, true)).toBe('2026-11-05');
+    expect(existingAccountSince('2026-11-14', { openedOn: '2025-03-02' }, true)).toBe('2026-10-15');
   });
 
   test('an empty account opened today takes the whole bank balance as its starting balance', () => {
     const list = [synced('1', '2026-11-03', -5000, 'Kroger'), synced('2', '2026-11-14', -700, 'Wawa')];
     const gap = linkGap({
       account: { id: 'check', openingBalance: 0 },
-      since: existingAccountSince('2026-11-14', '2026-11-14'),
+      since: existingAccountSince('2026-11-14', { openedOn: '2026-11-14' }, false),
       plaidAccountId: 'p-check',
       synced: list,
       transactions: [],
@@ -320,5 +324,17 @@ describe('where matching starts', () => {
     });
     // Only today's Wawa comes in to approve, so the starting balance is the bank's balance before it.
     expect(gap).toBe(200700);
+  });
+});
+
+describe('a missed transaction comes in as itself', () => {
+  test('an inflow you never entered waits on Home instead of becoming an adjustment', () => {
+    const account = { id: 'check', openingBalance: 250000, openedOn: '2026-10-27' };
+    const list = [synced('in', '2026-10-29', 5817, 'Deposit'), synced('d', '2026-11-02', -15000, 'Daily Intel')];
+    const transactions = [txn('a', '2026-11-01', -15000, 'Daily Intel', { cleared: true })];
+    const since = existingAccountSince('2026-11-14', account, true);
+    const preview = linkPreview({ accountId: 'check', since, synced: list, plaidAccountId: 'p-check', transactions, payees: [] });
+    expect(preview.fresh.map((s) => s.id)).toEqual(['in']);
+    expect(linkGap({ account, since, plaidAccountId: 'p-check', synced: list, transactions, payees: [], bankBalance: 250000 - 15000 + 5817 })).toBe(0);
   });
 });

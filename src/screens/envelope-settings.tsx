@@ -240,6 +240,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
   const envelope = useStore((s) => s.envelopes.find((e) => e.id === id));
   const updateEnvelope = useStore((s) => s.updateEnvelope);
   const setTargetFor = useStore((s) => s.setTarget);
+  const setTargetKind = useStore((s) => s.setTargetKind);
   const ledger = useLedger();
   const [name, setName] = useState(envelope?.name ?? '');
   const [group, setGroup] = useState<string>(fixGroup(envelope?.group ?? 'Daily'));
@@ -298,7 +299,7 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
         )}
         {!fixed && <GroupPicker group={group} onGroup={setGroup} />}
         {!fixed && <TargetKindRow value={kind} onChange={setKind} />}
-        {!isDebt && <TargetAmountRow ref={targetRef} kind={fixed ? 'spending' : kind} value={target} onChange={setTarget} />}
+        {!isDebt && <TargetAmountRow ref={targetRef} kind={kind} value={target} onChange={setTarget} />}
         {!fixed && (
           <TargetExtraRows
             kind={kind}
@@ -329,12 +330,15 @@ export function EnvelopeSettings({ id, month: monthParam }: { id: string; month?
             name: fixed ? envelope.name : name.trim(),
             group: fixed ? envelope.group : group,
             ...(emoji && emoji !== envelope.emoji ? { emoji } : {}),
-            ...(!fixed && kind !== targetKindOf(envelope) ? { targetKind: kind } : {}),
+
             ...(!fixed && (kind === 'builder' || kind === 'repeat') && date !== envelope.targetDate ? { targetDate: date } : {}),
             ...(!fixed && kind === 'repeat' && every !== envelope.targetEvery ? { targetEvery: every } : {}),
           });
+          // A new target type starts this month; its amount is always set with it.
+          const kindChanged = !fixed && kind !== targetKindOf(envelope);
+          if (kindChanged) setTargetKind(id, kind, month);
           const next = parseMoney(target);
-          if (!isDebt && (next ?? null) !== current) setTargetFor(id, month, next);
+          if (!isDebt && (kindChanged || (next ?? null) !== current)) setTargetFor(id, month, next);
           haptic('success');
           closeSheet();
         }}

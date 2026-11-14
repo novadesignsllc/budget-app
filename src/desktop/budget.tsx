@@ -346,7 +346,7 @@ export function DesktopBudget() {
               }}
             >
               <Text variant="callout" weight="600" tone="negative" style={{ flex: 1 }}>
-                {p === 'savings' ? 'Savings' : 'Spending'} is {formatDollars(-pools[p].readyToAssign)} short this month.
+                {p === 'savings' ? 'Savings' : 'Spending'} is {formatDollars(-pools[p].readyToAssign, 'up')} short this month.
               </Text>
               {floorDollars(pools[p === 'savings' ? 'spending' : 'savings'].readyToAssign) >= 0 && (
                 <DButton
@@ -575,6 +575,8 @@ function targetLabel(
   debt?: { owed: number; target: number },
 ): { text: string; tone: 'textSecondary' | 'textTertiary' | 'negative' | 'caution' } {
   if (row.available < 0) return { text: `Over by ${formatDollars(-row.available, 'up')}`, tone: 'negative' };
+  // A paid-off card asks for nothing, so its target is zero: say so before "No target".
+  if (e.debtAccountId && debt && debt.owed <= 0) return { text: 'Paid off', tone: 'textSecondary' };
   const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
   if (target <= 0) {
     if (!e.debtAccountId && isSnoozed(e, month) && targetSetFor(e, month))
@@ -582,7 +584,7 @@ function targetLabel(
     return { text: 'No target', tone: 'textTertiary' };
   }
   const amount = formatDollars(ceilDollars(target));
-  const kind = e.debtAccountId ? 'spending' : targetKindOf(e);
+  const kind = e.debtAccountId ? 'spending' : targetKindOf(e, month);
   if (kind === 'builder') {
     const by = e.targetDate ? ` by ${monthName(e.targetDate)}` : '';
     if (row.carriedIn + row.assigned >= target) return { text: `${amount}${by} · reached`, tone: 'textSecondary' };
@@ -608,7 +610,6 @@ function targetLabel(
     return { text: `Keep ${amount} · full`, tone: 'textSecondary' };
   }
   const base = kind === 'goal' ? `Save ${amount} a month` : kind === 'weekly' ? `${amount} a week` : `${amount} a month`;
-  if (e.debtAccountId && debt && debt.owed <= 0) return { text: 'Paid off', tone: 'textSecondary' };
   if (need >= 100) return { text: `${base} · ${formatDollars(need)} short`, tone: 'caution' };
   if (row.available < 100 && row.spent > 0) return { text: `${base} · paid`, tone: 'textSecondary' };
   return { text: `${base} · funded`, tone: 'textSecondary' };

@@ -2,9 +2,43 @@ import { ceilDollars } from './money';
 import type { MonthKey } from './months';
 import type { Cents, Envelope, TargetKind } from './types';
 
-/** Spending (a monthly limit) or goal (set aside every month), defaulting by group. */
-export function targetKindOf(envelope: Pick<Envelope, 'targetKind' | 'group'>): TargetKind {
+/**
+ * The target type: the one in effect in `month` when given (see `targetKinds`), else the
+ * current one. Unset follows the group: Savings saves each month, everything else is a
+ * spending limit.
+ */
+export function targetKindOf(
+  envelope: Pick<Envelope, 'targetKind' | 'group'> & { targetKinds?: Envelope['targetKinds'] },
+  month?: MonthKey,
+): TargetKind {
+  if (month && envelope.targetKinds) {
+    const keys = Object.keys(envelope.targetKinds).sort();
+    const at = keys.filter((m) => m <= month).pop() ?? keys[0];
+    if (at) return envelope.targetKinds[at];
+  }
   return envelope.targetKind ?? (envelope.group === 'Savings' ? 'goal' : 'spending');
+}
+
+/**
+ * Switching an envelope's target type from `month` on. Earlier months keep the type they
+ * had, so their amounts still mean what they meant. Amounts planned for later months were
+ * set under the old type, so they go; `month` starts with no target until one is set.
+ */
+export function changeTargetKind(
+  envelope: Pick<Envelope, 'targetKind' | 'group' | 'targets' | 'targetKinds'>,
+  kind: TargetKind,
+  month: MonthKey,
+): Pick<Envelope, 'targetKind' | 'targetKinds' | 'targets'> {
+  const was = targetKindOf(envelope);
+  const targets = Object.fromEntries(Object.entries(envelope.targets ?? {}).filter(([m]) => m < month));
+  const earliest = Object.keys(envelope.targets ?? {}).sort()[0];
+  const kinds: Record<string, TargetKind> = envelope.targetKinds
+    ? Object.fromEntries(Object.entries(envelope.targetKinds).filter(([m]) => m < month))
+    : earliest && earliest < month
+      ? { [earliest]: was }
+      : {};
+  kinds[month] = kind;
+  return { targetKind: kind, targetKinds: kinds, targets: { ...targets, [month]: null } };
 }
 
 /** The target types in the order they're offered, with their names. */
@@ -42,6 +76,26 @@ function addMonths(month: MonthKey, n: number): MonthKey {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * A repeating builder's current cycle: the month it's due and what counts as saved toward
+ * it. A bill paid before its due month (autopay, or a bank date a few days early) means
+ * that cycle is done, so the next one starts. Outside the due month, money spent from the
+ * envelope (a bill paid late) isn't saved toward the next one.
+ */
+export function repeatCycle(
+  envelope: Pick<Envelope, 'targetDate' | 'targetEvery'>,
+  target: Cents,
+  row: { carriedIn: Cents; activity?: Cents; cycleSpent?: Cents },
+  month: MonthKey,
+): { due: MonthKey; have: Cents } | null {
+  let due = nextDue(envelope, month);
+  if (!due) return null;
+  const every = Math.max(1, envelope.targetEvery ?? 12);
+  if (target > 0 && (row.cycleSpent ?? 0) >= target * 0.9) due = addMonths(due, every);
+  const have = month === due ? row.carriedIn : row.carriedIn + Math.min(0, row.activity ?? 0);
+  return { due, have };
+}
+
 /** Percent of income: a percent target (stored × 100) of this month's income, in whole dollars. */
 export function percentOf(target: Cents, income: Cents): Cents {
   return ceilDollars(Math.ceil((Math.max(0, income) * target) / 10000));
@@ -53,12 +107,12 @@ export function percentOf(target: Cents, income: Cents): Cents {
  * builders; the percent of this month's income.
  */
 export function targetThisMonth(
-  envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate' | 'targetEvery'>,
+  envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate' | 'targetEvery'> & { targetKinds?: Envelope['targetKinds'] },
   target: Cents,
-  row: { carriedIn: Cents; monthIncome?: Cents; percentCarry?: Cents },
+  row: { carriedIn: Cents; activity?: Cents; cycleSpent?: Cents; monthIncome?: Cents; percentCarry?: Cents },
   month: MonthKey,
 ): Cents {
-  switch (targetKindOf(envelope)) {
+  switch (targetKindOf(envelope, month)) {
     case 'weekly':
       return target * weeksIn(month);
     case 'percent':
@@ -67,8 +121,8 @@ export function targetThisMonth(
     case 'builder':
       return builderMonthly(envelope, target, row.carriedIn, month);
     case 'repeat': {
-      const due = nextDue(envelope, month);
-      return due ? builderMonthly({ targetDate: due }, target, row.carriedIn, month) : 0;
+      const cycle = repeatCycle(envelope, target, row, month);
+      return cycle ? builderMonthly({ targetDate: cycle.due }, target, cycle.have, month) : 0;
     }
     default:
       return target;
@@ -118,12 +172,20 @@ export function builderMonthly(
  * - Percent wants its share of the month's income assigned.
  */
 export function targetNeed(
-  envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate' | 'targetEvery'>,
+  envelope: Pick<Envelope, 'targetKind' | 'group' | 'targetDate' | 'targetEvery'> & { targetKinds?: Envelope['targetKinds'] },
   target: Cents,
-  row: { assigned: Cents; carriedIn: Cents; available: Cents; monthIncome?: Cents; percentCarry?: Cents },
+  row: {
+    assigned: Cents;
+    carriedIn: Cents;
+    available: Cents;
+    activity?: Cents;
+    cycleSpent?: Cents;
+    monthIncome?: Cents;
+    percentCarry?: Cents;
+  },
   month: MonthKey,
 ): Cents {
-  const kind = targetKindOf(envelope);
+  const kind = targetKindOf(envelope, month);
   if (kind === 'bank') return Math.max(0, target - row.available);
   const amount = targetThisMonth(envelope, target, row, month);
   // Maximum and Weekly refill what's there; the rest want this month's amount assigned.

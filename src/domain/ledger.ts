@@ -69,6 +69,8 @@ export function computeLedger({ accounts, envelopes, transactions, allocations, 
   }
 
   for (const t of transactions) {
+    // Dated after this month: not counted yet, the same as the Budget tab.
+    if (monthEnd && t.date > monthEnd) continue;
     const account = accountById.get(t.accountId);
     if (!account) continue;
     bump(balance, t.accountId, t.amount);

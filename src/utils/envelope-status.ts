@@ -1,6 +1,6 @@
 import { ceilDollars, formatDollars } from '@/domain/money';
 import type { EnvelopeMonth, MonthKey } from '@/domain/months';
-import { builderEnded, nextDue, targetFor, targetKindOf, targetNeed } from '@/domain/targets';
+import { builderEnded, repeatCycle, targetFor, targetKindOf, targetNeed, targetThisMonth } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
 import { DEBT_GROUP } from '@/store';
 
@@ -57,11 +57,14 @@ export function targetBar(
   const target = e.debtAccountId ? (debt?.target ?? 0) : (targetFor(e, month) ?? 0);
   if (target <= 0) return null;
   if (row.available < 0) return { state: 'over', progress: 1 };
-  const need = e.debtAccountId ? Math.max(0, target - row.assigned) : targetNeed(e, target, row, month);
-  if (need >= 100) {
-    // How much of the target is in: a spending limit counts what's in the envelope.
-    const have = target - need;
-    return { state: 'short', progress: Math.min(1, Math.max(0, have / target)) };
+  // Whole dollars, rounded up, like the status line, Fill and Auto-assign: 66¢ short is "$1 short".
+  const need = ceilDollars(e.debtAccountId ? Math.max(0, target - row.assigned) : targetNeed(e, target, row, month));
+  if (need > 0) {
+    // How much of this month's amount is in (a percent or a weekly target asks a different
+    // amount than the number it's set to).
+    const asks = e.debtAccountId ? target : targetThisMonth(e, target, row, month);
+    const base = Math.max(asks, need);
+    return { state: 'short', progress: Math.min(1, Math.max(0, (base - need) / base)) };
   }
   if (row.available < 100) return { state: 'empty', progress: 0 };
   const month$ = row.available + row.spent;
@@ -78,6 +81,8 @@ export function monthName(key: string): string {
 // The budget shows whole dollars: amounts round down, spending rounds up.
 const m = (c: Cents) => formatDollars(c);
 const up = (c: Cents) => formatDollars(c, 'up');
+/** "+$50" put in, or "-$50" taken back out. */
+const signed = (c: Cents) => (c < 0 ? `-${m(-c)}` : `+${m(c)}`);
 
 /**
  * How an envelope is doing in a month, in one line. Bills and Daily show spending
@@ -122,7 +127,7 @@ export function envelopeStatus(
   const target = targetFor(e, month) ?? 0;
   const need = ceilDollars(targetNeed(e, target, row, month));
 
-  const kind = targetKindOf(e);
+  const kind = targetKindOf(e, month);
   if (kind === 'bank' && target) {
     return {
       subtitle: need > 0 ? `${m(need)} to refill to ${m(target)}` : `Full at ${m(target)}`,
@@ -154,9 +159,9 @@ export function envelopeStatus(
   }
 
   if (kind === 'repeat' && target) {
-    const due = nextDue(e, month);
-    const when = due ? monthName(due) : '';
-    const have = row.carriedIn + assigned;
+    const cycle = repeatCycle(e, target, row, month);
+    const when = cycle ? monthName(cycle.due) : '';
+    const have = (cycle?.have ?? row.carriedIn) + assigned;
     return {
       subtitle:
         need > 0
@@ -174,7 +179,7 @@ export function envelopeStatus(
 
   if (kind === 'goal') {
     return {
-      subtitle: target ? `+${m(assigned)} of ${m(target)} this month` : `+${m(assigned)} this month`,
+      subtitle: target ? `${signed(assigned)} of ${m(target)} this month` : `${signed(assigned)} this month`,
       tone: target && assigned >= target ? 'positive' : 'textSecondary',
       progress: target ? assigned / target : available > 0 ? 1 : 0,
       overspent: false,

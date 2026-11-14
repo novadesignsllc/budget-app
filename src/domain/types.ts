@@ -83,6 +83,12 @@ export type Envelope = {
    */
   targetKind?: TargetKind;
   /**
+   * The target type by month, like `targets`: an entry applies from that month on. It
+   * keeps an old month reading its amount the way it was set (a $400 Maximum stays $400
+   * after the envelope switches to Percent). Unset means `targetKind` for every month.
+   */
+  targetKinds?: Record<string, TargetKind>;
+  /**
    * Builder: the month (`YYYY-MM`) the amount should be reached by. Repeating builder: the
    * next month it's due; after that it comes due every `targetEvery` months.
    */

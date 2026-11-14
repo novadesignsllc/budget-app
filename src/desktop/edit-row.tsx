@@ -5,7 +5,7 @@ import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
 import { cleanAmount, showAmount } from '@/domain/amount-text';
-import { addDays } from '@/domain/dates';
+import { addDays, today } from '@/domain/dates';
 import { parseMoney } from '@/domain/money';
 import { isCashAccount, type Account, type Transaction } from '@/domain/types';
 import { useEntryOptions } from '@/hooks/use-entry-options';
@@ -57,8 +57,11 @@ export function RegisterEditRow({
   );
   const dates = useMemo<DropdownOption<string>[]>(() => {
     const list: DropdownOption<string>[] = [];
+    // Never after today: a transaction dated ahead wouldn't count anywhere yet.
+    const last = today();
     for (let i = 30; i >= -60; i--) {
       const d = addDays(t.date, i);
+      if (d > last && d !== t.date) continue;
       list.push({ value: d, label: shortDate(d) });
     }
     return list;

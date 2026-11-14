@@ -15,7 +15,7 @@ import type { Strategy } from '@/domain/debt';
 import type { MonthKey } from '@/domain/months';
 import { findPayee } from '@/domain/payees';
 import { canReconcile, isLocked } from '@/domain/reconcile';
-import { withTarget } from '@/domain/targets';
+import { changeTargetKind, targetKindOf, withTarget } from '@/domain/targets';
 import { normalizePayee } from '@/domain/quick-add';
 import { ceilDollars } from '@/domain/money';
 import { advance, monthlyCost } from '@/domain/recurring';
@@ -180,6 +180,8 @@ type Actions = {
   }) => string;
   /** Sets the target from `month` on. Earlier months keep the target they had. */
   setTarget: (envelopeId: string, month: MonthKey, amount: Cents | null) => void;
+  /** Switches the target type from `month` on (earlier months keep theirs). Set the amount after. */
+  setTargetKind: (envelopeId: string, kind: TargetKind, month: MonthKey) => void;
   /** Snoozes (or un-snoozes) an envelope's target for one month. */
   snoozeTarget: (envelopeId: string, month: MonthKey, on: boolean) => void;
   updateEnvelope: (
@@ -476,6 +478,13 @@ export const useStore = create<Store>()((set, get) => ({
       envelopes: s.envelopes.map((e) => (e.id === envelopeId ? { ...e, targets: withTarget(e, month, amount) } : e)),
     })),
 
+  setTargetKind: (envelopeId, kind, month) =>
+    set((s) => ({
+      envelopes: s.envelopes.map((e) =>
+        e.id === envelopeId && kind !== targetKindOf(e) ? { ...e, ...changeTargetKind(e, kind, month) } : e,
+      ),
+    })),
+
   snoozeTarget: (envelopeId, month, on) =>
     set((s) => ({
       envelopes: s.envelopes.map((e) => {
@@ -486,7 +495,16 @@ export const useStore = create<Store>()((set, get) => ({
     })),
 
   updateEnvelope: (id, patch) =>
-    set((s) => ({ envelopes: s.envelopes.map((e) => (e.id === id ? { ...e, ...patch } : e)) })),
+    set((s) => ({
+      envelopes: s.envelopes.map((e) => {
+        if (e.id !== id) return e;
+        // A new target type starts this month; earlier months keep the type they had.
+        if (patch.targetKind && patch.targetKind !== targetKindOf(e)) {
+          return { ...e, ...patch, ...changeTargetKind(e, patch.targetKind, today().slice(0, 7)) };
+        }
+        return { ...e, ...patch };
+      }),
+    })),
 
   reorderEnvelopes: (groups) =>
     set((s) => {
@@ -1061,13 +1079,15 @@ export const useStore = create<Store>()((set, get) => ({
       const plan = billTarget(r);
       const e = get().envelopes.find((x) => x.id === envelopeId);
       if (!e) return;
+      const month = today().slice(0, 7);
+      const kind = plan.targetKind ?? (e.group === 'Savings' ? 'goal' : 'spending');
       set((s) => ({
         envelopes: s.envelopes.map((x) => {
           if (x.id !== envelopeId) return x;
-          const { targetKind: _k, targetDate: _d, targetEvery: _e, ...rest } = x;
+          const { targetDate: _d, targetEvery: _e, ...rest } = x;
           return {
             ...rest,
-            ...(plan.targetKind ? { targetKind: plan.targetKind } : {}),
+            ...(kind !== targetKindOf(x) ? changeTargetKind(x, kind, month) : {}),
             ...(plan.targetDate ? { targetDate: plan.targetDate } : {}),
             ...(plan.targetEvery ? { targetEvery: plan.targetEvery } : {}),
           };
@@ -1258,12 +1278,13 @@ export const useStore = create<Store>()((set, get) => ({
       envelopes: st.envelopes.map((x) => {
         const c = changes.find((c) => c.e!.id === x.id);
         if (!c) return x;
+        const switched = changeTargetKind(x, 'repeat', month);
         return {
           ...x,
-          targetKind: 'repeat' as const,
+          ...switched,
           targetDate: c.plan.targetDate,
           targetEvery: c.plan.targetEvery,
-          targets: withTarget(x, month, c.plan.amount),
+          targets: { ...switched.targets, [month]: c.plan.amount },
         };
       }),
     }));

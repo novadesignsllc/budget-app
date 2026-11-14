@@ -1,6 +1,6 @@
 import { ceilDollars } from './money';
 import { accountPool, envelopePool, type Pool } from './pools';
-import { percentOf, targetFor, targetKindOf, targetNeed } from './targets';
+import { nextDue, percentOf, targetFor, targetKindOf, targetNeed } from './targets';
 import { isCashAccount, type Account, type Allocation, type Cents, type Envelope, type ISODate, type Transaction } from './types';
 
 /** `YYYY-MM` */
@@ -65,6 +65,11 @@ export type EnvelopeMonth = {
    * Negative when earlier months got more than their share.
    */
   percentCarry?: Cents;
+  /**
+   * Repeating builders: what was spent from the envelope earlier in the current cycle
+   * (since the previous due month), so a bill paid early ends the cycle.
+   */
+  cycleSpent?: Cents;
 };
 
 export type BudgetMonth = {
@@ -133,12 +138,14 @@ export function computeMonth(
   let cash = 0;
   let savingsCash = 0;
   let split = false;
+  const opened = openedFrom(input.accounts, input.transactions);
   for (const a of input.accounts) {
-    if (isCashAccount(a) && a.openedOn <= end) {
+    const from = opened.get(a.id)!;
+    if (isCashAccount(a) && from <= end) {
       cash += a.openingBalance;
       if (accountPool(a) === 'savings') savingsCash += a.openingBalance;
     }
-    if (accountPool(a) === 'savings' && !a.closed && a.openedOn <= end) split = true;
+    if (accountPool(a) === 'savings' && !a.closed && from <= end) split = true;
   }
 
   const touch = (id: string, amount: Cents, date: ISODate) => {
@@ -175,7 +182,7 @@ export function computeMonth(
 
   // Percent-of-income targets keep a running account from the month they start: each
   // month owes its share of that month's income, and everything assigned pays it down.
-  const percentEnvelopes = input.envelopes.filter((e) => targetKindOf(e) === 'percent' && e.targets);
+  const percentEnvelopes = input.envelopes.filter((e) => targetKindOf(e, month) === 'percent' && e.targets);
   const percentCarry = new Map<string, Cents>();
   if (percentEnvelopes.length) {
     const incomeByMonth = new Map<MonthKey, Cents>();
@@ -186,13 +193,14 @@ export function computeMonth(
       incomeByMonth.set(monthOf(t.date), (incomeByMonth.get(monthOf(t.date)) ?? 0) + t.amount);
     }
     for (const e of percentEnvelopes) {
+      // From the first month it was a percent target with an amount.
       const first = Object.keys(e.targets!)
-        .filter((m) => e.targets![m])
+        .filter((m) => e.targets![m] && targetKindOf(e, m) === 'percent')
         .sort()[0];
       if (!first || first >= month) continue;
       let owed = 0;
       for (let m = first; m < month; m = addMonthKey(m, 1)) {
-        const pct = targetFor(e, m);
+        const pct = targetKindOf(e, m) === 'percent' ? targetFor(e, m) : null;
         if (pct) owed += percentOf(pct, incomeByMonth.get(m) ?? 0);
       }
       for (const al of input.allocations) {
@@ -202,9 +210,24 @@ export function computeMonth(
     }
   }
 
+  // Repeating builders: spending earlier in the cycle (a bill paid before its due month).
+  const cycleSpent = new Map<string, Cents>();
+  for (const e of input.envelopes) {
+    if (targetKindOf(e, month) !== 'repeat' || !e.targetDate) continue;
+    const due = nextDue(e, month);
+    if (!due) continue;
+    const from = monthStart(addMonthKey(due, -Math.max(1, e.targetEvery ?? 12) + 1));
+    let spent = 0;
+    for (const t of input.transactions) {
+      if (t.envelopeId === e.id && t.amount < 0 && t.date >= from && t.date < start) spent += -t.amount;
+    }
+    if (spent) cycleSpent.set(e.id, spent);
+  }
+
   let total = 0;
   let savingsTotal = 0;
   for (const [id, r] of rows) {
+    if (cycleSpent.has(id)) r.cycleSpent = cycleSpent.get(id);
     r.available = r.carriedIn + r.assigned + r.activity;
     r.monthIncome = income;
     if (percentCarry.has(id)) r.percentCarry = percentCarry.get(id);
@@ -255,15 +278,32 @@ export function canGoToMonth(month: MonthKey, today: ISODate): boolean {
   return month <= addMonthKey(monthOf(today), MONTHS_AHEAD);
 }
 
+/**
+ * When each account starts counting: the day it was added, or its earliest transaction if
+ * one was logged from before then. The starting balance comes before every transaction, so
+ * a purchase from last month on an account added today puts the account in last month too.
+ */
+export function openedFrom(accounts: Account[], transactions: Transaction[]): Map<string, ISODate> {
+  const from = new Map(accounts.map((a) => [a.id, a.openedOn]));
+  for (const t of transactions) {
+    const d = from.get(t.accountId);
+    if (d !== undefined && t.date < d) from.set(t.accountId, t.date);
+  }
+  return from;
+}
+
 /** Money already given to months after `month` (budgeting ahead), and which months. */
 export function assignedAhead(allocations: Allocation[], month: MonthKey): { total: Cents; months: MonthKey[] } {
   const end = monthEnd(month);
-  const months = new Set<MonthKey>();
+  const byMonth = new Map<MonthKey, Cents>();
   let total = 0;
   for (const a of allocations) {
     if (a.date <= end) continue;
     total += a.amount;
-    months.add(monthOf(a.date));
+    const m = monthOf(a.date);
+    byMonth.set(m, (byMonth.get(m) ?? 0) + a.amount);
   }
-  return { total, months: [...months].sort() };
+  // A month whose money was all moved back holds nothing, so it isn't named.
+  const months = [...byMonth].filter(([, v]) => v !== 0).map(([m]) => m);
+  return { total, months: months.sort() };
 }

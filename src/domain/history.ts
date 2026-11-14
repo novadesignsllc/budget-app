@@ -1,4 +1,4 @@
-import { addMonthKey, monthEnd, monthOf, type MonthKey } from './months';
+import { addMonthKey, monthEnd, monthOf, openedFrom, type MonthKey } from './months';
 import { isCashAccount, type Account, type Cents, type ISODate, type Transaction } from './types';
 
 export type BalancePoint = { month: MonthKey; cash: Cents; debt: Cents };
@@ -14,7 +14,8 @@ export function balanceHistory(
   today: ISODate,
 ): BalancePoint[] {
   if (!input.accounts.length) return [];
-  const earliest = input.accounts.reduce((a, x) => (x.openedOn < a ? x.openedOn : a), input.accounts[0].openedOn);
+  const opened = openedFrom(input.accounts, input.transactions);
+  const earliest = [...opened.values()].sort()[0];
   const current = monthOf(today);
   const byId = new Map(input.accounts.map((a) => [a.id, a]));
   const points: BalancePoint[] = [];
@@ -25,14 +26,14 @@ export function balanceHistory(
     let cash = 0;
     let debt = 0;
     for (const a of input.accounts) {
-      if (a.openedOn > end) continue;
+      if (opened.get(a.id)! > end) continue;
       if (isCashAccount(a)) cash += a.openingBalance;
       else debt += -a.openingBalance;
     }
     for (const t of input.transactions) {
       if (t.date > end) continue;
       const a = byId.get(t.accountId);
-      if (!a || a.openedOn > end) continue;
+      if (!a) continue;
       if (isCashAccount(a)) cash += t.amount;
       else debt += -t.amount;
     }

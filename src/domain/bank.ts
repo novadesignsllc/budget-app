@@ -4,10 +4,10 @@ import { envelopeFor, normalizePayee } from './quick-add';
 import { isCashAccount, type Account, type AccountKind, type Cents, type Envelope, type ISODate, type Payee, type Recurring, type Transaction } from './types';
 
 /**
- * Bank sync. Transactions are still entered by hand; the bank's copy is a check on them.
- * Each bank transaction either links to one you entered (exact amount, close date), waits
- * on Home for you to approve it, or was skipped. Linked transactions get the bank's
- * pending/posted status.
+ * Bank sync. The bank is the truth: every bank transaction lands in its account, linked to
+ * one you entered (exact amount, close date) or added on its own with its best guess.
+ * What Home asks about is the connection: which envelope, or whether it's one you entered.
+ * Linked transactions get the bank's pending/posted status.
  */
 
 /** One account at a linked bank, and the Slip account it feeds. */
@@ -228,6 +228,8 @@ export type TxnPatch = {
   amount?: Cents;
   /** The bank changed or dropped it after it was linked: flag it for a look. */
   flag?: boolean;
+  /** One bank sync added that the bank has now dropped (a hold that never posted). */
+  remove?: boolean;
 };
 
 export type SyncPlan = {
@@ -283,7 +285,10 @@ export function planSync(input: {
     // Reconciled ones are locked; the bank only updates the status of open ones.
     if (!t.reconciled) {
       p.cleared = !b.pending;
-      if (t.amount !== b.amount && prev && prev.amount !== b.amount) {
+      // One the bank added is the bank's: a tip or a gas hold settling just changes it.
+      if (t.fromBank) {
+        if (t.amount !== b.amount) p.amount = b.amount;
+      } else if (t.amount !== b.amount && prev && prev.amount !== b.amount) {
         p.amount = b.amount;
         p.flag = true;
       }
@@ -336,14 +341,15 @@ export function planSync(input: {
     if (old.status === 'linked' && old.transactionId) {
       const replaced = [...byId.values()].some((x) => x.pendingId === id && x.status === 'linked');
       const t = txnById.get(old.transactionId);
-      if (!replaced && t && !t.reconciled) patch({ id: old.transactionId, bankId: null, cleared: false, flag: true });
+      if (!replaced && t && !t.reconciled)
+        patch(t.fromBank ? { id: t.id, remove: true } : { id: old.transactionId, bankId: null, cleared: false, flag: true });
     }
   }
 
   return { bankTransactions: [...byId.values()], patches: [...patches.values()] };
 }
 
-/** Bank transactions waiting for you on Home, newest first. */
+/** Bank transactions not in the account yet (sync adds these on its own), newest first. */
 export function waiting(bankTransactions: BankTransaction[]): BankTransaction[] {
   return bankTransactions
     .filter((b) => b.status === 'new')
@@ -516,6 +522,61 @@ export function choiceFromKey(key: string): BankChoice | undefined {
   return undefined;
 }
 
+/** What a transaction is now, as a choice: so Home's dropdown starts on it. A bill reads as its envelope. */
+export function choiceOf(t: Transaction): BankChoice | undefined {
+  if (t.kind === 'transfer') return t.transferAccountId ? { type: 'transfer', accountId: t.transferAccountId } : undefined;
+  if (t.kind === 'income') return { type: 'income' };
+  if (t.kind === 'interest') return { type: 'interest' };
+  if (t.kind === 'adjustment') return { type: 'adjustment' };
+  return t.envelopeId ? { type: 'envelope', envelopeId: t.envelopeId } : undefined;
+}
+
+const TRANSFER_CATEGORIES = new Set(['TRANSFER_IN', 'TRANSFER_OUT', 'LOAN_PAYMENTS']);
+const TRANSFER_WORDS = /\b(payment|autopay|transfer|xfer|pmt|e-?payment|thank you)\b/i;
+/** Words in account names that don't tell one account from another. */
+const GENERIC = new Set(['card', 'credit', 'cash', 'bank', 'account', 'checking', 'savings', 'loan', 'personal', 'rewards', 'everyday', 'custom', 'prime', 'unlimited', 'blue', 'visa', 'mastercard', 'signature', 'preferred', 'business']);
+/** How banks spell some issuers in transaction text. */
+const ALIASES: Record<string, string[]> = { amex: ['americanexpress'], citi: ['citibank', 'citicard'], capital: ['capitalone'] };
+
+/**
+ * The other account in a payment or transfer the bank describes in words ("DISCOVER
+ * E-PAYMENT", "Payment to card ending 4417"): the one account its name or last four digits
+ * point to. A card payment with no name falls to the only checking account, if there's one.
+ */
+export function transferByName(
+  bank: BankTransaction,
+  accounts: Account[],
+  masks: Map<string, string> = new Map(),
+): string | undefined {
+  const text = `${bank.raw} ${bank.name}`;
+  if (!TRANSFER_CATEGORIES.has(bank.category ?? '') && !TRANSFER_WORDS.test(text)) return undefined;
+  const here = accounts.find((a) => a.id === bank.accountId);
+  if (!here) return undefined;
+  const cash = isCashAccount(here);
+  // Money leaving a card or loan isn't a payment to anything.
+  if (!cash && bank.amount < 0) return undefined;
+  const others = accounts.filter((a) => !a.closed && a.id !== here.id && (cash || isCashAccount(a)));
+  const byMask = others.filter((a) => {
+    const m = masks.get(a.id);
+    return !!m && new RegExp(`(^|\\D)${m}(\\D|$)`).test(text);
+  });
+  if (byMask.length === 1) return byMask[0].id;
+  const squashed = text.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const words = (name: string) =>
+    name
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !GENERIC.has(w))
+      .flatMap((w) => [w, ...(ALIASES[w] ?? [])]);
+  const byName = others.filter((a) => words(a.name).some((w) => squashed.includes(w)));
+  if (byName.length === 1) return byName[0].id;
+  if (!byName.length && !cash && bank.amount > 0) {
+    const checking = others.filter((a) => a.kind === 'checking');
+    if (checking.length === 1) return checking[0].id;
+  }
+  return undefined;
+}
+
 /** A bill or subscription that this bank transaction looks like: same account, similar name, due within a week. */
 export function dueBill(bank: BankTransaction, recurring: Recurring[]): Recurring | undefined {
   if (bank.amount >= 0) return undefined;
@@ -544,8 +605,9 @@ export function transferPartner(bank: BankTransaction, bankTransactions: BankTra
 
 /**
  * Where a bank transaction most likely goes, so most need only a tap on Approve: a bill
- * that's due, then what you picked for this payee before, the other side of a transfer,
- * a paycheck, interest on a card, then a guess from the name.
+ * that's due, then what you picked for this payee before, the other side of a transfer
+ * (or an account the payment names), a paycheck, interest on a card, then a guess from
+ * the name.
  */
 export function guessChoice(
   bank: BankTransaction,
@@ -555,6 +617,8 @@ export function guessChoice(
     payees: Payee[];
     recurring: Recurring[];
     bankTransactions: BankTransaction[];
+    /** Last four digits of linked accounts, by Slip account id. */
+    masks?: Map<string, string>;
   },
 ): BankChoice | undefined {
   const account = ctx.accounts.find((a) => a.id === bank.accountId);
@@ -569,6 +633,8 @@ export function guessChoice(
   if (payee && live(payee.envelopeId)) return { type: 'envelope', envelopeId: payee.envelopeId! };
   const partner = transferPartner(bank, ctx.bankTransactions);
   if (partner) return { type: 'transfer', accountId: partner.accountId };
+  const named = transferByName(bank, ctx.accounts, ctx.masks);
+  if (named) return { type: 'transfer', accountId: named };
   if (bank.amount > 0 && cash && bank.category === 'INCOME') return { type: 'income' };
   if (bank.amount < 0 && !cash && bank.category === 'BANK_FEES') return { type: 'interest' };
   if (bank.amount < 0) {
@@ -576,4 +642,11 @@ export function guessChoice(
     if (guess.envelopeId && live(guess.envelopeId)) return { type: 'envelope', envelopeId: guess.envelopeId };
   }
   return undefined;
+}
+
+/** Last four digits of each linked account, by Slip account id, for spotting them in payment text. */
+export function linkMasks(links: BankLink[]): Map<string, string> {
+  const masks = new Map<string, string>();
+  for (const l of links) for (const a of l.accounts) if (a.accountId && a.mask) masks.set(a.accountId, a.mask);
+  return masks;
 }

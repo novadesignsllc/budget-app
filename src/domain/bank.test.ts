@@ -1,4 +1,4 @@
-import { describe, expect, test } from '@jest/globals';
+import { describe, expect, it, test } from '@jest/globals';
 
 import {
   choiceFromKey,
@@ -16,12 +16,13 @@ import {
   planSync,
   similarName,
   slipBalance,
+  transferByName,
   waiting,
   type BankLink,
   type BankTransaction,
   type SyncedTxn,
 } from './bank';
-import type { Transaction } from './types';
+import type { Account, Transaction } from './types';
 
 const link: BankLink = {
   id: 'item1',
@@ -336,5 +337,36 @@ describe('a missed transaction comes in as itself', () => {
     const preview = linkPreview({ accountId: 'check', since, synced: list, plaidAccountId: 'p-check', transactions, payees: [] });
     expect(preview.fresh.map((s) => s.id)).toEqual(['in']);
     expect(linkGap({ account, since, plaidAccountId: 'p-check', synced: list, transactions, payees: [], bankBalance: 250000 - 15000 + 5817 })).toBe(0);
+  });
+});
+
+describe('transferByName', () => {
+  const acct = (id: string, name: string, kind: Account['kind']): Account =>
+    ({ id, name, kind, openingBalance: 0, openedOn: '2026-01-01', order: 0 }) as Account;
+  const accounts = [
+    acct('chk', 'Checking', 'checking'),
+    acct('disc', 'Discover Card', 'credit_card'),
+    acct('cfu', 'Chase Freedom Unlimited', 'credit_card'),
+    acct('cff', 'Chase Freedom Flex', 'credit_card'),
+    acct('amex', 'Amex Blue Cash Everyday', 'credit_card'),
+  ];
+  const bank = (accountId: string, raw: string, amount: number, category?: string) =>
+    ({ id: 'b', linkId: 'l', plaidAccountId: 'p', accountId, date: '2026-11-01', amount, name: raw, raw, pending: false, status: 'new', createdAt: 0, ...(category ? { category } : {}) }) as BankTransaction;
+
+  it('finds the one account a payment names', () => {
+    expect(transferByName(bank('chk', 'DISCOVER E-PAYMENT 4417', -5000), accounts)).toBe('disc');
+    expect(transferByName(bank('chk', 'AMERICAN EXPRESS ACH PMT', -5000), accounts)).toBe('amex');
+  });
+  it('leaves it alone when two accounts fit, unless the last four say which', () => {
+    expect(transferByName(bank('chk', 'CHASE CREDIT CRD AUTOPAY', -5000), accounts)).toBeUndefined();
+    const masks = new Map([['cff', '9921']]);
+    expect(transferByName(bank('chk', 'Payment to Chase card ending in 9921', -5000), accounts, masks)).toBe('cff');
+  });
+  it('needs payment words or a transfer category', () => {
+    expect(transferByName(bank('chk', 'DISCOVER BOOKS', -5000), accounts)).toBeUndefined();
+    expect(transferByName(bank('chk', 'DISCOVER BOOKS', -5000, 'TRANSFER_OUT'), accounts)).toBe('disc');
+  });
+  it('a card payment with no name comes from the only checking account', () => {
+    expect(transferByName(bank('disc', 'INTERNET PAYMENT - THANK YOU', 5000), accounts)).toBe('chk');
   });
 });

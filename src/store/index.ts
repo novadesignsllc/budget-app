@@ -1,8 +1,13 @@
 import { create } from 'zustand';
 
 import {
+  choiceKey,
+  choiceOf,
+  guessChoice,
+  linkMasks,
   nameKey,
   planSync,
+  transferPartner,
   STARTING_BALANCE,
   type BankChoice,
   slipBalance,
@@ -249,6 +254,8 @@ type Actions = {
     date: ISODate;
     envelopeId?: string;
     payee?: string;
+    /** A fixed pair id (bank sync's), so two devices making it write the same rows. */
+    id?: string;
   }) => string | undefined;
   /** Takes the lock off transactions reconciled a moment ago (Undo). They stay posted. */
   unreconcile: (ids: string[]) => void;
@@ -260,13 +267,20 @@ type Actions = {
   removeBankLink: (id: string) => void;
   /** Applies what one sync brought: new and changed bank transactions, links, balances. */
   applyBankSync: (linkId: string, result: SyncResult) => void;
-  /** Makes a Slip transaction from a bank transaction waiting on Home. Returns its id. */
-  approveBank: (bankId: string, choice: BankChoice) => string | undefined;
-  /** Links a bank transaction to one you entered. The bank's amount wins. */
+  /**
+   * Makes a Slip transaction from a bank transaction not in the account yet. No choice
+   * leaves it without an envelope; `review` puts it on Home to check. Returns its id.
+   */
+  approveBank: (bankId: string, choice: BankChoice | undefined, opts?: { review?: boolean }) => string | undefined;
+  /** Adds a bank transaction to its account on its own, with its best guess, for Home to check. */
+  autoAddBank: (bankId: string) => string | undefined;
+  /** Home's Approve: the bank transaction goes where `choice` says, and comes off Home. */
+  settleBank: (bankId: string, choice: BankChoice) => void;
+  /** Links a bank transaction to one you entered (what sync added for it goes). The bank's amount wins. */
   linkBank: (bankId: string, transactionId: string) => void;
-  /** Takes a bank transaction off Home without adding it. */
+  /** Takes a bank transaction out of the account and keeps it out. */
   skipBank: (bankId: string) => void;
-  /** Undo for Approve and Skip: puts a bank transaction back on Home and removes what approving added. */
+  /** Undo for Approve and Link: puts a bank transaction back the way sync added it, on Home. */
   restoreBank: (bankId: string) => void;
 
   /** Marks everything except `pendingIds` cleared and posts any difference as an adjustment. */
@@ -366,6 +380,58 @@ function learnBankName(payees: Payee[], payee: string, bank: Pick<BankTransactio
       ? { ...p, bankNames, bankLabels: Object.fromEntries(Object.entries(labels).filter(([k]) => bankNames.includes(k))) }
       : p,
   );
+}
+
+/**
+ * Takes back what a bank transaction made: a transaction sync added for it goes (with the
+ * other half of a transfer, and a bill's due date moves back); one you entered just
+ * unlinks. The bank transaction is left not in the account yet.
+ */
+function unmake(
+  s: Pick<State, 'transactions' | 'bankTransactions' | 'recurring'>,
+  bankId: string,
+): Pick<State, 'transactions' | 'bankTransactions' | 'recurring'> {
+  const bank = s.bankTransactions.find((b) => b.id === bankId);
+  if (!bank) return s;
+  const made = bank.transactionId ? s.transactions.find((t) => t.id === bank.transactionId) : undefined;
+  let { transactions, recurring } = s;
+  if (made?.fromBank) {
+    const pair = made.transferPairId;
+    transactions = transactions.filter((t) => t.id !== made.id && !(pair && t.transferPairId === pair));
+    const due = made.recurringId && made.id.startsWith(`${made.recurringId}-`) ? made.id.slice(made.recurringId.length + 1) : undefined;
+    if (due) recurring = recurring.map((r) => (r.id === made.recurringId && r.nextDue > due ? { ...r, nextDue: due } : r));
+  } else if (made) {
+    transactions = transactions.map((t) => {
+      if (t.id !== made.id) return t;
+      const { bankId: _unlinked, ...rest } = t;
+      return rest;
+    });
+  }
+  // The other half of a transfer may have been another bank transaction's: it lets go too.
+  const gone = new Set(s.transactions.filter((t) => !transactions.includes(t)).map((t) => t.id));
+  return {
+    transactions,
+    recurring,
+    bankTransactions: s.bankTransactions.map((b) => {
+      if (b.id !== bankId && !(b.transactionId && gone.has(b.transactionId) && b.status === 'linked')) return b;
+      const { transactionId: _t, ...rest } = b;
+      return { ...rest, status: 'new' as const };
+    }),
+  };
+}
+
+/** `unmake` on the store. Returns the other bank transactions that let go with it. */
+function takeBack(bankId: string): string[] {
+  const before = useStore.getState();
+  const next = unmake(before, bankId);
+  useStore.setState(next);
+  const was = new Map(before.bankTransactions.map((b) => [b.id, b.status]));
+  return next.bankTransactions.filter((b) => b.id !== bankId && b.status === 'new' && was.get(b.id) !== 'new').map((b) => b.id);
+}
+
+/** Puts bank transactions that let go back in their accounts on their own. */
+function readd(ids: string[]) {
+  for (const id of ids) useStore.getState().autoAddBank(id);
 }
 
 /** The name a bank transaction goes in as: your name for that payee if you've linked it before. */
@@ -596,8 +662,10 @@ export const useStore = create<Store>()((set, get) => ({
         if (t.id === id) {
           const { amount: _ignored, accountId: _account, kind, ...rest } = patch;
           const inflow = t.amount > 0 && (t.kind === 'income' || t.kind === 'spend');
+          // Given an envelope or a kind by you, it's been checked: it comes off Home.
+          const { review: _r, ...checked } = t;
           const next = applyAmount({
-            ...t,
+            ...(patch.envelopeId || kind ? checked : t),
             ...rest,
             ...(inflow && kind ? { kind, envelopeId: kind === 'income' ? undefined : rest.envelopeId } : {}),
           });
@@ -641,7 +709,8 @@ export const useStore = create<Store>()((set, get) => ({
     set((st) => {
       const transactions = st.transactions.map((x) => {
         if (x.id !== id) return x;
-        const { envelopeId: _e, memo: _m, ...rest } = x;
+        // Edited by you, so it's been checked: it comes off Home.
+        const { envelopeId: _e, memo: _m, review: _r, ...rest } = x;
         return {
           ...rest,
           date: f.date,
@@ -661,10 +730,18 @@ export const useStore = create<Store>()((set, get) => ({
     set((s) => {
       const target = s.transactions.find((t) => t.id === id);
       if (!target) return s;
+      const gone = s.transactions.filter((t) => t.id === id || (target.transferPairId && t.transferPairId === target.transferPairId));
+      const goneIds = new Set(gone.map((t) => t.id));
       return {
-        transactions: s.transactions.filter(
-          (t) => t.id !== id && !(target.transferPairId && t.transferPairId === target.transferPairId),
-        ),
+        transactions: s.transactions.filter((t) => !goneIds.has(t.id)),
+        // Deleting a bank's transaction keeps it out: the next sync won't add it back.
+        bankTransactions: s.bankTransactions.some((b) => b.transactionId && goneIds.has(b.transactionId))
+          ? s.bankTransactions.map((b) => {
+              if (!b.transactionId || !goneIds.has(b.transactionId)) return b;
+              const { transactionId: _t, ...rest } = b;
+              return { ...rest, status: 'skipped' as const };
+            })
+          : s.bankTransactions,
       };
     }),
 
@@ -712,8 +789,8 @@ export const useStore = create<Store>()((set, get) => ({
     }));
   },
 
-  transfer: ({ fromAccountId, toAccountId, amount, date, envelopeId, payee }) => {
-    const pair = newId();
+  transfer: ({ fromAccountId, toAccountId, amount, date, envelopeId, payee, id }) => {
+    const pair = id ?? newId();
     const accounts = get().accounts;
     const from = accounts.find((a) => a.id === fromAccountId);
     const to = accounts.find((a) => a.id === toAccountId);
@@ -728,7 +805,7 @@ export const useStore = create<Store>()((set, get) => ({
       transactions: [
         ...s.transactions,
         {
-          id: newId(),
+          id: id ? `${id}-out` : newId(),
           date,
           accountId: from.id,
           amount: -Math.abs(amount),
@@ -741,7 +818,7 @@ export const useStore = create<Store>()((set, get) => ({
           createdAt: now,
         },
         {
-          id: newId(),
+          id: id ? `${id}-in` : newId(),
           date,
           accountId: to.id,
           amount: Math.abs(amount),
@@ -777,13 +854,13 @@ export const useStore = create<Store>()((set, get) => ({
         bankTransactions: s.bankTransactions.filter((b) => b.linkId !== id),
         transactions: s.transactions.map((t) => {
           if (!t.bankId || !gone.has(t.bankId)) return t;
-          const { bankId: _unlinked, ...rest } = t;
+          const { bankId: _unlinked, review: _r, ...rest } = t;
           return rest;
         }),
       };
     }),
 
-  applyBankSync: (linkId, result) =>
+  applyBankSync: (linkId, result) => {
     set((s) => {
       const link = s.bankLinks.find((l) => l.id === linkId);
       if (!link) return s;
@@ -806,6 +883,12 @@ export const useStore = create<Store>()((set, get) => ({
       if (plan.patches.length) {
         const byId = new Map(plan.patches.map((p) => [p.id, p]));
         const pairAmount = new Map<string, Cents>();
+        // A hold the bank dropped that sync had added goes, with the other half of a transfer.
+        const removed = new Set(plan.patches.filter((p) => p.remove).map((p) => p.id));
+        const removedPairs = new Set(
+          transactions.filter((t) => removed.has(t.id) && t.transferPairId).map((t) => t.transferPairId!),
+        );
+        transactions = transactions.filter((t) => !removed.has(t.id) && !(t.transferPairId && removedPairs.has(t.transferPairId)));
         transactions = transactions.map((t) => {
           const p = byId.get(t.id);
           if (!p) return t;
@@ -852,36 +935,78 @@ export const useStore = create<Store>()((set, get) => ({
           l.id === linkId ? { ...l, accounts, cursor: result.cursor, syncedAt: Date.now(), needsLogin: false } : l,
         ),
       };
-    }),
+    });
+    // The bank is the truth: whatever didn't link to one you entered goes in on its own,
+    // with its best guess, and waits on Home for you to check it. Oldest first, so the
+    // first half of a transfer is in before its other half looks for it.
+    const fresh = get()
+      .bankTransactions.filter((b) => b.linkId === linkId && b.status === 'new')
+      .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.createdAt - b.createdAt));
+    for (const b of fresh) get().autoAddBank(b.id);
+  },
 
-  approveBank: (bankId, choice) => {
+  autoAddBank: (bankId) => {
+    const s = get();
+    const bank = s.bankTransactions.find((b) => b.id === bankId);
+    if (!bank || bank.status !== 'new') return undefined;
+    const ctx = {
+      accounts: s.accounts,
+      envelopes: s.envelopes,
+      payees: s.payees,
+      recurring: s.recurring,
+      bankTransactions: s.bankTransactions,
+      masks: linkMasks(s.bankLinks),
+    };
+    return get().approveBank(bankId, guessChoice(bank, ctx), { review: true });
+  },
+
+  approveBank: (bankId, choice, opts) => {
     const s = get();
     const bank = s.bankTransactions.find((b) => b.id === bankId);
     if (!bank || bank.status !== 'new') return undefined;
     const account = s.accounts.find((a) => a.id === bank.accountId);
     if (!account) return undefined;
+    const review = !!opts?.review;
     const cash = isCashAccount(account);
     const payee = bankPayeeName(s.payees, bank);
     const cleared = !bank.pending;
     const now = Date.now();
     let txnId: string | undefined;
 
-    if (choice.type === 'transfer') {
+    if (choice?.type === 'transfer') {
       const out = bank.amount < 0;
+      // The other account's bank copy, if it's linked too: it becomes the other half.
+      const partner = transferPartner(bank, s.bankTransactions.filter((b) => b.accountId === choice.accountId));
       const pair = get().transfer({
         fromAccountId: out ? bank.accountId : choice.accountId,
         toAccountId: out ? choice.accountId : bank.accountId,
         amount: Math.abs(bank.amount),
         date: bank.date,
+        id: `bank-${bankId}`,
       });
       if (!pair) return undefined;
-      txnId = get().transactions.find((t) => t.transferPairId === pair && t.accountId === bank.accountId)?.id;
-      if (txnId) {
-        const id = txnId;
-        set((st) => ({ transactions: st.transactions.map((t) => (t.id === id ? { ...t, bankId, cleared } : t)) }));
+      const halves = get().transactions.filter((t) => t.transferPairId === pair);
+      txnId = halves.find((t) => t.accountId === bank.accountId)?.id;
+      const other = halves.find((t) => t.accountId !== bank.accountId);
+      // The partner was already added on its own (it came in first): this transfer replaces it.
+      if (partner?.status === 'linked' && partner.transactionId) {
+        const made = get().transactions.find((t) => t.id === partner.transactionId);
+        // Claimed just below, so it isn't added back on its own.
+        if (made?.fromBank && made.transferPairId !== pair) set(unmake(get(), partner.id));
       }
+      const claim = !!partner && get().bankTransactions.find((b) => b.id === partner.id)?.status === 'new' && !!other;
+      set((st) => ({
+        transactions: st.transactions.map((t) => {
+          if (t.transferPairId !== pair) return t;
+          if (t.id === txnId) return { ...t, bankId, cleared, fromBank: true, ...(review ? { review } : {}) };
+          return claim ? { ...t, bankId: partner!.id, cleared: !partner!.pending, fromBank: true } : { ...t, fromBank: true };
+        }),
+        bankTransactions: claim
+          ? st.bankTransactions.map((b) => (b.id === partner!.id ? { ...b, status: 'linked' as const, transactionId: other!.id } : b))
+          : st.bankTransactions,
+      }));
     } else {
-      const recurring = choice.type === 'bill' ? s.recurring.find((r) => r.id === choice.recurringId) : undefined;
+      const recurring = choice?.type === 'bill' ? s.recurring.find((r) => r.id === choice.recurringId) : undefined;
       // One id per bank transaction (or per bill and due date), so approving twice can't add it twice.
       const id = recurring ? `${recurring.id}-${recurring.nextDue}` : `bank-${bankId}`;
       if (s.transactions.some((t) => t.id === id)) {
@@ -890,13 +1015,13 @@ export const useStore = create<Store>()((set, get) => ({
         return id;
       }
       const envelopeId =
-        choice.type === 'envelope' ? choice.envelopeId : recurring ? recurring.envelopeId : undefined;
+        choice?.type === 'envelope' ? choice.envelopeId : recurring ? recurring.envelopeId : undefined;
       const kind: TransactionKind =
-        choice.type === 'income'
+        choice?.type === 'income'
           ? 'income'
-          : choice.type === 'interest'
+          : choice?.type === 'interest'
             ? 'interest'
-            : choice.type === 'adjustment'
+            : choice?.type === 'adjustment'
               ? 'adjustment'
               : cash
                 ? 'spend'
@@ -912,15 +1037,18 @@ export const useStore = create<Store>()((set, get) => ({
         ...(recurring ? { recurringId: recurring.id } : {}),
         cleared,
         bankId,
+        fromBank: true,
+        ...(review ? { review } : {}),
         createdAt: now,
       };
       txnId = id;
+      // A guess isn't something you picked, so only your own choices teach the payee.
+      const learn = !review && choice && (kind === 'income' || kind === 'spend' || kind === 'slip');
       set((st) => ({
         transactions: [...st.transactions, row],
-        payees:
-          kind === 'income' || kind === 'spend' || kind === 'slip'
-            ? learnBankName(learnPayee(st.payees, row.payee, kind === 'income' ? undefined : envelopeId), row.payee, bank)
-            : st.payees,
+        payees: learn
+          ? learnBankName(learnPayee(st.payees, row.payee, kind === 'income' ? undefined : envelopeId), row.payee, bank)
+          : st.payees,
       }));
       if (recurring) get().updateRecurring(recurring.id, { nextDue: advance(recurring) });
     }
@@ -934,7 +1062,47 @@ export const useStore = create<Store>()((set, get) => ({
     return txnId;
   },
 
-  linkBank: (bankId, transactionId) =>
+  settleBank: (bankId, choice) => {
+    const s = get();
+    const bank = s.bankTransactions.find((b) => b.id === bankId);
+    const row = bank?.transactionId ? s.transactions.find((t) => t.id === bank.transactionId) : undefined;
+    if (!bank || !row) return;
+    const done = (t: Transaction) => {
+      const { review: _r, ...rest } = t;
+      return rest;
+    };
+    const same = choiceKey(choiceOf(row)) === choiceKey(choice) || (choice.type === 'bill' && row.recurringId === choice.recurringId);
+    if (same || !row.fromBank) {
+      set((st) => ({
+        transactions: st.transactions.map((t) => (t.id === row.id ? done(t) : t)),
+        payees:
+          row.kind === 'income' || row.kind === 'spend' || row.kind === 'slip'
+            ? learnBankName(learnPayee(st.payees, row.payee, row.kind === 'income' ? undefined : row.envelopeId), row.payee, bank)
+            : st.payees,
+      }));
+      return;
+    }
+    // Something else: make it again from the bank's copy, keeping your note, flag and lock.
+    const keep = {
+      ...(row.memo ? { memo: row.memo } : {}),
+      ...(row.flagged ? { flagged: row.flagged, flagColor: row.flagColor } : {}),
+      ...(row.reconciled ? { reconciled: true, cleared: true } : {}),
+    };
+    const freed = takeBack(bankId);
+    const id = get().approveBank(bankId, choice);
+    if (id && Object.keys(keep).length)
+      set((st) => ({ transactions: st.transactions.map((t) => (t.id === id ? { ...t, ...keep } : t)) }));
+    readd(freed);
+  },
+
+  linkBank: (bankId, transactionId) => {
+    // What sync added for it on its own goes: yours is the one that stays.
+    const own = get().bankTransactions.find((b) => b.id === bankId);
+    const freed: string[] = [];
+    if (own?.transactionId && own.transactionId !== transactionId) {
+      const made = get().transactions.find((t) => t.id === own.transactionId);
+      if (made?.fromBank) freed.push(...takeBack(bankId));
+    }
     set((s) => {
       const bank = s.bankTransactions.find((b) => b.id === bankId);
       const target = s.transactions.find((t) => t.id === transactionId);
@@ -942,10 +1110,11 @@ export const useStore = create<Store>()((set, get) => ({
       const magnitude = Math.abs(bank.amount);
       const transactions = s.transactions.map((t) => {
         if (t.id === transactionId) {
+          const { review: _r, ...rest } = t;
           // Reconciled ones keep their amount; the lock means it was already checked.
           return t.reconciled
-            ? { ...t, bankId }
-            : { ...t, bankId, amount: bank.amount, cleared: !bank.pending };
+            ? { ...rest, bankId }
+            : { ...rest, bankId, amount: bank.amount, cleared: !bank.pending };
         }
         if (!target.reconciled && target.transferPairId && t.transferPairId === target.transferPairId) {
           return { ...t, amount: Math.sign(t.amount) * magnitude };
@@ -957,42 +1126,33 @@ export const useStore = create<Store>()((set, get) => ({
         payees: learnBankName(s.payees, target.payee, bank),
         bankTransactions: s.bankTransactions.map((b) => {
           if (b.id === bankId) return { ...b, status: 'linked' as const, transactionId };
-          // Anything else that was linked to it lets go.
+          // Anything else that was linked to it lets go, and goes in on its own.
           if (b.transactionId === transactionId && b.status === 'linked') {
+            freed.push(b.id);
             const { transactionId: _t, ...rest } = b;
             return { ...rest, status: 'new' as const };
           }
           return b;
         }),
       };
-    }),
+    });
+    readd(freed);
+  },
 
-  skipBank: (bankId) =>
+  skipBank: (bankId) => {
+    const freed = takeBack(bankId);
     set((s) => ({
       bankTransactions: s.bankTransactions.map((b) => (b.id === bankId ? { ...b, status: 'skipped' as const } : b)),
-    })),
+    }));
+    readd(freed);
+  },
 
-  restoreBank: (bankId) =>
-    set((s) => {
-      const bank = s.bankTransactions.find((b) => b.id === bankId);
-      if (!bank) return s;
-      const made = bank.transactionId ? s.transactions.find((t) => t.id === bank.transactionId) : undefined;
-      // Only what approving made goes away; a transaction you entered yourself just unlinks.
-      const approved = !!made && (made.id === `bank-${bankId}` || (!!made.transferPairId && made.createdAt >= bank.createdAt));
-      const pair = approved && made?.transferPairId;
-      const transactions = approved
-        ? s.transactions.filter((t) => t.id !== made!.id && !(pair && t.transferPairId === pair))
-        : s.transactions.map((t) => {
-            if (t.id !== bank.transactionId) return t;
-            const { bankId: _unlinked, ...rest } = t;
-            return rest;
-          });
-      const { transactionId: _t, ...rest } = bank;
-      return {
-        transactions,
-        bankTransactions: s.bankTransactions.map((b) => (b.id === bankId ? { ...rest, status: 'new' as const } : b)),
-      };
-    }),
+  restoreBank: (bankId) => {
+    // Undo: back to how sync brought it in, waiting on Home.
+    const freed = takeBack(bankId);
+    get().autoAddBank(bankId);
+    readd(freed);
+  },
 
   reconcile: (accountId, bankBalance, pendingIds) => {
     const day = today();

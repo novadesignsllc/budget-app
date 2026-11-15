@@ -102,14 +102,12 @@ function QueueRow({
   choice,
   onChoose,
   onApprove,
-  onSkip,
   last,
 }: {
   item: QueueItem;
   choice: string | undefined;
   onChoose: (key: string) => void;
   onApprove: () => void;
-  onSkip: () => void;
   last: boolean;
 }) {
   const colors = useColors();
@@ -117,7 +115,13 @@ function QueueRow({
   const emojiFor = useChoiceEmoji();
   const { bank, account } = item;
   const slip = !isCashAccount(account) && bank.amount < 0 && choiceFromKey(choice ?? '')?.type === 'envelope';
-  const note = bank.pending ? 'Pending' : slip ? `Slip on ${account.name}` : account.name;
+  const note = item.near
+    ? `Same as your ${item.near.payee}?`
+    : bank.pending
+      ? 'Pending'
+      : slip
+        ? `Slip on ${account.name}`
+        : account.name;
   return (
     <View
       style={{
@@ -134,10 +138,7 @@ function QueueRow({
     >
       <ActionMenu
         accessibilityLabel={`${bank.name}, ${formatMoney(bank.amount)}. More`}
-        items={[
-          { label: 'Link to one I entered', onPress: () => router.push({ pathname: '/bank-match', params: { id: bank.id } }) },
-          { label: 'Skip it', onPress: onSkip },
-        ]}
+        items={[{ label: 'Link to one I entered', onPress: () => router.push({ pathname: '/bank-match', params: { id: bank.id } }) }]}
         style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, opacity: pressed ? 0.6 : 1 })}
       >
         <DateBlock date={bank.date} tone={slip ? 'negative' : undefined} />
@@ -173,20 +174,21 @@ function QueueRow({
 }
 
 /**
- * Home's list of what the bank sent that isn't in Slip yet. Approve adds it (asking first
- * when it's close to one you entered); tap the date for Link or Skip.
+ * Home's list of what the bank added that you haven't checked. It's already in the account;
+ * Approve keeps it where it's going (asking first when it looks like one you entered), and
+ * tapping the date links it to one you entered.
  */
 export function BankQueueCard() {
   const colors = useColors();
   const items = useBankQueue();
   const { linked, syncedAt } = useBankSyncState();
-  const { approve, skip, dialog } = useBankActions();
-  const bankTransactions = useStore((s) => s.bankTransactions);
+  const { approve, dialog } = useBankActions();
+  const transactions = useStore((s) => s.transactions);
   const [picked, setPicked] = useState<Record<string, string>>({});
   const matched = useMemo(() => {
     const weekAgo = addDays(today(), -6);
-    return bankTransactions.filter((b) => b.status === 'linked' && b.date >= weekAgo && !b.transactionId?.startsWith('bank-')).length;
-  }, [bankTransactions]);
+    return transactions.filter((t) => t.bankId && !t.fromBank && t.date >= weekAgo).length;
+  }, [transactions]);
   if (!linked) return null;
 
   return (
@@ -230,7 +232,6 @@ export function BankQueueCard() {
               choice={choice}
               onChoose={(key) => setPicked((p) => ({ ...p, [item.bank.id]: key }))}
               onApprove={() => approve(item, choice)}
-              onSkip={() => skip(item)}
               last={i === items.length - 1}
             />
           );

@@ -23,7 +23,6 @@ import {
   openingFromBank,
   slipBalance,
   trackable,
-  waiting,
   type BankAccountLink,
   type SyncResult,
 } from '@/domain/bank';
@@ -199,10 +198,11 @@ export function BankSetup({ id }: { id: string }) {
         useStore.getState().addAdjustment(accountId, gap, fresh ? { starting: true } : { fix: true });
       }
 
-    const waitingNow = waiting(useStore.getState().bankTransactions).filter((b) => b.linkId === link.id).length;
+    const mine = new Set(useStore.getState().bankTransactions.filter((b) => b.linkId === link.id).map((b) => b.id));
+    const waitingNow = useStore.getState().transactions.filter((t) => t.review && t.bankId && mine.has(t.bankId)).length;
     haptic('success');
     showToast({
-      message: `${link.institution} is linked.${waitingNow ? ` ${waitingNow} waiting on Home.` : ''}`,
+      message: `${link.institution} is linked.${waitingNow ? ` ${waitingNow} to check on Home.` : ''}`,
     });
     closeSheet();
   }

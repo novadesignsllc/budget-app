@@ -137,6 +137,10 @@ export type Transaction = {
   recurringId?: string;
   /** The bank's copy of this transaction (a BankTransaction id), once bank sync links them. */
   bankId?: string;
+  /** Bank sync added it (you didn't enter it), so its amount follows the bank. */
+  fromBank?: boolean;
+  /** Came in from the bank and waits on Home for you to check where it goes. */
+  review?: boolean;
   createdAt: number;
 };
 

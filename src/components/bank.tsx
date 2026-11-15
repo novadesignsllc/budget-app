@@ -113,24 +113,25 @@ export function matchDifference(mine: Pick<Transaction, 'amount' | 'date'>, bank
   const gap = Math.abs(bank.amount) - Math.abs(mine.amount);
   if (gap > 0) return `The bank shows ${formatMoney(gap)} more.`;
   if (gap < 0) return `The bank shows ${formatMoney(-gap)} less.`;
+  if (mine.date === bank.date) return 'Same amount, same day.';
   return 'Same amount on a different day.';
 }
 
 /**
- * Approving a bank transaction that's close to one you entered, but not the same: link the
- * two (the bank's amount wins), or add the bank's as its own.
+ * Approving a bank transaction that looks like one you entered: link the two (yours stays,
+ * with the bank's amount), or keep both.
  */
 export function MatchDialog({
   mine,
   bank,
   onLink,
-  onAddNew,
+  onKeepBoth,
   onCancel,
 }: {
   mine: Transaction | null;
   bank: BankTransaction | null;
   onLink: () => void;
-  onAddNew: () => void;
+  onKeepBoth: () => void;
   onCancel: () => void;
 }) {
   const colors = useColors();
@@ -201,13 +202,13 @@ export function MatchDialog({
             {desktop ? (
               <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm }}>
                 <Button title="Cancel" variant="ghost" onPress={onCancel} />
-                <Button title="Add new" variant="secondary" onPress={onAddNew} />
+                <Button title="Keep both" variant="secondary" onPress={onKeepBoth} />
                 <Button title="Link" onPress={onLink} />
               </View>
             ) : (
               <View style={{ gap: spacing.sm }}>
                 <Button title="Link" size="lg" onPress={onLink} />
-                <Button title="Add new" size="lg" variant="secondary" onPress={onAddNew} />
+                <Button title="Keep both" size="lg" variant="secondary" onPress={onKeepBoth} />
                 <Button title="Cancel" variant="ghost" onPress={onCancel} />
               </View>
             )}

@@ -2,15 +2,8 @@ import { useMemo, useState } from 'react';
 
 import type { DropdownOption } from '@/components/dropdown';
 import { useToast } from '@/components/toast';
-import {
-  choiceFromKey,
-  choiceKey,
-  guessChoice,
-  nearMatch,
-  waiting,
-  type BankTransaction,
-} from '@/domain/bank';
-import { daysBetween } from '@/domain/dates';
+import { choiceFromKey, choiceKey, choiceOf, exactMatch, nearMatch, type BankTransaction } from '@/domain/bank';
+import { addDays, daysBetween, today } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
 import { isCashAccount, type Account, type Transaction } from '@/domain/types';
 import { useEntryOptions } from '@/hooks/use-entry-options';
@@ -20,36 +13,42 @@ import { haptic } from '@/utils/haptics';
 export type QueueItem = {
   bank: BankTransaction;
   account: Account;
-  /** What Approve does unless you pick something else. */
+  /** What sync added for it: already in the account. */
+  txn: Transaction;
+  /** Where it goes now (what Approve keeps unless you pick something else). */
   guess?: string;
-  /** One you entered that's close but not the same: Approve asks first. */
+  /** One you entered that looks like the same transaction: Approve asks first. */
   near?: Transaction;
 };
 
-/** Bank transactions waiting on Home, each with its best guess and any near match. */
+/** How far back a bank transaction that's in still gets checked against ones you enter later. */
+const RECHECK_DAYS = 30;
+
+/**
+ * What's on Home: bank transactions sync added that you haven't checked yet, and any it
+ * added that now look like one you entered (you logged it after the bank sent it).
+ */
 export function useBankQueue(): QueueItem[] {
   const bankTransactions = useStore((s) => s.bankTransactions);
   const transactions = useStore((s) => s.transactions);
   const accounts = useStore((s) => s.accounts);
-  const envelopes = useStore((s) => s.envelopes);
   const payees = useStore((s) => s.payees);
-  const recurring = useStore((s) => s.recurring);
   return useMemo(() => {
-    const byId = new Map(accounts.map((a) => [a.id, a]));
+    const accountById = new Map(accounts.map((a) => [a.id, a]));
+    const bankById = new Map(bankTransactions.map((b) => [b.id, b]));
+    const since = addDays(today(), -RECHECK_DAYS);
     const items: QueueItem[] = [];
-    for (const bank of waiting(bankTransactions)) {
-      const account = byId.get(bank.accountId);
-      if (!account || account.closed) continue;
-      const ctx = { accounts, envelopes, payees, recurring, bankTransactions };
-      items.push({
-        bank,
-        account,
-        guess: choiceKey(guessChoice(bank, ctx)),
-        near: nearMatch(bank, transactions, payees),
-      });
+    for (const txn of transactions) {
+      if (!txn.bankId || !(txn.review || (txn.fromBank && !txn.reconciled && txn.date >= since))) continue;
+      const bank = bankById.get(txn.bankId);
+      const account = accountById.get(txn.accountId);
+      if (!bank || bank.transactionId !== txn.id || !account || account.closed) continue;
+      const near = txn.reconciled ? undefined : (exactMatch(bank, transactions, payees) ?? nearMatch(bank, transactions, payees));
+      if (!txn.review && !near) continue;
+      items.push({ bank, account, txn, guess: choiceKey(choiceOf(txn)), near });
     }
-    return items;
-  }, [bankTransactions, transactions, accounts, envelopes, payees, recurring]);
+    return items.sort((a, b) => (a.bank.date < b.bank.date ? 1 : a.bank.date > b.bank.date ? -1 : b.bank.createdAt - a.bank.createdAt));
+  }, [bankTransactions, transactions, accounts, payees]);
 }
 
 /** When the banks last sent something, and whether any wants you to sign in again. */
@@ -94,13 +93,12 @@ export function useChoiceOptions(item: QueueItem): DropdownOption<string>[] {
 }
 
 /**
- * Approve, link, skip, each with Undo. A bank transaction close to one you entered opens
+ * Approve and Link, each with Undo. One that looks like a transaction you entered opens
  * the "Same as one you entered?" question first; `dialog` is what MatchDialog needs.
  */
 export function useBankActions() {
-  const approveBank = useStore((s) => s.approveBank);
+  const settleBank = useStore((s) => s.settleBank);
   const linkBank = useStore((s) => s.linkBank);
-  const skipBank = useStore((s) => s.skipBank);
   const restoreBank = useStore((s) => s.restoreBank);
   const showToast = useToast((s) => s.show);
   const [asking, setAsking] = useState<{ item: QueueItem; choice?: string } | null>(null);
@@ -108,17 +106,15 @@ export function useBankActions() {
   const undoable = (message: string, bankId: string) =>
     showToast({ message, actionLabel: 'Undo', onAction: () => restoreBank(bankId) });
 
-  function add(item: QueueItem, key: string | undefined) {
+  function keep(item: QueueItem, key: string | undefined) {
     const choice = key ? choiceFromKey(key) : undefined;
     if (!choice) {
       showToast({ message: `Pick where ${item.bank.name} goes first.` });
       return;
     }
-    if (!approveBank(item.bank.id, choice)) return;
+    settleBank(item.bank.id, choice);
     haptic('success');
-    // A bill moves on to its next due date, which Undo can't take back, so it gets none.
-    if (choice.type === 'bill') showToast({ message: `Added ${item.bank.name} · ${formatMoney(item.bank.amount)}` });
-    else undoable(`Added ${item.bank.name} · ${formatMoney(item.bank.amount)}`, item.bank.id);
+    undoable(`Approved ${item.bank.name} · ${formatMoney(item.bank.amount)}`, item.bank.id);
   }
 
   function approve(item: QueueItem, key: string | undefined) {
@@ -126,18 +122,13 @@ export function useBankActions() {
       setAsking({ item, choice: key });
       return;
     }
-    add(item, key);
+    keep(item, key);
   }
 
   function link(item: QueueItem, txn: Transaction) {
     linkBank(item.bank.id, txn.id);
     haptic('success');
     undoable(`Linked to your ${txn.payee}`, item.bank.id);
-  }
-
-  function skip(item: QueueItem) {
-    skipBank(item.bank.id);
-    undoable(`Skipped ${item.bank.name}`, item.bank.id);
   }
 
   const dialog = {
@@ -147,14 +138,14 @@ export function useBankActions() {
       if (asking?.item.near) link(asking.item, asking.item.near);
       setAsking(null);
     },
-    onAddNew: () => {
-      if (asking) add(asking.item, asking.choice);
+    onKeepBoth: () => {
+      if (asking) keep(asking.item, asking.choice);
       setAsking(null);
     },
     onCancel: () => setAsking(null),
   };
 
-  return { approve, link, skip, dialog };
+  return { approve, link, dialog };
 }
 
 /** "Synced 9:41 AM", or "Synced Mon 9:41 AM" when it's been a while. */

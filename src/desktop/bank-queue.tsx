@@ -24,13 +24,11 @@ function Row({
   choice,
   onChoose,
   onApprove,
-  onSkip,
 }: {
   item: QueueItem;
   choice: string | undefined;
   onChoose: (key: string) => void;
   onApprove: () => void;
-  onSkip: () => void;
 }) {
   const colors = useColors();
   const options = useChoiceOptions(item);
@@ -58,10 +56,16 @@ function Row({
         <Text variant="body" weight="600" color={ink} numberOfLines={1}>
           {bank.name}
         </Text>
-        {bank.raw !== bank.name && (
-          <Text variant="caption" tone="textTertiary" numberOfLines={1}>
-            {bank.raw}
+        {item.near ? (
+          <Text variant="caption" tone="accent" numberOfLines={1}>
+            Same as your {item.near.payee}?
           </Text>
+        ) : (
+          bank.raw !== bank.name && (
+            <Text variant="caption" tone="textTertiary" numberOfLines={1}>
+              {bank.raw}
+            </Text>
+          )
         )}
       </View>
       <Text variant="callout" color={slip ? colors.negative : colors.textSecondary} numberOfLines={1} style={{ width: COL.account }}>
@@ -91,10 +95,7 @@ function Row({
         <DButton label="Approve" onPress={onApprove} style={{ height: 30 }} />
         <ActionMenu
           accessibilityLabel={`More for ${bank.name}`}
-          items={[
-            { label: 'Link to one I entered', onPress: () => router.push({ pathname: '/bank-match', params: { id: bank.id } }) },
-            { label: 'Skip it', onPress: onSkip },
-          ]}
+          items={[{ label: 'Link to one I entered', onPress: () => router.push({ pathname: '/bank-match', params: { id: bank.id } }) }]}
           style={({ pressed, open }) => ({
             width: 30,
             height: 30,
@@ -116,7 +117,7 @@ export function DesktopBankQueue() {
   const colors = useColors();
   const items = useBankQueue();
   const { linked, syncedAt } = useBankSyncState();
-  const { approve, skip, dialog } = useBankActions();
+  const { approve, dialog } = useBankActions();
   const [picked, setPicked] = useState<Record<string, string>>({});
   if (!linked) return null;
   const label = (text: string, width?: number, right?: boolean) => (
@@ -175,7 +176,6 @@ export function DesktopBankQueue() {
                 choice={choice}
                 onChoose={(key) => setPicked((p) => ({ ...p, [item.bank.id]: key }))}
                 onApprove={() => approve(item, choice)}
-                onSkip={() => skip(item)}
               />
             );
           })}

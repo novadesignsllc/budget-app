@@ -3,7 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { fromISODate } from '@/domain/dates';
 import { formatMoney } from '@/domain/money';
-import { isDebtAccount, type Account, type Envelope, type Transaction } from '@/domain/types';
+import { isCashAccount, isDebtAccount, type Account, type Envelope, type Transaction } from '@/domain/types';
 import { useStore } from '@/store';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
@@ -45,6 +45,19 @@ export function transactionEmoji(t: Transaction, envelope?: Envelope, other?: Ac
   if (t.kind === 'adjustment') return '⚖️';
   if (t.kind === 'transfer') return other && isDebtAccount(other) ? '💳' : '🔁';
   return '✉️';
+}
+
+/**
+ * The name a row shows. A transfer says where the money went: "Payment To: Chase" from
+ * cash to a card or loan, "Transfer To: Savings" otherwise (and "From" on the side it
+ * arrived). Everything else shows its payee.
+ */
+export function transactionTitle(t: Transaction, account?: Account, other?: Account): string {
+  if (t.kind !== 'transfer' || !other) return t.payee || 'Untitled';
+  const out = t.amount < 0;
+  const [from, to] = out ? [account, other] : [other, account];
+  const payment = !!from && !!to && isCashAccount(from) && isDebtAccount(to);
+  return `${payment ? 'Payment' : 'Transfer'} ${out ? 'To' : 'From'}: ${other.name}`;
 }
 
 /** The line under the payee: which card a slip went on, then the note. Empty when there's neither. */
@@ -97,7 +110,8 @@ export function TransactionRow({
         ? [account.name, base].filter(Boolean).join(' · ')
         : base;
 
-  const rowBg = done ? colors.control : slip ? colors.negativeTint : colors.surface;
+  // Reconciled wins: a reconciled transfer is grey like the rest.
+  const rowBg = done ? colors.control : slip ? colors.negativeTint : t.kind === 'transfer' ? colors.blueSoft : colors.surface;
   const row = (
     <Pressable
       accessibilityRole={select ? 'checkbox' : 'button'}
@@ -159,7 +173,7 @@ export function TransactionRow({
             numberOfLines={1}
             style={[cell, { flexShrink: 1 }]}
           >
-            {t.payee || 'Untitled'}
+            {transactionTitle(t, account, other)}
           </Text>
           {t.flagged && <Icon sf="flag.fill" md="flag" size={10} color={flagHues[t.flagColor ?? 'red']} />}
           {t.bankId && <LinkedMark size={10} />}

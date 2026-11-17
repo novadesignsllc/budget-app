@@ -12,6 +12,7 @@ import { averageMonthlyIncome } from '@/domain/history';
 import { formatDollars, formatMoney } from '@/domain/money';
 import { dueForApproval, recurringMonthly, upcoming } from '@/domain/recurring';
 import { isCashAccount, type Recurring } from '@/domain/types';
+import { transactionTitle } from '@/components/transaction-row';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { useWealthChart } from '@/hooks/use-wealth-chart';
@@ -236,6 +237,7 @@ export function DesktopHome() {
                 {recent.map((t) => {
                   const envelope = t.envelopeId ? envelopeById.get(t.envelopeId) : undefined;
                   const slip = t.kind === 'slip';
+                  const transfer = t.kind === 'transfer' && !t.reconciled;
                   const env = envelope?.name ?? (t.kind === 'income' ? 'Ready to assign' : t.kind === 'transfer' ? 'Transfer' : '');
                   return (
                     <Pressable
@@ -251,14 +253,14 @@ export function DesktopHome() {
                         paddingHorizontal: 16,
                         borderBottomWidth: 1,
                         borderBottomColor: colors.hairline,
-                        backgroundColor: hovered ? colors.tableHeader : 'transparent',
+                        backgroundColor: hovered ? colors.tableHeader : transfer ? colors.blueSoft : 'transparent',
                       })}
                     >
                       <Text variant="callout" tone="textSecondary" style={{ width: 56 }}>
                         {shortDate(t.date)}
                       </Text>
                       <Text variant="callout" weight="600" numberOfLines={1} style={{ flex: 1 }}>
-                        {t.payee}
+                        {transactionTitle(t, accountById.get(t.accountId), t.transferAccountId ? accountById.get(t.transferAccountId) : undefined)}
                       </Text>
                       <Text
                         variant="callout"
@@ -275,7 +277,7 @@ export function DesktopHome() {
                       <Text
                         variant="callout"
                         align="right"
-                        color={t.amount > 0 ? colors.positive : slip ? colors.negative : colors.text}
+                        color={t.amount > 0 ? colors.positive : colors.negative}
                         style={{ width: 100, fontVariant: ['tabular-nums'] }}
                       >
                         {formatMoney(t.amount, { signed: t.amount > 0 })}

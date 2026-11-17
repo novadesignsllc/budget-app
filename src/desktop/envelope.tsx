@@ -126,6 +126,7 @@ export function DesktopEnvelope({ id, month: monthParam }: { id: string; month?:
                     t={item.t}
                     columns={{ envelope: false }}
                     account={accountById.get(item.t.accountId)}
+                    other={item.t.transferAccountId ? accountById.get(item.t.transferAccountId) : undefined}
                     envelope={envelope}
                   />
                 ),

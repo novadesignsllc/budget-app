@@ -6,7 +6,6 @@ import { useDock } from '@/components/dock';
 import { Dropdown } from '@/components/dropdown';
 import { Icon } from '@/components/icon';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
-import { RangePills } from '@/components/range-pills';
 import { ScreenTitle } from '@/components/screen-title';
 import { TransactionCalendar } from '@/components/transaction-calendar';
 import { Text } from '@/components/text';
@@ -90,7 +89,11 @@ const SPLIT_COLUMNS: Column[] = [
   { label: 'Inflow', width: TXN_COLUMNS.money, align: 'right' },
 ];
 
-/** The Transactions tab: one month at a time in a dense table, or a search across every month. */
+/**
+ * The Transactions tab: the month's calendar on top and its transactions underneath,
+ * newest first. Tapping a day narrows the list to it; tapping it again shows the month.
+ * Search covers every month.
+ */
 export function TransactionList() {
   const colors = useColors();
   const { contentBottom } = useDock();
@@ -103,9 +106,10 @@ export function TransactionList() {
   const [searching, setSearching] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
-  // Searching always shows the list.
-  const calendar = view === 'calendar' && !searching;
+  // A day picked on the calendar narrows the list to it; it belongs to the month it was picked in.
+  const [picked, setPicked] = useState<{ month: MonthKey; day: number } | null>(null);
+  const day = !searching && picked?.month === month ? picked.day : null;
+  const dayKey = day === null ? null : `${month}-${String(day).padStart(2, '0')}`;
 
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
   const envelopeById = useMemo(() => new Map(envelopes.map((e) => [e.id, e])), [envelopes]);
@@ -127,7 +131,9 @@ export function TransactionList() {
   const rows = useMemo(
     () =>
       scoped.filter((t) =>
-        filter === 'flagged'
+        dayKey && t.date !== dayKey
+          ? false
+          : filter === 'flagged'
           ? t.flagged
           : filter === 'open'
             ? !t.reconciled
@@ -135,7 +141,7 @@ export function TransactionList() {
               ? t.kind === 'slip'
               : true,
       ),
-    [scoped, filter],
+    [scoped, filter, dayKey],
   );
 
   const flaggedCount = scoped.filter((t) => t.flagged).length;
@@ -147,13 +153,15 @@ export function TransactionList() {
         ? 'Nothing matches that search.'
         : filter !== 'all'
           ? 'Nothing here matches this filter.'
-          : `Nothing in ${formatMonth(month)} yet.`;
+          : day !== null
+            ? 'Nothing in or out this day.'
+            : `Nothing in ${formatMonth(month)} yet.`;
 
   return (
     <>
       <ScreenTitle title="Transactions" />
       <FlatList
-        data={calendar ? [] : rows}
+        data={rows}
         keyExtractor={(t) => t.id}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -171,20 +179,16 @@ export function TransactionList() {
           <View
             style={{
               gap: spacing.md - 2,
-              marginBottom: rows.length && !calendar ? 0 : spacing.md - 2,
+              marginBottom: rows.length ? 0 : spacing.md - 2,
             }}
           >
             {!searching && (
-              <RangePills
-                options={[
-                  { value: 'calendar', label: 'Calendar' },
-                  { value: 'list', label: 'List' },
-                ]}
-                value={view}
-                onChange={setView}
+              <TransactionCalendar
+                month={month}
+                selected={day}
+                onSelect={(n) => setPicked(n === null ? null : { month, day: n })}
               />
             )}
-            {calendar && <TransactionCalendar month={month} />}
             {searching && (
               <View
                 style={{
@@ -214,17 +218,15 @@ export function TransactionList() {
                 />
               </View>
             )}
-            {!calendar && rows.length > 0 && <TableCardTop columns={SPLIT_COLUMNS} />}
+            {rows.length > 0 && <TableCardTop columns={SPLIT_COLUMNS} />}
           </View>
         }
         ListEmptyComponent={
-          calendar ? undefined : (
-            <Card padded>
-              <Text variant="callout" tone="textSecondary">
-                {emptyText}
-              </Text>
-            </Card>
-          )
+          <Card padded>
+            <Text variant="callout" tone="textSecondary">
+              {emptyText}
+            </Text>
+          </Card>
         }
         renderItem={({ item, index }) => {
           const last = index === rows.length - 1;
@@ -242,20 +244,18 @@ export function TransactionList() {
       />
       <ScreenActions>
         {/* Filter and month sit down here with search, for one-handed use. */}
-        {!calendar && (
-          <Dropdown
-            variant="compact"
-            value={filter}
-            onChange={setFilter}
-            label="Show"
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'flagged', label: flaggedCount ? `Flagged ${flaggedCount}` : 'Flagged' },
-              { value: 'open', label: 'Not reconciled' },
-              { value: 'slips', label: 'Slips' },
-            ]}
-          />
-        )}
+        <Dropdown
+          variant="compact"
+          value={filter}
+          onChange={setFilter}
+          label="Show"
+          options={[
+            { value: 'all', label: 'All' },
+            { value: 'flagged', label: flaggedCount ? `Flagged ${flaggedCount}` : 'Flagged' },
+            { value: 'open', label: 'Not reconciled' },
+            { value: 'slips', label: 'Slips' },
+          ]}
+        />
         {!searching && (
           <Dropdown variant="compact" value={month} options={monthOptions} onChange={setMonth} label="Month" />
         )}

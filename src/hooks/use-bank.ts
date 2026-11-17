@@ -80,8 +80,8 @@ export function useChoiceOptions(item: QueueItem): DropdownOption<string>[] {
       (r) => r.active && r.accountId === account.id && !inflow && Math.abs(daysBetween(r.nextDue, bank.date)) <= 14,
     );
     for (const r of bills) out.push({ value: `bill:${r.id}`, label: r.name, detail: formatMoney(r.amount), section: 'Bills due' });
-    // Card payments come in on the card as money in; spending on a card is a slip from an envelope.
-    if (!(inflow && !cash)) for (const o of envelopeOptions) out.push({ ...o, value: `env:${o.value}` });
+    // Every direction can go to an envelope: a refund on a card goes back to the envelope it came from.
+    for (const o of envelopeOptions) out.push({ ...o, value: `env:${o.value}` });
     for (const a of accounts) {
       if (a.closed || a.id === account.id) continue;
       out.push({ value: `xfer:${a.id}`, label: inflow ? `From ${a.name}` : `To ${a.name}`, section: 'Transfer' });

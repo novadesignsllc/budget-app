@@ -82,7 +82,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
           {tabs.map((t, i) =>
             t.name === 'settings' ? null : (
               <TabTrigger key={t.name} name={t.name} href={t.href as never} resetOnFocus asChild>
-                <SideItem label={t.label} shortcut={String(i + 1)} />
+                <SideItem label={t.label} />
               </TabTrigger>
             ),
           )}
@@ -113,7 +113,7 @@ export function Sidebar({ tabs }: { tabs: readonly SidebarTab[] }) {
         {tabs.map((t, i) =>
           t.name === 'settings' ? (
             <TabTrigger key={t.name} name={t.name} href={t.href as never} resetOnFocus asChild>
-              <SideItem label={t.label} shortcut={String(i + 1)} />
+              <SideItem label={t.label} />
             </TabTrigger>
           ) : null,
         )}

@@ -12,6 +12,7 @@ import { useToast } from '@/components/toast';
 import { TransactionRow, TXN_COLUMNS } from '@/components/transaction-row';
 import { formatMoney } from '@/domain/money';
 import { canReconcile, reconciledBalance } from '@/domain/reconcile';
+import { confirmAction } from '@/utils/confirm';
 import { useLedger } from '@/hooks/use-ledger';
 import { isDebtAccount, type Transaction } from '@/domain/types';
 import { newestFirst, TableCardRow, TableCardTop } from '@/screens/transactions';
@@ -61,9 +62,12 @@ export function useReconcilePosted(accountId: string) {
     () => transactions.filter((t) => t.accountId === accountId && t.cleared && !t.reconciled && canReconcile(t)),
     [transactions, accountId],
   );
-  function reconcile() {
+  async function reconcile() {
     const ids = ready.map((t) => t.id);
     if (!ids.length) return;
+    const what = `${ids.length} ${ids.length === 1 ? 'transaction' : 'transactions'}`;
+    if (!(await confirmAction(`Reconcile ${what}?`, 'They’ll be locked as matching your bank. Pending ones stay open.', 'Reconcile')))
+      return;
     reconcileTransactions(accountId, ids);
     haptic('success');
     const account = useStore.getState().accounts.find((a) => a.id === accountId);

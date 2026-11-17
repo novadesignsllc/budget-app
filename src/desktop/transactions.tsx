@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { TextInput, View } from 'react-native';
 
-import { RangePills } from '@/components/range-pills';
 import { TransactionCalendar } from '@/components/transaction-calendar';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { formatPickedDate } from '@/components/date-picker';
@@ -31,6 +30,7 @@ const SEARCH_LIMIT = 300;
 type Filter = 'flagged' | 'noEnvelope' | 'open';
 
 const monthFormat = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+const dayFormat = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 
 /**
  * Every transaction in a spreadsheet: type a new one in the top row and press Enter,
@@ -46,11 +46,14 @@ export function DesktopTransactions() {
   const [query, setQuery] = useState('');
   const [accountId, setAccountId] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter | null>(null);
-  const [view, setView] = useState<'calendar' | 'list'>('calendar');
+  const [picked, setPicked] = useState<{ month: MonthKey; day: number } | null>(null);
 
   const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
   const envelopeById = useMemo(() => new Map(envelopes.map((e) => [e.id, e])), [envelopes]);
   const searching = query.trim().length > 0;
+  // A day picked on the calendar narrows the list to it, in the month it was picked in.
+  const day = !searching && picked?.month === month ? picked.day : null;
+  const dayKey = day === null ? null : `${month}-${String(day).padStart(2, '0')}`;
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -61,13 +64,13 @@ export function DesktopTransactions() {
         if (filter === 'flagged' && !t.flagged) return false;
         if (filter === 'open' && t.reconciled) return false;
         if (filter === 'noEnvelope' && !((t.kind === 'spend' || t.kind === 'slip') && !t.envelopeId)) return false;
-        if (!q) return monthOf(t.date) === month;
+        if (!q) return dayKey ? t.date === dayKey : monthOf(t.date) === month;
         const env = t.envelopeId ? envelopeById.get(t.envelopeId)?.name : '';
         const amount = (Math.abs(t.amount) / 100).toFixed(2);
         return `${t.payee} ${env ?? ''} ${t.memo ?? ''} ${amount}`.toLowerCase().includes(q);
       })
       .sort(newestFirst);
-  }, [transactions, query, accountId, filter, month, envelopeById]);
+  }, [transactions, query, accountId, filter, month, dayKey, envelopeById]);
 
   const shown = searching ? rows.slice(0, SEARCH_LIMIT) : rows;
   const out = rows.reduce((a, t) => a + (t.amount < 0 ? -t.amount : 0), 0);
@@ -80,16 +83,6 @@ export function DesktopTransactions() {
       header={
         <>
           <PageTitle>Transactions</PageTitle>
-          {!searching && (
-            <RangePills
-              options={[
-                { value: 'calendar', label: 'Calendar' },
-                { value: 'list', label: 'List' },
-              ]}
-              value={view}
-              onChange={setView}
-            />
-          )}
           {!searching && (
             <Dropdown variant="compact" value={month} options={monthOptions} onChange={setMonth} label="Month" />
           )}
@@ -107,10 +100,14 @@ export function DesktopTransactions() {
         </>
       }
     >
-      {view === 'calendar' && !searching ? (
-        <TransactionCalendar month={month} wide />
-      ) : (
-        <>
+      {!searching && (
+        <TransactionCalendar
+          month={month}
+          selected={day}
+          onSelect={(n) => setPicked(n === null ? null : { month, day: n })}
+          wide
+        />
+      )}
       <View accessibilityRole="toolbar" style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm }}>
         <Pill label="All accounts" on={!accountId} onPress={() => setAccountId(null)} />
         {accounts.map((a) => (
@@ -133,7 +130,9 @@ export function DesktopTransactions() {
               ? 'No transactions yet. Type one in the row above.'
               : searching
                 ? 'Nothing matches that search.'
-                : 'Nothing here for this month and filter.'}
+                : day !== null
+                  ? 'Nothing here for this day and filter.'
+                  : 'Nothing here for this month and filter.'}
           </Text>
         ) : (
           shown.map((t) => (
@@ -162,7 +161,7 @@ export function DesktopTransactions() {
           }}
         >
           <Text variant="callout" tone="textSecondary">
-            {searching ? 'Every month' : monthFormat.format(asDate(month))} · {rows.length}{' '}
+            {searching ? 'Every month' : day !== null ? dayFormat.format(new Date(`${dayKey}T12:00:00`)) : monthFormat.format(asDate(month))} · {rows.length}{' '}
             {rows.length === 1 ? 'transaction' : 'transactions'}
             {searching && rows.length > SEARCH_LIMIT ? ` (showing the newest ${SEARCH_LIMIT})` : ''}
           </Text>
@@ -178,8 +177,6 @@ export function DesktopTransactions() {
           </Text>
         </View>
       </DCard>
-        </>
-      )}
     </DPage>
   );
 }

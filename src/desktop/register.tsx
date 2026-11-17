@@ -7,6 +7,7 @@ import { Text } from '@/components/text';
 import { STARTING_BALANCE } from '@/domain/bank';
 import { formatMoney } from '@/domain/money';
 import type { Account, Envelope, Transaction } from '@/domain/types';
+import { transactionTitle } from '@/components/transaction-row';
 import { flagHues, radius, spacing, useColors } from '@/theme';
 
 import { shortDate } from './budget';
@@ -99,7 +100,9 @@ export function RegisterRow({
   }
   const ink = done ? colors.textTertiary : colors.text;
   const sub = done ? colors.textMuted : colors.textSecondary;
-  const outColor = done ? colors.textTertiary : t.kind === 'slip' ? colors.negative : colors.text;
+  const outColor = done ? colors.textTertiary : colors.negative;
+  // Transfers are blue; reconciled ones stay grey like the rest.
+  const transfer = t.kind === 'transfer' && !done;
   const row = (
     <Pressable
       accessibilityRole={select ? 'checkbox' : 'button'}
@@ -115,7 +118,15 @@ export function RegisterRow({
         paddingHorizontal: 16,
         ...(columns.status ? { flex: 1, paddingRight: 0 } : { borderTopWidth: 1, borderTopColor: colors.hairline }),
         opacity: select?.disabled ? 0.55 : 1,
-        backgroundColor: hovered ? (done ? colors.rowDoneHover : colors.tableHeader) : done ? colors.rowDone : 'transparent',
+        backgroundColor: hovered
+          ? done
+            ? colors.rowDoneHover
+            : colors.tableHeader
+          : done
+            ? colors.rowDone
+            : transfer
+              ? colors.blueSoft
+              : 'transparent',
       })}
     >
       {columns.check && (
@@ -164,7 +175,7 @@ export function RegisterRow({
             <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: flagHues[t.flagColor ?? 'red'] }} />
           )}
           <Text variant="body" weight="500" color={ink} numberOfLines={1} style={{ flexShrink: 1 }}>
-            {t.payee}
+            {transactionTitle(t, account, other)}
           </Text>
           {t.bankId && <LinkedMark size={12} />}
         </View>

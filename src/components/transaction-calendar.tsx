@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { dailyFlow, monthGrid } from '@/domain/calendar';
@@ -7,28 +7,49 @@ import { formatMoney } from '@/domain/money';
 import { monthOf, type MonthKey } from '@/domain/months';
 import { useAccounts } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
-import { isListed, newestFirst } from '@/screens/transactions';
 import { spacing, useColors } from '@/theme';
 
-import { Card, CardHeader } from './card';
+import { Card } from './card';
 import { Text } from './text';
-import { TransactionRow } from './transaction-row';
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const longMonth = new Intl.DateTimeFormat('en-US', { month: 'long' });
 
-/** The calendar shows whole dollars, rounded up. */
-const dollars = (cents: number, sign: boolean) => `${sign ? '$' : ''}${Math.ceil(cents / 100).toLocaleString('en-US')}`;
+/** A day's change in a phone-width cell: "+$1.8k" past $1,000 so it fits. */
+const short = (cents: number) => {
+  const d = Math.ceil(Math.abs(cents) / 100);
+  if (d < 1000) return dollars(cents, true);
+  const k = d >= 10000 ? Math.round(d / 1000) : Math.round(d / 100) / 10;
+  return `${cents < 0 ? '-' : '+'}$${k}k`;
+};
+
+/** Whole dollars, rounded up, with a sign when asked: "-$1,500", "+$500", "$0". */
+const dollars = (cents: number, signed = false) => {
+  const text = `$${Math.ceil(Math.abs(cents) / 100).toLocaleString('en-US')}`;
+  if (cents < 0) return `-${text}`;
+  return signed && cents > 0 ? `+${text}` : text;
+};
 
 /**
- * Transactions as a month calendar: each day's money in (green) and out (red), the
- * month's totals on top, and the picked day's transactions underneath (or beside it on a
- * computer).
+ * Transactions as a month calendar: each day shows its change (money in minus out), red
+ * when it went down and green when it went up. Inflow, outflow and left over sit on top,
+ * for the picked day or, with none picked, the whole month. Tapping a day picks it;
+ * tapping it again clears it.
  */
-export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: boolean }) {
+export function TransactionCalendar({
+  month,
+  selected,
+  onSelect,
+  wide,
+}: {
+  month: MonthKey;
+  /** The picked day of the month, or null for the whole month. */
+  selected: number | null;
+  onSelect: (day: number | null) => void;
+  wide?: boolean;
+}) {
   const colors = useColors();
   const transactions = useStore((s) => s.transactions);
-  const envelopes = useStore((s) => s.envelopes);
   const { all: accounts } = useAccounts();
   const day = today();
   const thisMonth = monthOf(day) === month;
@@ -38,6 +59,7 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
   const days = useMemo(() => dailyFlow(accounts, transactions, month), [accounts, transactions, month]);
   const weeks = useMemo(() => monthGrid(month), [month]);
   const total = useMemo(() => {
+    if (selected !== null) return days.get(selected) ?? { inflow: 0, outflow: 0 };
     let inflow = 0;
     let outflow = 0;
     for (const d of days.values()) {
@@ -45,28 +67,15 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
       outflow += d.outflow;
     }
     return { inflow, outflow };
-  }, [days]);
+  }, [days, selected]);
 
-  // Today in this month; otherwise the last day with anything, else the 1st.
-  const fallback = thisMonth ? todayNumber : Math.max(1, ...days.keys());
-  const [picked, setPicked] = useState<{ month: MonthKey; day: number } | null>(null);
-  const selected = picked?.month === month ? picked.day : fallback;
-
-  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
-  const envelopeById = useMemo(() => new Map(envelopes.map((e) => [e.id, e])), [envelopes]);
-  const date = `${month}-${String(selected).padStart(2, '0')}`;
-  const list = useMemo(
-    () => transactions.filter((t) => t.date === date && isListed(t)).sort(newestFirst),
-    [transactions, date],
-  );
   const [y, m] = month.split('-').map(Number);
-  const weekday = WEEKDAYS[new Date(y, m - 1, selected).getDay()];
-  const flow = days.get(selected);
-  const summary = [flow?.inflow ? `${formatMoney(flow.inflow)} in` : '', flow?.outflow ? `${formatMoney(flow.outflow)} out` : '']
-    .filter(Boolean)
-    .join(' · ');
-
   const left = total.inflow - total.outflow;
+  const scope =
+    selected === null
+      ? longMonth.format(new Date(y, m - 1, 1))
+      : `${WEEKDAYS[new Date(y, m - 1, selected).getDay()]}, ${longMonth.format(new Date(y, m - 1, selected))} ${selected}`;
+
   const stat = (label: string, value: string, tone?: 'positive' | 'negative') => (
     <View style={{ flex: 1, gap: 1 }}>
       <Text variant="footnote" tone="textSecondary">
@@ -81,143 +90,108 @@ export function TransactionCalendar({ month, wide }: { month: MonthKey; wide?: b
     </View>
   );
 
-  const cellHeight = wide ? 88 : 52;
-  const grid = (
-    <Card>
-      <View style={{ padding: wide ? 10 : spacing.sm, gap: wide ? 4 : 3 }}>
-        <View style={{ flexDirection: 'row', gap: wide ? 4 : 3, paddingBottom: 2 }}>
-          {WEEKDAYS.map((w) => (
-            <Text
-              key={w}
-              variant="label"
-              caps={wide}
-              tone="textTertiary"
-              align={wide ? 'left' : 'center'}
-              style={{ flex: 1, paddingLeft: wide ? 8 : 0 }}
-            >
-              {wide ? w.slice(0, 3) : w[0]}
-            </Text>
-          ))}
-        </View>
-        {weeks.map((week, i) => (
-          <View key={i} style={{ flexDirection: 'row', gap: wide ? 4 : 3 }}>
-            {week.map((n, j) => {
-              if (n === null)
-                return <View key={j} style={{ flex: 1, height: cellHeight, borderRadius: 8, backgroundColor: wide ? colors.tableHeader : 'transparent' }} />;
-              const d = days.get(n);
-              const on = n === selected;
-              const later = future || (thisMonth && n > todayNumber);
-              const isToday = thisMonth && n === todayNumber;
-              return (
-                <Pressable
-                  key={j}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`${longMonth.format(new Date(y, m - 1, n))} ${n}${d?.inflow ? `, ${formatMoney(d.inflow)} in` : ''}${d?.outflow ? `, ${formatMoney(d.outflow)} out` : ''}`}
-                  onPress={() => setPicked({ month, day: n })}
-                  style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
-                    flex: 1,
-                    minWidth: 0,
-                    height: cellHeight,
-                    paddingHorizontal: wide ? 8 : 1,
-                    paddingVertical: wide ? 8 : 4,
-                    borderRadius: 8,
-                    borderCurve: 'continuous',
-                    borderWidth: 1,
-                    borderColor: on ? colors.accent : wide ? colors.hairline : 'transparent',
-                    backgroundColor: on ? colors.accentSoft : pressed || hovered ? colors.control : colors.surface,
-                    alignItems: wide ? 'flex-start' : 'center',
-                    gap: wide ? 2 : 1,
-                  })}
-                >
-                  <View
-                    style={{
-                      minWidth: 20,
-                      height: 20,
-                      paddingHorizontal: 3,
-                      borderRadius: 10,
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      backgroundColor: isToday ? colors.accent : 'transparent',
-                    }}
-                  >
-                    <Text
-                      style={{ fontSize: 12, lineHeight: 15, fontWeight: isToday ? '700' : '600' }}
-                      color={isToday ? colors.onInk : later ? colors.disabled : colors.text}
-                    >
-                      {n}
-                    </Text>
-                  </View>
-                  {d?.inflow ? (
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontSize: wide ? 12 : 10, lineHeight: wide ? 16 : 12, fontWeight: '600', fontVariant: ['tabular-nums'] }}
-                      color={colors.positive}
-                    >
-                      +{dollars(d.inflow, !!wide)}
-                    </Text>
-                  ) : null}
-                  {d?.outflow ? (
-                    <Text
-                      numberOfLines={1}
-                      style={{ fontSize: wide ? 12 : 10, lineHeight: wide ? 16 : 12, fontWeight: '600', fontVariant: ['tabular-nums'] }}
-                      color={colors.negative}
-                    >
-                      {dollars(d.outflow, !!wide)}
-                    </Text>
-                  ) : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        ))}
-      </View>
-    </Card>
-  );
-
-  const dayCard = (
-    <Card>
-      <CardHeader title={`${weekday}, ${longMonth.format(new Date(y, m - 1, selected))} ${selected}`} detail={summary || undefined} />
-      {list.length === 0 ? (
-        <Text variant="callout" tone="textSecondary" style={{ paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md }}>
-          Nothing in or out.
-        </Text>
-      ) : (
-        list.map((t, i) => (
-          <TransactionRow
-            key={t.id}
-            t={t}
-            account={accountById.get(t.accountId)}
-            envelope={t.envelopeId ? envelopeById.get(t.envelopeId) : undefined}
-            columns="single"
-            showAccount
-            last={i === list.length - 1}
-          />
-        ))
-      )}
-    </Card>
-  );
-
+  const cellHeight = wide ? 64 : 46;
   return (
-    <View style={{ gap: wide ? spacing.lg : spacing.md }}>
+    <View style={{ gap: wide ? spacing.md : spacing.md - 2 }}>
       <Card>
-        <View style={{ flexDirection: 'row', gap: spacing.md, paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md }}>
-          {stat('Inflow', dollars(total.inflow, true), total.inflow ? 'positive' : undefined)}
-          {stat('Outflow', dollars(total.outflow, true), total.outflow ? 'negative' : undefined)}
-          {stat('Left over', `${left < 0 ? '-' : '+'}${dollars(Math.abs(left), true)}`)}
+        <View style={{ paddingHorizontal: spacing.md + 2, paddingVertical: spacing.md, gap: spacing.sm }}>
+          <Text variant="footnote" weight="600" tone="textSecondary">
+            {scope}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            {stat('Inflow', dollars(total.inflow), total.inflow ? 'positive' : undefined)}
+            {stat('Outflow', dollars(total.outflow), total.outflow ? 'negative' : undefined)}
+            {stat('Left over', dollars(left, true), left < 0 ? 'negative' : left > 0 ? 'positive' : undefined)}
+          </View>
         </View>
       </Card>
-      {wide ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'flex-start' }}>
-          <View style={{ flexGrow: 999, flexShrink: 1, flexBasis: 560, minWidth: 0 }}>{grid}</View>
-          <View style={{ flexGrow: 1, flexShrink: 1, flexBasis: 320, maxWidth: 420 }}>{dayCard}</View>
+      <Card>
+        <View style={{ padding: wide ? 10 : spacing.sm, gap: wide ? 4 : 3 }}>
+          <View style={{ flexDirection: 'row', gap: wide ? 4 : 3, paddingBottom: 2 }}>
+            {WEEKDAYS.map((w) => (
+              <Text
+                key={w}
+                variant="label"
+                caps={wide}
+                tone="textTertiary"
+                align={wide ? 'left' : 'center'}
+                style={{ flex: 1, paddingLeft: wide ? 8 : 0 }}
+              >
+                {wide ? w.slice(0, 3) : w[0]}
+              </Text>
+            ))}
+          </View>
+          {weeks.map((week, i) => (
+            <View key={i} style={{ flexDirection: 'row', gap: wide ? 4 : 3 }}>
+              {week.map((n, j) => {
+                // Every cell sits in an equal slot, so a short last week lines up with the rest.
+                if (n === null)
+                  return (
+                    <View key={j} style={{ flex: 1, flexBasis: 0, minWidth: 0 }}>
+                      <View style={{ height: cellHeight, borderRadius: 8, backgroundColor: wide ? colors.tableHeader : 'transparent' }} />
+                    </View>
+                  );
+                const d = days.get(n);
+                const net = d ? d.inflow - d.outflow : 0;
+                const on = n === selected;
+                const later = future || (thisMonth && n > todayNumber);
+                const isToday = thisMonth && n === todayNumber;
+                return (
+                  <View key={j} style={{ flex: 1, flexBasis: 0, minWidth: 0 }}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`${longMonth.format(new Date(y, m - 1, n))} ${n}${later ? '' : `, ${formatMoney(net, { signed: true })}`}`}
+                    onPress={() => onSelect(on ? null : n)}
+                    style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
+                      height: cellHeight,
+                      paddingHorizontal: wide ? 8 : 1,
+                      paddingVertical: wide ? 8 : 4,
+                      borderRadius: 8,
+                      borderCurve: 'continuous',
+                      borderWidth: 1,
+                      borderColor: on ? colors.accent : wide ? colors.hairline : 'transparent',
+                      backgroundColor: on ? colors.accentSoft : pressed || hovered ? colors.control : colors.surface,
+                      alignItems: wide ? 'flex-start' : 'center',
+                      gap: wide ? 4 : 2,
+                    })}
+                  >
+                    <View
+                      style={{
+                        minWidth: 20,
+                        height: 20,
+                        paddingHorizontal: 3,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: isToday ? colors.accent : 'transparent',
+                      }}
+                    >
+                      <Text
+                        style={{ fontSize: 12, lineHeight: 15, fontWeight: isToday ? '700' : '600' }}
+                        color={isToday ? colors.onInk : later ? colors.disabled : colors.text}
+                      >
+                        {n}
+                      </Text>
+                    </View>
+                    {/* Days still to come have no change yet. */}
+                    {!later && (
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontSize: wide ? 13 : 10, lineHeight: wide ? 17 : 12, fontWeight: '600', fontVariant: ['tabular-nums'] }}
+                        color={net < 0 ? colors.negative : net > 0 ? colors.positive : colors.textTertiary}
+                      >
+                        {wide ? dollars(net, true) : short(net)}
+                      </Text>
+                    )}
+                  </Pressable>
+                  </View>
+                );
+              })}
+            </View>
+          ))}
         </View>
-      ) : (
-        <>
-          {grid}
-          {dayCard}
-        </>
-      )}
+      </Card>
     </View>
   );
 }

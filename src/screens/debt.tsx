@@ -175,10 +175,6 @@ export function Debt() {
       <Screen ref={scrollRef} onScroll={onScroll}>
         <ScreenTitle title="Debt" />
 
-        <Card>
-          <PaymentEnvelopes onEditingChange={(on, view) => revealAboveKeyboard(on ? view : null)} />
-        </Card>
-
         <Card padded>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <View style={{ gap: 2 }}>
@@ -218,6 +214,10 @@ export function Debt() {
                 .join(', ')}.`}
             />
           )}
+        </Card>
+
+        <Card>
+          <PaymentEnvelopes onEditingChange={(on, view) => revealAboveKeyboard(on ? view : null)} />
         </Card>
 
         <Card>

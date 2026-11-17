@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
+import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
 import { closeKeypad } from '@/components/keypad';
 import { Text } from '@/components/text';
@@ -11,6 +12,7 @@ import { floorDollars, formatDollars } from '@/domain/money';
 import { assignDateFor, type EnvelopeMonth } from '@/domain/months';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
+import { useCollapsedGroups } from '@/hooks/use-collapsed-groups';
 import { useLedger } from '@/hooks/use-ledger';
 import { LeftCell } from '@/screens/budget';
 import { useStore } from '@/store';
@@ -19,6 +21,7 @@ import { envelopeStatus, targetBar } from '@/utils/envelope-status';
 
 const EMPTY: EnvelopeMonth = { assigned: 0, activity: 0, spent: 0, carriedIn: 0, available: 0 };
 const noop = () => {};
+const FOLD_KEY = 'Debt tab: payments';
 
 /** What each debt's payment envelope has assigned this month, added up. Shown on the Budget. */
 export function useDebtAssigned(month: string): number {
@@ -54,6 +57,9 @@ export function PaymentEnvelopes({
   const assignMany = useStore((s) => s.assignMany);
   const removeAllocations = useStore((s) => s.removeAllocations);
   const showToast = useToast((s) => s.show);
+  // Folds closed like a Budget group, remembered on this device.
+  const open = useCollapsedGroups((s) => !s.closed.includes(FOLD_KEY));
+  const toggle = useCollapsedGroups((s) => s.toggle);
   const date = assignDateFor(month, today());
 
   const items = envelopes.filter((e) => e.debtAccountId && !e.hidden).sort((a, b) => a.order - b.order);
@@ -112,111 +118,122 @@ export function PaymentEnvelopes({
 
   return (
     <View>
-      <View
-        style={{
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`Debt payments, ${formatDollars(ready)} ready to pay. ${open ? 'Collapse' : 'Expand'}`}
+        onPress={() => toggle(FOLD_KEY)}
+        style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({
           flexDirection: 'row',
           alignItems: 'center',
           gap: spacing.sm,
           paddingHorizontal: padX,
           paddingVertical: desktop ? 11 : spacing.md - 1,
-          borderBottomWidth: 1,
+          borderBottomWidth: open ? 1 : 0,
           borderBottomColor: colors.separator,
-        }}
+          backgroundColor: pressed || hovered ? colors.control : 'transparent',
+        })}
       >
+        <View style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }}>
+          <Icon sf="chevron.down" md="expand_more" size={desktop ? 14 : 12} color={colors.textTertiary} weight="semibold" />
+        </View>
         <Text variant="section" accessibilityRole="header" style={{ flex: 1 }} numberOfLines={1}>
           Debt payments
         </Text>
         <Text variant="footnote" weight="600" tone="textSecondary">
           {formatDollars(ready)} ready to pay
         </Text>
-      </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: padX,
-          paddingVertical: 7,
-          backgroundColor: colors.tableHeader,
-          borderBottomWidth: 1,
-          borderBottomColor: colors.separator,
-        }}
-      >
-        {label('Payment', true)}
-        {label('Auto')}
-        {label('Manual')}
-        {label('Paid')}
-        {label('Left')}
-      </View>
-      {items.map((e, i) => {
-        const row = budget.envelopes.get(e.id) ?? EMPTY;
-        const debt = debtFor(e);
-        const status = envelopeStatus(e, row, month, debt);
-        const red = row.available < 0;
-        return (
-          <View
-            key={e.id}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              paddingHorizontal: padX,
-              paddingVertical: desktop ? 10 : 11,
-              borderTopWidth: i ? 1 : 0,
-              borderTopColor: colors.hairline,
-            }}
-          >
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={`${e.name}, ${formatDollars(row.available)} left. Open debt`}
-              onPress={() => router.navigate(`/debt/${e.debtAccountId}`)}
-              hitSlop={{ top: 9, bottom: 9 }}
-              style={({ pressed }) => ({ flex: 1, minWidth: 0, opacity: pressed ? 0.5 : 1 })}
+      </Pressable>
+      {open && (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: padX,
+            paddingVertical: 7,
+            backgroundColor: colors.tableHeader,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.separator,
+          }}
+        >
+          {label('Payment', true)}
+          {label('Auto')}
+          {label('Manual')}
+          {label('Paid')}
+          {label('Left')}
+        </View>
+      )}
+      {open &&
+        items.map((e, i) => {
+          const row = budget.envelopes.get(e.id) ?? EMPTY;
+          const debt = debtFor(e);
+          const status = envelopeStatus(e, row, month, debt);
+          const red = row.available < 0;
+          return (
+            <View
+              key={e.id}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: padX,
+                paddingVertical: desktop ? 10 : 11,
+                borderTopWidth: i ? 1 : 0,
+                borderTopColor: colors.hairline,
+              }}
             >
-              <Text
-                variant={desktop ? 'body' : 'row'}
-                weight="500"
-                tone={red ? 'negative' : 'text'}
-                numberOfLines={1}
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={`${e.name}, ${formatDollars(row.available)} left. Open debt`}
+                onPress={() => router.navigate(`/debt/${e.debtAccountId}`)}
+                hitSlop={{ top: 9, bottom: 9 }}
+                style={({ pressed }) => ({ flex: 1, minWidth: 0, opacity: pressed ? 0.5 : 1 })}
               >
-                {e.name}
-              </Text>
-            </Pressable>
-            {amount(row.moved ?? 0, 'down', true)}
-            <View style={{ marginLeft: gap }}>
-              <InlineAmount
-                exact
-                align={align}
-                cents={row.assigned}
-                width={col}
-                accessibilityLabel={`Assigned to ${e.name}`}
-                onEditingChange={onEditingChange}
-                onCommit={(cents) => assign(e.id, cents - row.assigned, date)}
-                actions={[
-                  {
-                    label: status.need > 0 ? `Fill ${formatDollars(status.need)}` : 'Target met',
-                    icon: { sf: 'bolt.fill', md: 'bolt' },
-                    disabled: status.need <= 0,
-                    onPress: () => {
-                      closeKeypad();
-                      assign(e.id, status.need, date);
+                <Text
+                  variant={desktop ? 'body' : 'row'}
+                  weight="500"
+                  tone={red ? 'negative' : 'text'}
+                  numberOfLines={1}
+                >
+                  {e.name}
+                </Text>
+              </Pressable>
+              {amount(row.moved ?? 0, 'down', true)}
+              <View style={{ marginLeft: gap }}>
+                <InlineAmount
+                  exact
+                  align={align}
+                  cents={row.assigned}
+                  width={col}
+                  accessibilityLabel={`Assigned to ${e.name}`}
+                  onEditingChange={onEditingChange}
+                  onCommit={(cents) => assign(e.id, cents - row.assigned, date)}
+                  actions={[
+                    {
+                      label: status.need > 0 ? `Fill ${formatDollars(status.need)}` : 'Target met',
+                      icon: { sf: 'bolt.fill', md: 'bolt' },
+                      disabled: status.need <= 0,
+                      onPress: () => {
+                        closeKeypad();
+                        assign(e.id, status.need, date);
+                      },
                     },
-                  },
-                ]}
+                  ]}
+                />
+              </View>
+              {amount(row.spent, 'up')}
+              <LeftCell
+                width={col}
+                row={row}
+                bar={targetBar(e, row, month, debt)}
+                past={false}
+                tone={red ? 'negative' : row.available < 100 ? 'textTertiary' : 'text'}
+                onEditingChange={onEditingChange ?? noop}
+                onMoveBack={(cents) => moveBack(e, cents)}
+                align={align}
               />
             </View>
-            {amount(row.spent, 'up')}
-            <LeftCell
-              width={col}
-              row={row}
-              bar={targetBar(e, row, month, debt)}
-              past={false}
-              tone={red ? 'negative' : row.available < 100 ? 'textTertiary' : 'text'}
-              onEditingChange={onEditingChange ?? noop}
-              onMoveBack={(cents) => moveBack(e, cents)}
-              align={align}
-            />
-          </View>
-        );
-      })}
+          );
+        })}
     </View>
   );
 }

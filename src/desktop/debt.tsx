@@ -120,9 +120,6 @@ export function DesktopDebt() {
 
   return (
     <DPage title="Debt" header={header}>
-      <DCard>
-        <PaymentEnvelopes desktop />
-      </DCard>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'stretch' }}>
         <DCard padded style={{ flexGrow: 3, flexShrink: 1, flexBasis: 560, minWidth: 0 }}>
           <Text variant="callout" weight="700">
@@ -182,6 +179,9 @@ export function DesktopDebt() {
           </DCard>
         </View>
       </View>
+      <DCard>
+        <PaymentEnvelopes desktop />
+      </DCard>
 
       <DCard style={{ minWidth: 840 }}>
         <View

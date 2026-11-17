@@ -98,11 +98,12 @@ export function RegisterRow({
   if (editing && !select) {
     return <RegisterEditRow t={t} account={account} columns={columns} envelopeLabel={env.text} onDone={() => setEditing(false)} />;
   }
-  const ink = done ? colors.textTertiary : colors.text;
-  const sub = done ? colors.textMuted : colors.textSecondary;
-  const outColor = done ? colors.textTertiary : colors.negative;
-  // Transfers are blue; reconciled ones stay grey like the rest.
+  // Transfers are blue, text too; reconciled ones stay grey like the rest.
   const transfer = t.kind === 'transfer' && !done;
+  const ink = done ? colors.textTertiary : transfer ? colors.blueInk : colors.text;
+  const sub = done ? colors.textMuted : transfer ? colors.blueInk : colors.textSecondary;
+  const outColor = done ? colors.textTertiary : colors.negative;
+  const rowBg = done ? colors.rowDone : transfer ? colors.blueSoft : 'transparent';
   const row = (
     <Pressable
       accessibilityRole={select ? 'checkbox' : 'button'}
@@ -118,15 +119,8 @@ export function RegisterRow({
         paddingHorizontal: 16,
         ...(columns.status ? { flex: 1, paddingRight: 0 } : { borderTopWidth: 1, borderTopColor: colors.hairline }),
         opacity: select?.disabled ? 0.55 : 1,
-        backgroundColor: hovered
-          ? done
-            ? colors.rowDoneHover
-            : colors.tableHeader
-          : done
-            ? colors.rowDone
-            : transfer
-              ? colors.blueSoft
-              : 'transparent',
+        // With the status column, the color belongs to the wrapper so it runs under the button too.
+        backgroundColor: hovered && !transfer ? (done ? colors.rowDoneHover : colors.tableHeader) : columns.status ? 'transparent' : rowBg,
       })}
     >
       {columns.check && (
@@ -181,7 +175,7 @@ export function RegisterRow({
         </View>
       </View>
       {columns.envelope !== false && (
-        <Text variant="callout" color={done ? colors.textMuted : colors[env.tone]} numberOfLines={1} style={{ flex: FLEX.envelope }}>
+        <Text variant="callout" color={done ? colors.textMuted : transfer ? colors.blueInk : colors[env.tone]} numberOfLines={1} style={{ flex: FLEX.envelope }}>
           {env.text}
         </Text>
       )}
@@ -217,7 +211,7 @@ export function RegisterRow({
         paddingRight: 16,
         borderTopWidth: 1,
         borderTopColor: colors.hairline,
-        backgroundColor: done ? colors.rowDone : 'transparent',
+        backgroundColor: rowBg,
       }}
     >
       {row}

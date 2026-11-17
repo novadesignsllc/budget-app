@@ -42,6 +42,8 @@ const light = {
   accentFaint: '#F7F6FF',
   blue: '#2F6FEB',
   blueSoft: '#E8EFFD',
+  /** Text on blueSoft: transfer rows. */
+  blueInk: '#1E3F8A',
   /** Due, flags, needs attention. */
   orange: '#C2560F',
   orangeSoft: '#FFF0E6',
@@ -119,6 +121,7 @@ const dark: Palette = {
   accentFaint: '#1C1F31',
   blue: '#6EA0FF',
   blueSoft: '#17243D',
+  blueInk: '#A9C6FF',
   orange: '#FF9B57',
   orangeSoft: '#33231A',
   positive: '#45C97E',

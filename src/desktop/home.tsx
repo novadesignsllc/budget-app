@@ -253,13 +253,13 @@ export function DesktopHome() {
                         paddingHorizontal: 16,
                         borderBottomWidth: 1,
                         borderBottomColor: colors.hairline,
-                        backgroundColor: hovered ? colors.tableHeader : transfer ? colors.blueSoft : 'transparent',
+                        backgroundColor: transfer ? colors.blueSoft : hovered ? colors.tableHeader : 'transparent',
                       })}
                     >
                       <Text variant="callout" tone="textSecondary" style={{ width: 56 }}>
                         {shortDate(t.date)}
                       </Text>
-                      <Text variant="callout" weight="600" numberOfLines={1} style={{ flex: 1 }}>
+                      <Text variant="callout" weight="600" color={transfer ? colors.blueInk : undefined} numberOfLines={1} style={{ flex: 1 }}>
                         {transactionTitle(t, accountById.get(t.accountId), t.transferAccountId ? accountById.get(t.transferAccountId) : undefined)}
                       </Text>
                       <Text

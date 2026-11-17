@@ -111,7 +111,8 @@ export function TransactionRow({
         : base;
 
   // Reconciled wins: a reconciled transfer is grey like the rest.
-  const rowBg = done ? colors.control : slip ? colors.negativeTint : t.kind === 'transfer' ? colors.blueSoft : colors.surface;
+  const transfer = t.kind === 'transfer' && !done;
+  const rowBg = done ? colors.control : slip ? colors.negativeTint : transfer ? colors.blueSoft : colors.surface;
   const row = (
     <Pressable
       accessibilityRole={select ? 'checkbox' : 'button'}
@@ -170,6 +171,7 @@ export function TransactionRow({
             variant="row"
             weight="600"
             tone={slip ? 'negative' : done ? 'textTertiary' : 'text'}
+            color={transfer ? colors.blueInk : undefined}
             numberOfLines={1}
             style={[cell, { flexShrink: 1 }]}
           >
@@ -182,6 +184,7 @@ export function TransactionRow({
           <Text
             variant="caption"
             tone={slip ? 'negative' : select?.disabled ? 'orange' : done ? 'textTertiary' : 'textSecondary'}
+            color={transfer ? colors.blueInk : undefined}
             numberOfLines={1}
             style={{ fontSize: 10.5, lineHeight: 13 }}
           >

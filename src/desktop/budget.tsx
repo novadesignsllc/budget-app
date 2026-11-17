@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
 import { ActionMenu } from '@/components/action-menu';
 import { Icon } from '@/components/icon';
@@ -30,19 +30,20 @@ import { builderEnded, isSnoozed, nextDue, targetFor, targetKindName, targetKind
 import { envelopePool } from '@/domain/pools';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
+import { useCollapsedGroups } from '@/hooks/use-collapsed-groups';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
 import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools } from '@/hooks/use-pools';
-import { isManagedGroup, useStore } from '@/store';
+import { DEBT_GROUP, isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary, monthName, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
 
-import { DButton, DCard, DPage, PageTitle, SearchField, Spacer, usePageKeys } from './ui';
+import { D_PAD, DButton, DCard, DPage, PageTitle, SearchField, Spacer, usePageKeys } from './ui';
 
 /** Assigned, Spent and Left: one width for all three, roomy enough for $12,345. */
 const COL = 84;
@@ -100,8 +101,11 @@ export function DesktopBudget() {
   const envelopeById = new Map(envelopes.map((e) => [e.id, e] as const));
   const date = assignDateFor(month, today());
 
+  const closedGroups = useCollapsedGroups((s) => s.closed);
+  const toggleGroup = useCollapsedGroups((s) => s.toggle);
+  // Debt payment envelopes live on the Debt tab now.
   const groups = useMemo(() => {
-    const visible = envelopes.filter((e) => !e.hidden);
+    const visible = envelopes.filter((e) => !e.hidden && e.group !== DEBT_GROUP);
     return orderGroups(
       visible.map((e) => e.group),
       groupOrder,
@@ -116,7 +120,7 @@ export function DesktopBudget() {
     .map((g) => ({ ...g, items: q ? g.items.filter((e) => e.name.toLowerCase().includes(q)) : g.items }))
     .filter((g) => g.items.length);
   const flat: Row[] = shown.flatMap((g) =>
-    g.items.map((e) => ({ envelope: e, row: budget.envelopes.get(e.id) ?? EMPTY })),
+    (closedGroups.includes(g.name) && !q ? [] : g.items).map((e) => ({ envelope: e, row: budget.envelopes.get(e.id) ?? EMPTY })),
   );
   const selected = flat.find((r) => r.envelope.id === selectedId) ?? flat[0];
 
@@ -127,6 +131,10 @@ export function DesktopBudget() {
     return { owed, target: a ? debtTarget(a, owed) : 0 };
   }
 
+  // What the Debt tab's payment envelopes got this month, so it shows while budgeting.
+  const debtAssigned = envelopes
+    .filter((e) => e.debtAccountId && !e.hidden)
+    .reduce((sum, e) => sum + (budget.envelopes.get(e.id)?.assigned ?? 0), 0);
   const debtTargets = new Map(
     envelopes.filter((e) => e.debtAccountId).map((e) => [e.id, ceilDollars(debtFor(e)?.target ?? 0)] as const),
   );
@@ -237,8 +245,7 @@ export function DesktopBudget() {
   return (
     <DPage
       title={`Budget · ${monthYear.format(asDate(month))}`}
-      scrollRef={scrollRef}
-      onScroll={onScroll}
+      fixed
       header={
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
@@ -267,6 +274,25 @@ export function DesktopBudget() {
           ) : (
             <ReadyPill cents={rta} past={past} />
           )}
+          <Pressable
+            accessibilityRole="link"
+            accessibilityLabel={`${formatDollars(debtAssigned)} assigned to debt payments this month. Open Debt`}
+            onPress={() => router.navigate('/debt')}
+            style={({ hovered }: { hovered?: boolean }) => ({
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 8,
+              backgroundColor: hovered ? colors.fill : colors.control,
+            })}
+          >
+            <Icon sf="creditcard" md="credit_card" size={14} color={colors.textSecondary} />
+            <Text variant="callout" weight="600" tone="textSecondary">
+              {formatDollars(debtAssigned)} to debt
+            </Text>
+          </Pressable>
           {month === thisMonth && aheadMoney && (
             <View style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.control }}>
               <Text variant="callout" weight="600" tone="textSecondary">
@@ -274,23 +300,34 @@ export function DesktopBudget() {
               </Text>
             </View>
           )}
-          {ahead && (
-            <View
-              style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: colors.accentSoft }}
-            >
-              <Text variant="callout" weight="600" tone="accent">
-                Planning ahead
-              </Text>
-            </View>
-          )}
           {(past || ahead) && (
-            <DButton label={`Back to ${monthOnly.format(asDate(thisMonth))}`} onPress={() => setMonth(thisMonth)} />
+            // One chip for a month other than this one: says which kind, and goes back.
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Back to ${monthOnly.format(asDate(thisMonth))}`}
+              onPress={() => setMonth(thisMonth)}
+              style={({ hovered }: { hovered?: boolean }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+                paddingHorizontal: 10,
+                paddingVertical: 6,
+                borderRadius: 8,
+                backgroundColor: ahead ? colors.accentSoft : colors.control,
+                opacity: hovered ? 0.8 : 1,
+              })}
+            >
+              <Text variant="callout" weight="600" tone={ahead ? 'accent' : 'textSecondary'}>
+                {ahead ? 'Planning ahead' : 'Past month'} · Back to {monthOnly.format(asDate(thisMonth))}
+              </Text>
+            </Pressable>
           )}
           <Spacer />
           {/* The tools stay together: if the header runs out of room they move down as one row. */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginLeft: 'auto' }}>
-            <SearchField value={query} onChange={setQuery} placeholder="Find an envelope" width={170} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginLeft: 'auto' }}>
+            <SearchField value={query} onChange={setQuery} placeholder="Find" width={130} />
             <DButton
+              iconOnly
               label="Auto-assign"
               icon={{ sf: 'bolt.fill', md: 'bolt' }}
               disabled={!gaps.some((g) => readyFor(envelopeById.get(g.envelopeId) ?? { group: '' }) >= 100)}
@@ -302,7 +339,8 @@ export function DesktopBudget() {
               }
             />
             <DButton
-              label="Sort"
+              iconOnly
+              label="Sort envelopes"
               icon={{ sf: 'arrow.up.arrow.down', md: 'swap_vert' }}
               onPress={() =>
                 setSorting(
@@ -316,7 +354,8 @@ export function DesktopBudget() {
               }
             />
             <DButton
-              label="Envelope"
+              iconOnly
+              label="New envelope"
               icon={{ sf: 'plus', md: 'add' }}
               accessibilityLabel="New envelope"
               onPress={() => router.push({ pathname: '/new-envelope', params: { month } })}
@@ -325,6 +364,15 @@ export function DesktopBudget() {
         </>
       }
     >
+      <View style={{ flex: 1, minHeight: 0, flexDirection: 'row' }}>
+        <ScrollView
+          ref={scrollRef}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: D_PAD, paddingTop: 20, gap: spacing.lg }}
+        >
       {pools &&
         !past &&
         (['spending', 'savings'] as const)
@@ -369,8 +417,7 @@ export function DesktopBudget() {
               />
             </View>
           ))}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 20 }}>
-        <View style={{ flexGrow: 3, flexShrink: 1, flexBasis: 560, maxWidth: 1000, minWidth: 0, gap: spacing.md }}>
+        <View style={{ width: '100%', maxWidth: 1000, gap: spacing.md }}>
           {starters.length > 0 && (
             <Starters
               starters={starters}
@@ -398,21 +445,31 @@ export function DesktopBudget() {
                 const rows = g.items.map((e) => budget.envelopes.get(e.id) ?? EMPTY);
                 const sum = (k: 'assigned' | 'spent') => rows.reduce((a, r) => a + r[k], 0);
                 const left = rows.reduce((a, r) => a + floorDollars(r.available), 0);
+                // A search opens every group, so a match is never hidden.
+                const open = !!q || !closedGroups.includes(g.name);
                 return (
-                  // Each group is its own card, so the whole budget reads at a glance.
+                  // Each group is its own card, so the whole budget reads at a glance. Its header folds it.
                   <DCard key={g.name}>
-                    <View
-                      style={{
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: open }}
+                      accessibilityLabel={`${g.name}. ${open ? 'Collapse' : 'Expand'}`}
+                      onPress={() => toggleGroup(g.name)}
+                      style={({ hovered }: { hovered?: boolean }) => ({
                         flexDirection: 'row',
                         alignItems: 'center',
                         gap: GAP,
                         paddingHorizontal: 16,
                         paddingVertical: 11,
-                        borderBottomWidth: 1,
+                        borderBottomWidth: open ? 1 : 0,
                         borderBottomColor: colors.separator,
-                      }}
+                        backgroundColor: hovered ? colors.control : 'transparent',
+                      })}
                     >
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                        <View style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }}>
+                          <Icon sf="chevron.down" md="expand_more" size={14} color={colors.textTertiary} weight="semibold" />
+                        </View>
                         <View
                           style={{
                             width: 8,
@@ -437,8 +494,8 @@ export function DesktopBudget() {
                           {groupSummary(g.name, left)}
                         </Text>
                       </View>
-                    </View>
-                    {g.items.map((e, i) => {
+                    </Pressable>
+                    {open && g.items.map((e, i) => {
                       const row = budget.envelopes.get(e.id) ?? EMPTY;
                       const debt = debtFor(e);
                       const status = envelopeStatus(e, row, month, debt);
@@ -485,8 +542,15 @@ export function DesktopBudget() {
             )}
           </View>
         </View>
+        </ScrollView>
 
         {selected && (
+          // The details panel is its own column, pinned to the top: the list scrolls beside it.
+          <ScrollView
+            style={{ width: 380, flexGrow: 0, flexShrink: 0, borderLeftWidth: 1, borderLeftColor: colors.separator }}
+            contentContainerStyle={{ padding: 20 }}
+            keyboardShouldPersistTaps="handled"
+          >
           <Inspector
             key={selected.envelope.id}
             envelope={selected.envelope}
@@ -507,6 +571,7 @@ export function DesktopBudget() {
             moving={movingId === selected.envelope.id}
             onMoving={(on) => setMovingId(on ? selected.envelope.id : null)}
           />
+          </ScrollView>
         )}
       </View>
     </DPage>
@@ -770,7 +835,7 @@ function Inspector({
   const leftColor = row.available < 0 ? colors.negative : row.available < 100 ? colors.textSecondary : colors.positive;
 
   return (
-    <View style={{ flexGrow: 2, flexShrink: 0, flexBasis: 360, maxWidth: 560, gap: 14 }}>
+    <View style={{ gap: 14 }}>
       <DCard padded>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <View style={{ flex: 1, gap: 2 }}>

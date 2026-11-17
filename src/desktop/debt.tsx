@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 
 import { CreditUsePill } from '@/components/credit-use';
 import { Dropdown } from '@/components/dropdown';
+import { PaymentEnvelopes } from '@/components/payment-envelopes';
 import { LineChart } from '@/components/line-chart';
 import { Text } from '@/components/text';
 import { today } from '@/domain/dates';
@@ -119,6 +120,9 @@ export function DesktopDebt() {
 
   return (
     <DPage title="Debt" header={header}>
+      <DCard>
+        <PaymentEnvelopes desktop />
+      </DCard>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'stretch' }}>
         <DCard padded style={{ flexGrow: 3, flexShrink: 1, flexBasis: 560, minWidth: 0 }}>
           <Text variant="callout" weight="700">

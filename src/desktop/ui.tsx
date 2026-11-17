@@ -58,6 +58,7 @@ export function DPage({
   children,
   scrollRef,
   contentStyle,
+  fixed,
   ...props
 }: Omit<ScrollViewProps, 'contentContainerStyle'> & {
   /** The browser tab's title. */
@@ -68,10 +69,12 @@ export function DPage({
   children: React.ReactNode;
   scrollRef?: React.Ref<React.ComponentRef<typeof ScrollView>>;
   contentStyle?: ViewStyle;
+  /** The page lays out its own scrolling areas (Budget's list and details panel). */
+  fixed?: boolean;
 }) {
   const colors = useColors();
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, minHeight: 0, backgroundColor: colors.background }}>
       <Stack.Screen options={{ title }} />
       <View
         style={{
@@ -89,14 +92,18 @@ export function DPage({
         {back ? <BackLink label={back} /> : null}
         {header}
       </View>
-      <ScrollView
-        ref={scrollRef}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={[{ padding: D_PAD, paddingTop: 20, gap: spacing.lg }, contentStyle]}
-        {...props}
-      >
-        {children}
-      </ScrollView>
+      {fixed ? (
+        <View style={[{ flex: 1, minHeight: 0 }, contentStyle]}>{children}</View>
+      ) : (
+        <ScrollView
+          ref={scrollRef}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={[{ padding: D_PAD, paddingTop: 20, gap: spacing.lg }, contentStyle]}
+          {...props}
+        >
+          {children}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -176,8 +183,11 @@ export function DButton({
   disabled,
   style,
   accessibilityLabel,
+  iconOnly,
 }: {
   label: string;
+  /** Just the icon, square; the label is still read out and shown on hover. */
+  iconOnly?: boolean;
   icon?: IconSpec;
   onPress: () => void;
   variant?: 'outline' | 'accent';
@@ -197,7 +207,7 @@ export function DButton({
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         {
           height: 34,
-          paddingHorizontal: 12,
+          ...(iconOnly ? { width: 34 } : { paddingHorizontal: 12 }),
           borderRadius: radius.button,
           borderCurve: 'continuous',
           borderWidth: accent ? 0 : 1,
@@ -212,10 +222,39 @@ export function DButton({
         style,
       ]}
     >
-      {icon && <Icon sf={icon.sf} md={icon.md} size={13} color={accent ? colors.onInk : colors.accent} weight="semibold" />}
-      <Text variant="body" weight="600" color={accent ? colors.onInk : colors.text} numberOfLines={1}>
-        {label}
-      </Text>
+      {({ hovered }: { hovered?: boolean }) => (
+        <>
+          {icon && (
+            <Icon
+              sf={icon.sf}
+              md={icon.md}
+              size={iconOnly ? 15 : 13}
+              color={accent ? colors.onInk : colors.accent}
+              weight="semibold"
+            />
+          )}
+          {!iconOnly && (
+            <Text variant="body" weight="600" color={accent ? colors.onInk : colors.text} numberOfLines={1}>
+              {label}
+            </Text>
+          )}
+          {iconOnly && hovered && (
+            // A wide box anchored to the button's right edge; the bubble inside fits its text.
+            <View
+              pointerEvents="none"
+              style={{ position: 'absolute', top: 38, right: 0, width: 160, alignItems: 'flex-end', zIndex: 10 }}
+            >
+              <View
+                style={{ paddingHorizontal: 8, paddingVertical: 4, borderRadius: radius.tiny, backgroundColor: colors.ink }}
+              >
+                <Text variant="caption" weight="600" color={colors.onInk} numberOfLines={1}>
+                  {label}
+                </Text>
+              </View>
+            </View>
+          )}
+        </>
+      )}
     </Pressable>
   );
 }

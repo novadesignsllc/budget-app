@@ -31,11 +31,12 @@ import { envelopePool, type Pool } from '@/domain/pools';
 import { isSnoozed, targetSetFor } from '@/domain/targets';
 import type { Envelope } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
+import { useCollapsedGroups } from '@/hooks/use-collapsed-groups';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { AssignedAheadNote } from '@/components/home-cards';
 import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools, type PoolView } from '@/hooks/use-pools';
-import { isManagedGroup, useStore } from '@/store';
+import { DEBT_GROUP, isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
 import { envelopeStatus, groupSummary, leftPillState, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
@@ -108,8 +109,11 @@ export function Budget() {
     o.section === 'Ahead' ? o : { ...o, label: monthOnly.format(asDate(o.value)) },
   );
 
+  const closedGroups = useCollapsedGroups((s) => s.closed);
+  const toggleGroup = useCollapsedGroups((s) => s.toggle);
+  // Debt payment envelopes live on the Debt tab now.
   const groups = useMemo(() => {
-    const visible = envelopes.filter((e) => !e.hidden);
+    const visible = envelopes.filter((e) => !e.hidden && e.group !== DEBT_GROUP);
     return orderGroups(
       visible.map((e) => e.group),
       groupOrder,
@@ -131,6 +135,10 @@ export function Budget() {
   const hueFor = (group: string) => (past ? colors.textTertiary : groupColor(group));
   const date = assignDateFor(month, today());
   // Debt payments aim for what each debt's page says: the minimum or a custom amount.
+  // What the Debt tab's payment envelopes got this month, so it shows while budgeting.
+  const debtAssigned = envelopes
+    .filter((e) => e.debtAccountId && !e.hidden)
+    .reduce((sum, e) => sum + (budget.envelopes.get(e.id)?.assigned ?? 0), 0);
   const debtTargets = new Map(
     envelopes.filter((e) => e.debtAccountId).map((e) => [e.id, ceilDollars(debtFor(e)?.target ?? 0)] as const),
   );
@@ -340,6 +348,7 @@ export function Budget() {
             <AssignedAheadNote />
           </View>
         )}
+        <DebtAssigned cents={debtAssigned} past={past} />
 
         {groups.length > 0 && (
           <View style={{ flexDirection: 'row', gap: spacing.sm }}>
@@ -447,16 +456,18 @@ export function Budget() {
           return (
             <View key={g.name} onLayout={(e) => (groupY.current[g.name] = e.nativeEvent.layout.y)}>
               <Card>
-                <CardHeader
+                <GroupHeader
                   title={g.name}
                   dot={hue}
+                  open={!closedGroups.includes(g.name)}
+                  onToggle={() => toggleGroup(g.name)}
                   detail={
                     pools
                       ? `${groupSummary(g.name, total)} · ${POOL_SOURCE[envelopePool({ group: g.name })]}`
                       : groupSummary(g.name, total)
                   }
                 />
-                {g.items.map((e, i) => {
+                {!closedGroups.includes(g.name) && g.items.map((e, i) => {
                   const row = budget.envelopes.get(e.id) ?? EMPTY;
                   const status = envelopeStatus(e, row, month, debtFor(e));
                   const ready = readyFor(e);
@@ -855,6 +866,85 @@ function EnvelopeRow({
         />
       </View>
     </View>
+  );
+}
+
+/** A group's title row: tap to fold the group closed or open it again. */
+function GroupHeader({
+  title,
+  detail,
+  dot,
+  open,
+  onToggle,
+}: {
+  title: string;
+  detail: string;
+  dot: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={`${title}, ${detail}. ${open ? 'Collapse' : 'Expand'}`}
+      onPress={onToggle}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm + 1,
+        paddingHorizontal: spacing.md + 2,
+        paddingVertical: spacing.md - 1,
+        borderBottomWidth: open ? 1 : 0,
+        borderBottomColor: colors.separator,
+        backgroundColor: pressed ? colors.control : 'transparent',
+      })}
+    >
+      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dot }} />
+      <Text variant="section" style={{ flex: 1 }} numberOfLines={1} accessibilityRole="header">
+        {title}
+      </Text>
+      <Text variant="footnote" tone="textSecondary" numberOfLines={1}>
+        {detail}
+      </Text>
+      <View style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }}>
+        <Icon sf="chevron.down" md="expand_more" size={12} color={colors.textTertiary} weight="semibold" />
+      </View>
+    </Pressable>
+  );
+}
+
+/** What went to debt payments this month, with a way over to the Debt tab where they live. */
+function DebtAssigned({ cents, past }: { cents: number; past: boolean }) {
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="link"
+      accessibilityLabel={`${formatDollars(cents)} assigned to debt payments this month. Open Debt`}
+      onPress={() => router.navigate('/debt')}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: spacing.sm,
+        paddingHorizontal: spacing.md + 2,
+        height: 40,
+        borderRadius: radius.control,
+        borderCurve: 'continuous',
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: pressed ? colors.control : colors.surface,
+      })}
+    >
+      <Icon sf="creditcard" md="credit_card" size={14} color={past ? colors.textTertiary : groupColor(DEBT_GROUP)} />
+      <Text variant="callout" weight="600" style={{ flex: 1 }}>
+        Debt payments
+      </Text>
+      <Text variant="callout" weight="600" tone="textSecondary" style={{ fontVariant: ['tabular-nums'] }}>
+        {formatDollars(cents)}
+      </Text>
+      <Icon sf="chevron.right" md="chevron_right" size={12} color={colors.textTertiary} weight="semibold" />
+    </Pressable>
   );
 }
 

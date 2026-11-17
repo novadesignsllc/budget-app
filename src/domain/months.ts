@@ -60,6 +60,11 @@ export type EnvelopeMonth = {
   /** All income that came in this month, for percent-of-income targets. */
   monthIncome?: Cents;
   /**
+   * A debt's payment envelope: card spending this month that moved in from other
+   * envelopes (slips, minus refunds). Already counted in activity.
+   */
+  moved?: Cents;
+  /**
    * Percent-of-income targets: what earlier months still owe (their share of income
    * minus what was assigned), so a month that came up short carries into the next.
    * Negative when earlier months got more than their share.
@@ -175,7 +180,10 @@ export function computeMonth(
       if (pay) {
         const r = row(pay);
         if (t.date < start) r.carriedIn -= t.amount;
-        else r.activity -= t.amount;
+        else {
+          r.activity -= t.amount;
+          r.moved = (r.moved ?? 0) - t.amount;
+        }
       }
     }
   }

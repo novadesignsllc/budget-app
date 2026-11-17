@@ -8,6 +8,7 @@ import { CreditUsePill } from '@/components/credit-use';
 import { Dropdown } from '@/components/dropdown';
 import { LineChart } from '@/components/line-chart';
 import { MiniCard } from '@/components/mini-card';
+import { PaymentEnvelopes } from '@/components/payment-envelopes';
 import { Money } from '@/components/money';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
@@ -18,6 +19,7 @@ import { comparePlan, creditUse, type PlanComparison, type Strategy } from '@/do
 import { formatMoney } from '@/domain/money';
 import { monthOf } from '@/domain/months';
 import type { Account } from '@/domain/types';
+import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useAccounts, useDebtPlan, useLedger } from '@/hooks/use-ledger';
 import { useStore } from '@/store';
 import { chartColors, spacing, useColors } from '@/theme';
@@ -79,6 +81,8 @@ export function Debt() {
   const transactions = useStore((s) => s.transactions);
   const updateSettings = useStore((s) => s.updateSettings);
   const { inputs, monthly, comparison } = useDebtPlan();
+  // Typing a Manual amount keeps that row above the number pad.
+  const { scrollRef, onScroll, watch: revealAboveKeyboard } = useKeyboardReveal();
 
   const plans = useMemo(() => {
     if (!inputs.length || !comparison) return null;
@@ -168,8 +172,12 @@ export function Debt() {
 
   return (
     <>
-      <Screen>
+      <Screen ref={scrollRef} onScroll={onScroll}>
         <ScreenTitle title="Debt" />
+
+        <Card>
+          <PaymentEnvelopes onEditingChange={(on, view) => revealAboveKeyboard(on ? view : null)} />
+        </Card>
 
         <Card padded>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>

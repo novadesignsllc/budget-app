@@ -42,7 +42,22 @@ describe('computeMonth', () => {
     const oct = computeMonth(input, '2026-10');
     expect(oct.envelopes.get('groc')).toMatchObject({ carriedIn: 10000, assigned: 40000, spent: 7000, available: 43000 });
     // A slip moves cash into the card's payment envelope; that's not spending.
-    expect(oct.envelopes.get('vpay')).toMatchObject({ activity: 2000, spent: 0, available: 2000 });
+    expect(oct.envelopes.get('vpay')).toMatchObject({ activity: 2000, spent: 0, available: 2000, moved: 2000 });
+  });
+
+  it('counts card spending moved into the payment envelope by month, minus refunds', () => {
+    const more = {
+      ...input,
+      transactions: [
+        ...input.transactions,
+        tx({ accountId: 'visa', amount: 500, kind: 'slip', envelopeId: 'groc', date: '2026-10-08' }),
+        tx({ accountId: 'visa', amount: -3000, kind: 'slip', envelopeId: 'groc', date: '2026-11-02' }),
+      ],
+    };
+    expect(computeMonth(more, '2026-10').envelopes.get('vpay')!.moved).toBe(1500);
+    const nov = computeMonth(more, '2026-11').envelopes.get('vpay')!;
+    expect(nov).toMatchObject({ moved: 3000, carriedIn: 1500, available: 4500 });
+    expect(computeMonth(more, '2026-10').envelopes.get('groc')!.moved).toBeUndefined();
   });
 
   it('matches the all-time ledger for the latest month', () => {

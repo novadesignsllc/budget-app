@@ -215,7 +215,7 @@ function BanksSection({
                     label="Unlink"
                     danger
                     onPress={async () => {
-                      const yes = await confirmAction(`Unlink ${l.institution}?`, 'Slip stops checking this bank. Your transactions stay.', 'Unlink');
+                      const yes = await confirmAction(`Unlink ${l.institution}?`, 'Slip stops checking this bank. Your transactions stay.', 'Unlink', true);
                       if (yes) await unlinkBank(l.id).then(() => showToast({ message: `${l.institution} is unlinked.` }), fail);
                     }}
                   />

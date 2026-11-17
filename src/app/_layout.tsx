@@ -3,6 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import { ConfirmHost } from '@/components/confirm-dialog';
 import { useIsDesktop } from '@/components/dock';
 import { useBankAutoSync } from '@/bank/sync';
 import { KeypadHost } from '@/components/keypad';
@@ -99,6 +100,7 @@ export default function RootLayout() {
         {status === 'signedIn' && <BankAutoSync />}
         <SyncIndicator />
         <ToastHost />
+        <ConfirmHost />
       </ThemeProvider>
     </GestureHandlerRootView>
   );

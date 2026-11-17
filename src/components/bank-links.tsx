@@ -123,6 +123,7 @@ export function BankLinksCard({ padding = spacing.md + 2 }: { padding?: number }
                         `Unlink ${l.institution}?`,
                         'Slip stops checking this bank. Your transactions stay.',
                         'Unlink',
+                        true,
                       );
                       if (yes) await unlinkBank(l.id).then(() => showToast({ message: `${l.institution} is unlinked.` }), fail);
                     },

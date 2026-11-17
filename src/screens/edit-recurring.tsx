@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 
 import { Button } from '@/components/button';
 import { DateRow } from '@/components/date-picker';
@@ -18,6 +18,7 @@ import { EmojiHeader } from '@/screens/envelope-settings';
 import { useStore } from '@/store';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { closeSheet } from '@/utils/close-sheet';
+import { confirmAction } from '@/utils/confirm';
 import { haptic } from '@/utils/haptics';
 
 import { SheetHeader } from '@/components/sheet-header';
@@ -82,14 +83,7 @@ export function EditRecurring({ id }: { id?: string }) {
   function confirmDelete() {
     if (!existing) return;
     const message = `Its envelope goes too, and anything in it goes back to Ready to assign.`;
-    if (process.env.EXPO_OS === 'web') {
-      if (window.confirm(`Delete ${existing.name}? ${message}`)) remove();
-      return;
-    }
-    Alert.alert(`Delete ${existing.name}?`, message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: remove },
-    ]);
+    void confirmAction(`Delete ${existing.name}?`, message, 'Delete', true).then((yes) => yes && remove());
   }
 
   function save() {

@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Alert, TextInput } from 'react-native';
+import { TextInput } from 'react-native';
 
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
@@ -17,6 +17,7 @@ import { SheetHeader } from '@/components/sheet-header';
 import { isLocked, useStore } from '@/store';
 import { groupColor, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
+import { confirmAction } from '@/utils/confirm';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
 
@@ -128,15 +129,11 @@ export function EditTransaction({ id }: { id: string }) {
   /** Reconciled transactions can still be changed, after a yes. */
   function confirmThenSave() {
     if (!locked) return save();
-    const message = 'This is a reconciled transaction. Are you sure you want to save it?';
-    if (process.env.EXPO_OS === 'web') {
-      if (window.confirm(message)) save();
-      return;
-    }
-    Alert.alert('Reconciled', message, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Save', onPress: save },
-    ]);
+    void confirmAction(
+      'Change a reconciled transaction?',
+      'It was checked against your bank, so changing it can put this account off.',
+      'Save',
+    ).then((yes) => yes && save());
   }
 
   function save() {

@@ -94,7 +94,7 @@ export function RegisterEditRow({
   }
 
   async function remove() {
-    if (!(await confirmAction(`Delete ${t.payee}?`, 'This can’t be undone.', 'Delete'))) return;
+    if (!(await confirmAction(`Delete ${t.payee}?`, 'This can’t be undone.', 'Delete', true))) return;
     deleteTransaction(t.id);
     showToast({ message: `Deleted ${t.payee}` });
     onDone();

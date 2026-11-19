@@ -192,6 +192,16 @@ export function isDebtAccount(account: Pick<Account, 'kind'>): boolean {
   return !isCashAccount(account);
 }
 
+/** Colors for a group's dot or icon, in picker order. */
+export const MARK_COLORS = ['purple', 'blue', 'teal', 'green', 'yellow', 'orange', 'red', 'grey'] as const;
+export type MarkColor = (typeof MARK_COLORS)[number];
+
+/** What sits before a budget group's name. A group with none shows only its name. */
+export type GroupMark =
+  | { kind: 'dot'; color: MarkColor }
+  | { kind: 'icon'; icon: string; color: MarkColor }
+  | { kind: 'emoji'; emoji: string };
+
 /** Flag colors, in picker order. */
 export const FLAG_COLORS = ['red', 'orange', 'yellow', 'green', 'blue', 'purple'] as const;
 export type FlagColor = (typeof FLAG_COLORS)[number];

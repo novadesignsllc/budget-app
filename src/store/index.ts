@@ -31,6 +31,7 @@ import type {
   Allocation,
   Cents,
   Envelope,
+  GroupMark,
   ISODate,
   Payee,
   Recurring,
@@ -101,6 +102,8 @@ export type Settings = {
   groupOrder?: string[];
   /** The starter envelope suggestions were dismissed. */
   startersDone?: boolean;
+  /** Each group's dot, icon or emoji, by group name. A group not listed has none. */
+  groupMarks?: Record<string, GroupMark>;
 };
 
 export type NewTransaction = {

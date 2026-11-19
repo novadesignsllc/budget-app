@@ -85,6 +85,7 @@ export default function RootLayout() {
               <Stack.Screen name="delete-account" options={sheetStyle} />
               <Stack.Screen name="envelope/[id]" options={sheetStyle} />
               <Stack.Screen name="new-envelope" options={sheetStyle} />
+              <Stack.Screen name="group-look" options={sheetStyle} />
               <Stack.Screen name="transfer" options={sheetStyle} />
               <Stack.Screen name="statement" options={sheetStyle} />
               <Stack.Screen name="edit-recurring" options={sheetStyle} />

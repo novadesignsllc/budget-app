@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Dropdown } from '@/components/dropdown';
+import { useGroupMarks } from '@/components/group-mark';
 import { InlineAmount } from '@/components/inline-amount';
 import { Text } from '@/components/text';
 import { useToast } from '@/components/toast';
@@ -16,7 +17,7 @@ import { useLedger } from '@/hooks/use-ledger';
 import { LeftMath } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
-import { groupColor, spacing } from '@/theme';
+import { spacing } from '@/theme';
 import { envelopeStatus } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 
@@ -35,6 +36,7 @@ export function DesktopEnvelope({ id, month: monthParam }: { id: string; month?:
   const ledger = useLedger();
   const envelope = useStore((s) => s.envelopes.find((e) => e.id === id));
   const envelopes = useStore((s) => s.envelopes);
+  const groupMarks = useGroupMarks();
   const accounts = useStore((s) => s.accounts);
   const transactions = useStore((s) => s.transactions);
   const assign = useStore((s) => s.assign);
@@ -180,7 +182,7 @@ export function DesktopEnvelope({ id, month: monthParam }: { id: string; month?:
                 options={donors.map((d) => ({
                   value: d.id,
                   label: d.name,
-                  dot: groupColor(d.group),
+                  mark: groupMarks[d.group],
                   section: d.group,
                   detail: formatDollars(budget.envelopes.get(d.id)?.available ?? 0),
                 }))}

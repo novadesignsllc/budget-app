@@ -303,6 +303,18 @@ export const spacing = {
 } as const;
 
 /** Flag swatches. Saturated enough to read as a small icon in a table row. */
+/** A group's dot or icon color. Purple, blue, teal, green and grey are the old fixed group colors. */
+export const markHues = {
+  purple: '#5B4CF0',
+  blue: '#2a78d6',
+  teal: '#0E8FA0',
+  green: '#1baf7a',
+  yellow: '#E0A100',
+  orange: '#eb6834',
+  red: '#E5484D',
+  grey: '#8B97AA',
+} as const;
+
 export const flagHues = {
   red: '#E5484D',
   orange: '#F76B15',

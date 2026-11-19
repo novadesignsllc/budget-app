@@ -4,6 +4,7 @@ import { Pressable, Text as RNText, View } from 'react-native';
 import { Button } from '@/components/button';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
 import { EmojiPicker } from '@/components/emoji-picker';
+import { useGroupMarks } from '@/components/group-mark';
 import { SnoozeRow } from '@/components/snooze-row';
 import { ActionList, AmountRow, FormCard, FormRow, InputRow } from '@/components/form';
 import type { KeypadFieldHandle } from '@/components/keypad';
@@ -19,7 +20,7 @@ import { GROUPS, type BudgetGroup, type TargetKind } from '@/domain/types';
 import { useLedger } from '@/hooks/use-ledger';
 import { fixGroup, useStore } from '@/store';
 import { router } from 'expo-router';
-import { groupColor, radius, spacing, useColors } from '@/theme';
+import { radius, spacing, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { haptic } from '@/utils/haptics';
@@ -28,10 +29,11 @@ import { SheetHeader } from '@/components/sheet-header';
 
 /** The groups you can pick. Bills, Subscriptions and Debt payments fill themselves. */
 export function GroupPicker({ group, onGroup }: { group: string; onGroup: (group: BudgetGroup) => void }) {
+  const marks = useGroupMarks();
   const options: DropdownOption<BudgetGroup>[] = GROUPS.map((g) => ({
     value: g,
     label: g,
-    dot: groupColor(g),
+    mark: marks[g],
   }));
   return (
     <Dropdown variant="row" label="Group" value={fixGroup(group) as BudgetGroup} options={options} onChange={onGroup} />

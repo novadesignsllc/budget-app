@@ -7,6 +7,7 @@ import { Icon } from '@/components/icon';
 import { InlineAmount } from '@/components/inline-amount';
 import { closeKeypad, keypadIsOpen } from '@/components/keypad';
 import { desktopSheetOpen } from '@/components/screen';
+import { GroupMarkView, useGroupMarks } from '@/components/group-mark';
 import { SortList, type SortGroup } from '@/components/sort-list';
 import { useAssignedAhead } from '@/components/home-cards';
 import { SnoozeRow } from '@/components/snooze-row';
@@ -35,10 +36,10 @@ import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { LeftCell, LeftMath, STARTERS } from '@/screens/budget';
 import { newestFirst } from '@/screens/transactions';
-import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools } from '@/hooks/use-pools';
+import { coverShortfall, moveToCover, POOL_NAME, usePools } from '@/hooks/use-pools';
 import { DEBT_GROUP, isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
-import { envelopeStatus, groupSummary, monthName, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { envelopeStatus, monthName, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -77,6 +78,7 @@ export function DesktopBudget() {
   const updateSettings = useStore((s) => s.updateSettings);
   const addEnvelope = useStore((s) => s.addEnvelope);
   const reorderEnvelopes = useStore((s) => s.reorderEnvelopes);
+  const groupMarks = useGroupMarks();
   const assign = useStore((s) => s.assign);
   const assignMany = useStore((s) => s.assignMany);
   const removeAllocations = useStore((s) => s.removeAllocations);
@@ -466,34 +468,31 @@ export function DesktopBudget() {
                         backgroundColor: hovered ? colors.control : 'transparent',
                       })}
                     >
-                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-                        <View style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }}>
-                          <Icon sf="chevron.down" md="expand_more" size={14} color={colors.textTertiary} weight="semibold" />
-                        </View>
-                        <View
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: 4,
-                            backgroundColor: past ? colors.textTertiary : groupColor(g.name),
-                          }}
-                        />
-                        <Text variant="section" style={{ fontSize: 15 }}>
-                          {g.name}
-                        </Text>
-                        {pools && (
-                          <Text variant="footnote" tone="textSecondary">
-                            {POOL_SOURCE[envelopePool({ group: g.name })]}
-                          </Text>
-                        )}
-                      </View>
-                      <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
-                      <GroupSum>{formatDollars(sum('spent'), 'up')}</GroupSum>
-                      <View style={{ width: COL + 6, alignItems: 'flex-end', paddingRight: 6 }}>
-                        <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1}>
-                          {groupSummary(g.name, left)}
-                        </Text>
-                      </View>
+                      {({ hovered }: { hovered?: boolean }) => (
+                        <>
+                          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                            <View style={{ transform: [{ rotate: open ? '0deg' : '-90deg' }] }}>
+                              <Icon sf="chevron.down" md="expand_more" size={14} color={colors.textTertiary} weight="semibold" />
+                            </View>
+                            {groupMarks[g.name] && (
+                              <View style={{ width: 16, alignItems: 'center' }}>
+                                <GroupMarkView mark={groupMarks[g.name]} size={16} muted={past} />
+                              </View>
+                            )}
+                            <Text variant="section" style={{ fontSize: 15 }}>
+                              {g.name}
+                            </Text>
+                            {hovered && <GroupLookButton group={g.name} />}
+                          </View>
+                          <GroupSum>{formatDollars(sum('assigned'))}</GroupSum>
+                          <GroupSum>{formatDollars(sum('spent'), 'up')}</GroupSum>
+                          <View style={{ width: COL + 6, alignItems: 'flex-end', paddingRight: 6 }}>
+                            <Text variant="footnote" weight="600" tone="textSecondary" numberOfLines={1}>
+                              {formatDollars(left)}
+                            </Text>
+                          </View>
+                        </>
+                      )}
                     </Pressable>
                     {open && g.items.map((e, i) => {
                       const row = budget.envelopes.get(e.id) ?? EMPTY;
@@ -1158,6 +1157,30 @@ function GroupSum({ children }: { children: string }) {
     <Text variant="footnote" tone="textSecondary" align="center" style={{ width: COL, fontVariant: ['tabular-nums'] }}>
       {children}
     </Text>
+  );
+}
+
+/** Shown on a hovered group header: opens the picker for the group's dot, icon or emoji. */
+function GroupLookButton({ group }: { group: string }) {
+  const colors = useColors();
+  return (
+    // No button role: the web would nest a <button> in the header's <button>.
+    <Pressable
+      accessibilityLabel={`Change ${group} icon`}
+      hitSlop={4}
+      onPress={() => router.push({ pathname: '/group-look', params: { name: group } })}
+      style={({ hovered }: { hovered?: boolean }) => ({
+        width: 22,
+        height: 22,
+        borderRadius: radius.tiny,
+        borderCurve: 'continuous',
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: hovered ? colors.border : 'transparent',
+      })}
+    >
+      <Icon sf="paintpalette" md="palette" size={13} color={colors.textTertiary} />
+    </Pressable>
   );
 }
 

@@ -5,6 +5,7 @@ import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { DateRow } from '@/components/date-picker';
 import { Dropdown, type DropdownOption } from '@/components/dropdown';
+import { useGroupMarks } from '@/components/group-mark';
 import { ActionList, AmountHero, FlagRow, FormCard, FormRow, InputRow } from '@/components/form';
 import type { KeypadFieldHandle } from '@/components/keypad';
 import { SheetScreen } from '@/components/screen';
@@ -15,7 +16,6 @@ import { isCashAccount, type FlagColor } from '@/domain/types';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { SheetHeader } from '@/components/sheet-header';
 import { isLocked, useStore } from '@/store';
-import { groupColor, useColors } from '@/theme';
 import { closeSheet } from '@/utils/close-sheet';
 import { confirmAction } from '@/utils/confirm';
 import { orderGroups } from '@/utils/group-order';
@@ -34,12 +34,12 @@ const TITLES = {
 } as const;
 
 export function EditTransaction({ id }: { id: string }) {
-  const colors = useColors();
   const ledger = useLedger();
   const { cash, debts } = useAccounts();
   const allTransactions = useStore((s) => s.transactions);
   const t = allTransactions.find((x) => x.id === id);
   const envelopes = useStore((s) => s.envelopes);
+  const groupMarks = useGroupMarks();
   const update = useStore((s) => s.updateTransaction);
   const remove = useStore((s) => s.deleteTransaction);
   const setFlag = useStore((s) => s.setFlag);
@@ -71,12 +71,12 @@ export function EditTransaction({ id }: { id: string }) {
             value: e.id,
             label: e.name,
             section: e.group,
-            dot: groupColor(e.group),
+            mark: groupMarks[e.group],
             detail: available < 0 ? formatDollars(available) : `${formatDollars(available)} left`,
             tone: available < 0 ? 'negative' : undefined,
           };
         }),
-    [envelopes, ledger, listedGroups],
+    [envelopes, ledger, listedGroups, groupMarks],
   );
 
   if (!t) {
@@ -193,7 +193,7 @@ export function EditTransaction({ id }: { id: string }) {
             variant="row"
             label="Goes to"
             value={envelopeId ?? READY}
-            options={[{ value: READY, label: 'Ready to assign', dot: colors.positive }, ...envelopeOptions]}
+            options={[{ value: READY, label: 'Ready to assign' }, ...envelopeOptions]}
             onChange={(v) => setEnvelopeId(v === READY ? undefined : v)}
             searchable
           />

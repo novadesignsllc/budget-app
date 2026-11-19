@@ -58,5 +58,3 @@ export function coverShortfall(pools: Record<Pool, PoolView>, short: Pool) {
 }
 
 export const POOL_NAME: Record<Pool, string> = { spending: 'Spending', savings: 'Savings' };
-/** "from checking" / "from savings", for group headings. */
-export const POOL_SOURCE: Record<Pool, string> = { spending: 'from checking', savings: 'from savings' };

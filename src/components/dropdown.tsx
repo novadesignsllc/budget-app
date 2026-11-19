@@ -8,7 +8,10 @@ import { pageZoom } from '@/utils/zoom';
 import { keyboardTopIn, rememberFocus } from '@/utils/keyboard';
 import { cardFaces, radius, spacing, type as typeScale, useColors } from '@/theme';
 
+import type { GroupMark } from '@/domain/types';
+
 import { FieldLabel } from './field';
+import { GroupMarkView } from './group-mark';
 import { Icon } from './icon';
 import { FORM_ROW_HEIGHT } from './form';
 import { useMenuHost } from './menu-host';
@@ -21,8 +24,8 @@ export type DropdownOption<T extends string> = {
   detail?: string;
   /** A second line under the label. */
   description?: string;
-  /** A colored dot (envelope group). */
-  dot?: string;
+  /** The envelope group's dot, icon or emoji. */
+  mark?: GroupMark;
   /** A mini card face index (accounts). */
   face?: number;
   /** A solid swatch color (debts, matching their chart line). */
@@ -59,7 +62,12 @@ function Leading<T extends string>({ o }: { o: DropdownOption<T> }) {
         }}
       />
     );
-  if (o.dot) return <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: o.dot }} />;
+  if (o.mark)
+    return (
+      <View style={{ width: 14, alignItems: 'center' }}>
+        <GroupMarkView mark={o.mark} size={14} />
+      </View>
+    );
   return null;
 }
 

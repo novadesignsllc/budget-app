@@ -6,6 +6,7 @@ import { AnimatedNumber } from '@/components/animated-number';
 import { Button } from '@/components/button';
 import { Card, CardHeader, TableHeader } from '@/components/card';
 import { Dropdown } from '@/components/dropdown';
+import { useGroupMarks } from '@/components/group-mark';
 import { InlineAmount } from '@/components/inline-amount';
 import { debtTarget } from '@/domain/debt';
 import { Screen } from '@/components/screen';
@@ -22,7 +23,7 @@ import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useAccounts, useLedger } from '@/hooks/use-ledger';
 import { newestFirst } from '@/screens/transactions';
 import { useStore } from '@/store';
-import { groupColor, spacing, useColors } from '@/theme';
+import { spacing, useColors } from '@/theme';
 import { envelopeStatus } from '@/utils/envelope-status';
 import { haptic } from '@/utils/haptics';
 
@@ -33,6 +34,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
   const ledger = useLedger();
   const envelope = useStore((s) => s.envelopes.find((e) => e.id === id));
   const envelopes = useStore((s) => s.envelopes);
+  const groupMarks = useGroupMarks();
   const transactions = useStore((s) => s.transactions);
   const accounts = useStore((s) => s.accounts);
   const assign = useStore((s) => s.assign);
@@ -146,7 +148,7 @@ export function EnvelopeDetail({ id, month: monthParam }: { id: string; month?: 
               options={donors.map((d) => ({
                 value: d.id,
                 label: d.name,
-                dot: groupColor(d.group),
+                mark: groupMarks[d.group],
                 section: d.group,
                 detail: formatDollars(budget.envelopes.get(d.id)?.available ?? 0),
               }))}

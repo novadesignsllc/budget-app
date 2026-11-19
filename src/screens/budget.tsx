@@ -13,6 +13,7 @@ import { debtTarget } from '@/domain/debt';
 import { Screen } from '@/components/screen';
 import { ActionButton, ScreenActions } from '@/components/screen-actions';
 import { ScreenTitle } from '@/components/screen-title';
+import { GroupMarkView, useGroupMarks } from '@/components/group-mark';
 import { SortList, type SortGroup } from '@/components/sort-list';
 import { SwipeRow, useSwipeGuard } from '@/components/swipe-row';
 import { Text } from '@/components/text';
@@ -29,16 +30,16 @@ import {
 } from '@/domain/months';
 import { envelopePool, type Pool } from '@/domain/pools';
 import { isSnoozed, targetSetFor } from '@/domain/targets';
-import type { Envelope } from '@/domain/types';
+import type { Envelope, GroupMark } from '@/domain/types';
 import { currentMonth, useBudgetMonth } from '@/hooks/use-budget-month';
 import { useCollapsedGroups } from '@/hooks/use-collapsed-groups';
 import { useKeyboardReveal } from '@/hooks/use-keyboard-reveal';
 import { useLedger } from '@/hooks/use-ledger';
 import { AssignedAheadNote } from '@/components/home-cards';
-import { coverShortfall, moveToCover, POOL_NAME, POOL_SOURCE, usePools, type PoolView } from '@/hooks/use-pools';
+import { coverShortfall, moveToCover, POOL_NAME, usePools, type PoolView } from '@/hooks/use-pools';
 import { DEBT_GROUP, isManagedGroup, useStore } from '@/store';
 import { groupColor, radius, spacing, useColors } from '@/theme';
-import { envelopeStatus, groupSummary, leftPillState, targetBar, type TargetBar } from '@/utils/envelope-status';
+import { envelopeStatus, leftPillState, targetBar, type TargetBar } from '@/utils/envelope-status';
 import { envelopeEmoji } from '@/utils/envelope-emoji';
 import { orderGroups } from '@/utils/group-order';
 import { haptic } from '@/utils/haptics';
@@ -132,7 +133,7 @@ export function Budget() {
   const past = month < thisMonth;
   // A later month: money assigned here is set aside now and counts in that month.
   const ahead = month > thisMonth;
-  const hueFor = (group: string) => (past ? colors.textTertiary : groupColor(group));
+  const groupMarks = useGroupMarks();
   const date = assignDateFor(month, today());
   // Debt payments aim for what each debt's page says: the minimum or a custom amount.
   // What the Debt tab's payment envelopes got this month, so it shows while budgeting.
@@ -452,20 +453,16 @@ export function Budget() {
         {groups.map((g) => {
           // Add up the rounded Left column, so the header always matches the rows under it.
           const total = g.items.reduce((a, e) => a + floorDollars(budget.envelopes.get(e.id)?.available ?? 0), 0);
-          const hue = hueFor(g.name);
           return (
             <View key={g.name} onLayout={(e) => (groupY.current[g.name] = e.nativeEvent.layout.y)}>
               <Card>
                 <GroupHeader
                   title={g.name}
-                  dot={hue}
+                  mark={groupMarks[g.name]}
+                  muted={past}
                   open={!closedGroups.includes(g.name)}
                   onToggle={() => toggleGroup(g.name)}
-                  detail={
-                    pools
-                      ? `${groupSummary(g.name, total)} · ${POOL_SOURCE[envelopePool({ group: g.name })]}`
-                      : groupSummary(g.name, total)
-                  }
+                  detail={formatDollars(total)}
                 />
                 {!closedGroups.includes(g.name) && g.items.map((e, i) => {
                   const row = budget.envelopes.get(e.id) ?? EMPTY;
@@ -873,23 +870,33 @@ function EnvelopeRow({
 function GroupHeader({
   title,
   detail,
-  dot,
+  mark,
+  muted,
   open,
   onToggle,
 }: {
   title: string;
   detail: string;
-  dot: string;
+  mark?: GroupMark;
+  muted: boolean;
   open: boolean;
   onToggle: () => void;
 }) {
   const colors = useColors();
+  // A long press picks the group's dot, icon or emoji.
+  const editLook = () => {
+    haptic('light');
+    router.push({ pathname: '/group-look', params: { name: title } });
+  };
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ expanded: open }}
       accessibilityLabel={`${title}, ${detail}. ${open ? 'Collapse' : 'Expand'}`}
+      accessibilityActions={[{ name: 'look', label: 'Change icon' }]}
+      onAccessibilityAction={(e) => e.nativeEvent.actionName === 'look' && editLook()}
       onPress={onToggle}
+      onLongPress={editLook}
       style={({ pressed }) => ({
         flexDirection: 'row',
         alignItems: 'center',
@@ -901,7 +908,11 @@ function GroupHeader({
         backgroundColor: pressed ? colors.control : 'transparent',
       })}
     >
-      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: dot }} />
+      {mark && (
+        <View style={{ width: 16, alignItems: 'center' }}>
+          <GroupMarkView mark={mark} size={16} muted={muted} />
+        </View>
+      )}
       <Text variant="section" style={{ flex: 1 }} numberOfLines={1} accessibilityRole="header">
         {title}
       </Text>

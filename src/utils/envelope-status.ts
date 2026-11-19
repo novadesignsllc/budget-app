@@ -2,7 +2,6 @@ import { ceilDollars, formatDollars } from '@/domain/money';
 import type { EnvelopeMonth, MonthKey } from '@/domain/months';
 import { builderEnded, repeatCycle, targetFor, targetKindOf, targetNeed, targetThisMonth } from '@/domain/targets';
 import type { Cents, Envelope } from '@/domain/types';
-import { DEBT_GROUP } from '@/store';
 
 export type EnvelopeStatus = {
   subtitle: string;
@@ -215,8 +214,3 @@ export function leftPillState(row: Pick<EnvelopeMonth, 'available'>, bar: Target
   return row.available >= 100 ? 'funded' : 'empty';
 }
 
-export function groupSummary(group: string, total: Cents): string {
-  if (group === 'Savings') return `${m(total)} saved`;
-  if (group === DEBT_GROUP) return `${m(total)} ready to pay`;
-  return `${m(total)} left`;
-}

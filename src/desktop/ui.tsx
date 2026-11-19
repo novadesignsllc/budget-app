@@ -1,7 +1,6 @@
 import { router, Stack } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Pressable, ScrollView, TextInput, View, type ScrollViewProps, type ViewStyle } from 'react-native';
-import Svg, { Line, Rect } from 'react-native-svg';
+import { Image, Pressable, ScrollView, TextInput, View, type ScrollViewProps, type ViewStyle } from 'react-native';
 
 import { Icon } from '@/components/icon';
 import { Text } from '@/components/text';
@@ -15,14 +14,11 @@ export const D_PAD = 28;
 /** The app icon, small, for the sidebar. */
 export function SlipMark({ size = 28 }: { size?: number }) {
   return (
-    <View style={{ width: size, height: size, borderRadius: size / 4, overflow: 'hidden' }}>
-      <Svg width={size} height={size} viewBox="0 0 1024 1024">
-        <Rect width={1024} height={1024} fill="#15122E" />
-        <Line x1={372} y1={318} x2={652} y2={706} stroke="#3D2FB8" strokeWidth={150} strokeLinecap="round" />
-        <Line x1={680} y1={318} x2={372} y2={318} stroke="#8F73FF" strokeWidth={150} strokeLinecap="round" />
-        <Line x1={652} y1={706} x2={344} y2={706} stroke="#6E5CF5" strokeWidth={150} strokeLinecap="round" />
-      </Svg>
-    </View>
+    <Image
+      source={require('@/assets/images/mark.png')}
+      accessibilityIgnoresInvertColors
+      style={{ width: size, height: size, borderRadius: size / 4 }}
+    />
   );
 }
 
